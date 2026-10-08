@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Film } from 'lucide-react';
@@ -20,7 +21,7 @@ export interface TestStepProps {
 type TestPhase = 'idle' | 'running' | 'success' | 'failure' | 'completing' | 'complete';
 
 function technicalDetails(error: AppError): string {
-  return `Код: ${error.code}\n${error.technicalCause}`;
+  return t("Код: {0}\n{1}", error.code, error.technicalCause);
 }
 
 function invalidEvidenceError(summary: RecordingTestSummary): AppError {
@@ -69,6 +70,7 @@ export function TestStep({
   onBusyChange,
   footerTarget,
 }: TestStepProps) {
+  useTranslation();
   const [phase, setPhase] = useState<TestPhase>('idle');
   const [summary, setSummary] = useState<RecordingTestSummary | null>(null);
   const [testError, setTestError] = useState<AppError | null>(null);
@@ -163,18 +165,17 @@ export function TestStep({
   return (
     <div className={styles.stepContent} data-testid="test-step" aria-busy={busy}>
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>Проверим запись</h2>
+        <h2 className={styles.title}>{t("Проверим запись")}</h2>
         <p className={styles.copy}>
-          Создадим короткий клип, чтобы проверить изображение и звук.
-        </p>
+          {t("Создадим короткий клип, чтобы проверить изображение и звук.")}</p>
       </div>
 
       {phase === 'idle' && (
         <div className={styles.testPrompt}>
           <Film size={28} strokeWidth={1.3} aria-hidden="true" />
-          <strong>Всего 5 секунд</strong>
-          <p>Запишем выбранный экран и включённые источники звука. Клип появится в вашей папке.</p>
-          <span className={styles.testPath}>{draft.output_directory || 'Папка клипов'}</span>
+          <strong>{t("Всего 5 секунд")}</strong>
+          <p>{t("Запишем выбранный экран и включённые источники звука. Клип появится в вашей папке.")}</p>
+          <span className={styles.testPath}>{draft.output_directory || t('Папка клипов')}</span>
         </div>
       )}
 
@@ -182,8 +183,8 @@ export function TestStep({
         <div className={styles.testProgress} role="status">
           <RecordingOrb className={styles.recordingOrb} />
           <div>
-            <strong>Создаём тестовый клип…</strong>
-            <p>Захват длится 5 секунд; подготовка и сохранение могут занять больше времени.</p>
+            <strong>{t("Создаём тестовый клип…")}</strong>
+            <p>{t("Захват длится 5 секунд; подготовка и сохранение могут занять больше времени.")}</p>
           </div>
         </div>
       )}
@@ -191,29 +192,29 @@ export function TestStep({
       {(phase === 'success' || phase === 'completing') && summary && (
         <div className={styles.successPanel} data-testid="test-success-summary" role="status">
           <Check size={26} strokeWidth={1.5} aria-hidden="true" />
-          <strong>Тестовый клип готов</strong>
+          <strong>{t("Тестовый клип готов")}</strong>
           <p>
             {recordingWithoutAudio
-              ? 'Тест выполнен без звука — оба источника отключены в настройках.'
-              : 'Изображение и звук записаны. Можно открыть клип и проверить результат.'}
+              ? t('Тест выполнен без звука — оба источника отключены в настройках.')
+              : t('Изображение и звук записаны. Можно открыть клип и проверить результат.')}
           </p>
           <details className={styles.technicalDetails}>
-            <summary>Технические подробности</summary>
-            <span>Видео-пакетов: {summary.video_packets}</span>
-            <span>Аудио-пакетов: {summary.audio_packets}</span>
+            <summary>{t("Технические подробности")}</summary>
+            <span>{t("Видео-пакетов:")}{' '}{summary.video_packets}</span>
+            <span>{t("Аудио-пакетов:")}{' '}{summary.audio_packets}</span>
           </details>
           {phase === 'success' && <Button variant="tertiary" onClick={() => void handleOpenClip()}
-            data-testid="open-test-clip-button">Открыть клип</Button>}
+            data-testid="open-test-clip-button">{t("Открыть клип")}</Button>}
         </div>
       )}
 
       {phase === 'complete' && (
-        <InlineStatus tone="success">Настройка завершена. Replay включён.</InlineStatus>
+        <InlineStatus tone="success">{t("Настройка завершена. Replay включён.")}</InlineStatus>
       )}
 
       {phase === 'failure' && testError && (
         <ErrorNotice
-          title="Тестовая запись не готова"
+          title={t("Тестовая запись не готова")}
           technicalDetails={technicalDetails(testError)}
           action={
             <Button
@@ -221,53 +222,48 @@ export function TestStep({
               onClick={() => void handleOpenDiagnostics()}
               data-testid="test-diagnostics-button"
             >
-              Открыть диагностику
-            </Button>
+              {t("Открыть диагностику")}</Button>
           }
           data-testid="test-error-message"
         >
-          <p>{testError.summary}</p>
+          <p>{t(testError.summary)}</p>
           <p>
-            Проверьте выбранный экран, аудиоустройства, папку клипов и параметры видео,
-            затем повторите тест.
-          </p>
+            {t("Проверьте выбранный экран, аудиоустройства, папку клипов и параметры видео,\n            затем повторите тест.")}</p>
         </ErrorNotice>
       )}
 
       {openError && (
         <ErrorNotice
-          title="Клип сохранён, но не открылся"
+          title={t("Клип сохранён, но не открылся")}
           tone="warning"
           technicalDetails={technicalDetails(openError)}
           action={
             <Button variant="tertiary" onClick={() => void handleOpenClip()}>
-              Попробовать снова
-            </Button>
+              {t("Попробовать снова")}</Button>
           }
         >
-          {openError.summary}
+          {t(openError.summary)}
         </ErrorNotice>
       )}
       {diagnosticsError && (
         <ErrorNotice
-          title="Не удалось открыть диагностику"
+          title={t("Не удалось открыть диагностику")}
           tone="warning"
           technicalDetails={technicalDetails(diagnosticsError)}
           action={
             <Button variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-              Попробовать снова
-            </Button>
+              {t("Попробовать снова")}</Button>
           }
         >
-          {diagnosticsError.summary}
+          {t(diagnosticsError.summary)}
         </ErrorNotice>
       )}
       {completionError && (
         <ErrorNotice
-          title="Не удалось включить Replay"
+          title={t("Не удалось включить Replay")}
           technicalDetails={technicalDetails(completionError)}
         >
-          {completionError.summary}
+          {t(completionError.summary)}
         </ErrorNotice>
       )}
 
@@ -278,8 +274,7 @@ export function TestStep({
           disabled={busy || phase === 'complete' || !onBack}
           data-testid="test-back-button"
         >
-          Назад
-        </Button>
+          {t("Назад")}</Button>
 
         <div className={styles.actionCluster}>
           {phase !== 'complete' && (
@@ -287,13 +282,13 @@ export function TestStep({
               variant={phase === 'success' || phase === 'completing' ? 'tertiary' : 'primary'}
               onClick={() => void handleRunTest()}
               busy={phase === 'running'}
-              busyLabel="Создаём клип…"
+              busyLabel={t("Создаём клип…")}
               disabled={phase === 'completing'}
               data-testid="run-test-button"
             >
               {phase === 'success' || phase === 'failure' || phase === 'completing'
-                ? 'Записать снова'
-                : 'Записать 5 секунд'}
+                ? t('Записать снова')
+                : t('Записать 5 секунд')}
             </Button>
           )}
 
@@ -302,12 +297,11 @@ export function TestStep({
               variant="primary"
               onClick={() => void handleComplete()}
               busy={phase === 'completing'}
-              busyLabel="Включаем Replay…"
+              busyLabel={t("Включаем Replay…")}
               disabled={phase !== 'success'}
               data-testid="complete-onboarding-button"
             >
-              Включить Replay
-            </Button>
+              {t("Включить Replay")}</Button>
           )}
         </div>
       </div>)}

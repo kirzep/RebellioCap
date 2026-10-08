@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useRef, useState } from 'react';
 import { ArrowUpToLine } from 'lucide-react';
 import type { AvailableUpdate, UpdateProgress } from '../bridge/contracts';
@@ -14,6 +15,7 @@ export interface UpdateNoticeProps {
 }
 
 export function UpdateNotice({ update, onInstall, disabled }: UpdateNoticeProps) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,30 +40,30 @@ export function UpdateNotice({ update, onInstall, disabled }: UpdateNoticeProps)
   return <>
     <SidebarMenuItem>
       <SidebarMenuButton type="button" size="lg" className={cn(styles.navButton, styles.updateButton)}
-        aria-label={`Доступно обновление ${update.version}`} title={`Доступно обновление ${update.version}`}
+        aria-label={t("Доступно обновление {0}", update.version)} title={t("Доступно обновление {0}", update.version)}
         disabled={disabled || busy} onClick={() => { setError(null); setOpen(true); }}>
         <span className={styles.updateIcon}><ArrowUpToLine aria-hidden="true" /><span className={styles.updateDot} /></span>
         <span className={cn(styles.navLabel, styles.updateLabel)}>
-          <span>Доступно обновление</span><span className={styles.updateVersion}>Версия {update.version}</span>
+          <span>{t("Доступно обновление")}</span><span className={styles.updateVersion}>{t("Версия")}{' '}{update.version}</span>
         </span>
       </SidebarMenuButton>
     </SidebarMenuItem>
-    <ConfirmDialog open={open} title={`Обновить RebellioCap до версии ${update.version}?`}
-      description="Сначала скачаем и проверим обновление. Текущая запись остановится с сохранением файла, Replay будет выключен, а несохранённый повтор будет потерян. После установки обновления приложение перезапустится."
-      confirmLabel="Обновить и перезапустить" cancelLabel="Позже" initialFocus="cancel"
-      busy={busy} busyLabel="Обновляем…" onConfirm={() => void install()} onCancel={() => setOpen(false)}>
+    <ConfirmDialog open={open} title={t("Обновить RebellioCap до версии {0}?", update.version)}
+      description={t("Сначала скачаем и проверим обновление. Текущая запись остановится с сохранением файла, Replay будет выключен, а несохранённый повтор будет потерян. После установки обновления приложение перезапустится.")}
+      confirmLabel={t("Обновить и перезапустить")} cancelLabel={t("Позже")} initialFocus="cancel"
+      busy={busy} busyLabel={t("Обновляем…")} onConfirm={() => void install()} onCancel={() => setOpen(false)}>
       {update.releaseNotes && <div className="whitespace-pre-wrap text-sm text-muted-foreground">{update.releaseNotes}</div>}
       {busy && <div className="mt-3 space-y-2">
-        <p role="status">{progress?.phase === 'installing' ? 'Устанавливаем обновление…' : progress?.phase === 'preparing' ? 'Завершаем запись перед обновлением…' : 'Скачиваем обновление…'}</p>
+        <p role="status">{progress?.phase === 'installing' ? t('Устанавливаем обновление…') : progress?.phase === 'preparing' ? t('Завершаем запись перед обновлением…') : t('Скачиваем обновление…')}</p>
         {(!progress || progress.phase === 'downloading') && <>
-          <progress aria-label="Загрузка обновления" className="w-full" max={progress?.totalBytes || undefined}
+          <progress aria-label={t("Загрузка обновления")} className="w-full" max={progress?.totalBytes || undefined}
             value={progress?.totalBytes ? progress.downloadedBytes : undefined} />
           {progress && <p className="text-sm text-muted-foreground">
-            {(progress.downloadedBytes / 1048576).toFixed(1)} МБ{progress.totalBytes ? ` из ${(progress.totalBytes / 1048576).toFixed(1)} МБ` : ''}
+            {(progress.downloadedBytes / 1048576).toFixed(1)} {' '}{t("МБ")}{progress.totalBytes ? t(" из {0} МБ", (progress.totalBytes / 1048576).toFixed(1)) : ''}
           </p>}
         </>}
       </div>}
-      {error && <ErrorNotice title="Не удалось обновить приложение">{error}</ErrorNotice>}
+      {error && <ErrorNotice title={t("Не удалось обновить приложение")}>{t(error)}</ErrorNotice>}
     </ConfirmDialog>
   </>;
 }

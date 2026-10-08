@@ -48,7 +48,7 @@ export function EditorMedia({ item, asset, clock, active, playing, canvasWidth, 
     }
     let disposed = false;
     const fail = (reason: unknown) => {
-      if (!disposed) onPlaybackError(`Не удалось воспроизвести «${asset?.name ?? 'медиа'}»: ${String(reason)}. Нажмите «Воспроизвести», чтобы повторить.`);
+      if (!disposed) onPlaybackError(asset?.name ? `Не удалось воспроизвести «${asset.name}»: ${String(reason)}. Нажмите «Воспроизвести», чтобы повторить.` : `Не удалось воспроизвести медиа: ${String(reason)}. Нажмите «Воспроизвести», чтобы повторить.`);
     };
     if (media.paused) {
       try {

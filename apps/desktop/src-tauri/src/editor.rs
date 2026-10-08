@@ -241,11 +241,11 @@ fn dialog(save: bool, folder: bool, name: &str, extension: &str) -> Result<Optio
         }
         d.SetOptions(options).map_err(|e| e.to_string())?;
         d.SetTitle(&HSTRING::from(if folder {
-            "Упаковать проект в папку"
+            crate::language::text("Упаковать проект в папку", "Package project into a folder")
         } else if save {
-            "Сохранить"
+            crate::language::text("Сохранить", "Save")
         } else {
-            "Открыть видео, аудио, изображение или проект"
+            crate::language::text("Открыть видео, аудио, изображение или проект", "Open video, audio, image, or project")
         }))
         .map_err(|e| e.to_string())?;
         if save {
@@ -954,7 +954,7 @@ pub async fn editor_export(
     let (engine, _) = crate::commands::editor_paths(&state, None).await?;
     let app2 = app.clone();
     let path =
-        tauri::async_runtime::spawn_blocking(move || dialog(true, false, "Монтаж.mp4", "mp4"))
+        tauri::async_runtime::spawn_blocking(move || dialog(true, false, crate::language::text("Монтаж.mp4", "Edit.mp4"), "mp4"))
             .await
             .map_err(|e| e.to_string())??;
     let Some(path) = path else { return Ok(false) };

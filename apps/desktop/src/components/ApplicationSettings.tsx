@@ -1,11 +1,14 @@
+import { t, useTranslation } from '../i18n';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DeveloperLogsPanel } from './DeveloperMode';
 import { NotificationSettingsPanel } from './NotificationSettings';
 import { RecordingNameSettings } from '../naming/NamingSettings';
 import { ErrorNotice } from './Primitives';
+import { LanguageSettings } from './LanguageSettings';
 
 export function ApplicationSettings() {
+  useTranslation();
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,19 +36,20 @@ export function ApplicationSettings() {
     } finally { setBusy(false); }
   }
   return <div className="space-y-6">
-    <div><h2 className="text-xl font-semibold">Приложение</h2>
-      <p className="mt-2 text-muted-foreground">Крестик сворачивает RebellioCap в трей. Replay, запись и горячие клавиши продолжают работать.</p></div>
+    <div><h2 className="text-xl font-semibold">{t("Приложение")}</h2>
+      <p className="mt-2 text-muted-foreground">{t("Крестик сворачивает RebellioCap в трей. Replay, запись и горячие клавиши продолжают работать.")}</p></div>
     <label className="flex items-center gap-3 rounded-2xl border p-5">
       <input type="checkbox" checked={enabled} disabled={busy || !native}
-        onChange={event => void change(event.target.checked)} aria-label="Запускать с Windows" />
-      <span><span className="block font-medium">Запускать с Windows</span>
-        <span className="block text-sm text-muted-foreground">При входе в Windows приложение запускается в трее. Изменение сохраняется сразу.</span></span>
+        onChange={event => void change(event.target.checked)} aria-label={t("Запускать с Windows")} />
+      <span><span className="block font-medium">{t("Запускать с Windows")}</span>
+        <span className="block text-sm text-muted-foreground">{t("При входе в Windows приложение запускается в трее. Изменение сохраняется сразу.")}</span></span>
     </label>
-    <p className="text-sm text-muted-foreground">Нажмите на значок в трее, чтобы вернуть окно. В меню по правой кнопке мыши доступны быстрые действия и «Выйти».</p>
-    {!native && <p role="status">Автозапуск доступен в установленном приложении Windows.</p>}
+    <p className="text-sm text-muted-foreground">{t("Нажмите на значок в трее, чтобы вернуть окно. В меню по правой кнопке мыши доступны быстрые действия и «Выйти».")}</p>
+    {!native && <p role="status">{t("Автозапуск доступен в установленном приложении Windows.")}</p>}
     <RecordingNameSettings />
+    <LanguageSettings />
     <NotificationSettingsPanel />
     <DeveloperLogsPanel />
-    {error && <ErrorNotice title="Автозапуск" technicalDetails={technicalError ?? undefined}>{error}</ErrorNotice>}
+    {error && <ErrorNotice title={t("Автозапуск")} technicalDetails={technicalError ?? undefined}>{t(error)}</ErrorNotice>}
   </div>;
 }

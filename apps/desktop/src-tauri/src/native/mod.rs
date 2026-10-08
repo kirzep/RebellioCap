@@ -125,6 +125,7 @@ pub fn choose_directory() -> Result<Option<PathBuf>> {
         dialog
             .SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR)
             .map_err(|e| e.to_string())?;
+        dialog.SetTitle(&windows::core::HSTRING::from(crate::language::text("Выберите папку для записей", "Choose a recording folder"))).map_err(|e| e.to_string())?;
         if let Err(e) = dialog.Show(None) {
             if e.code().0 as u32 == 0x800704c7 {
                 return Ok(None);

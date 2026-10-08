@@ -72,11 +72,11 @@ pub fn show(app: &tauri::AppHandle) {
 }
 
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Открыть", true, None::<&str>)?;
-    let replay = MenuItem::with_id(app, "replay", "Сохранить повтор", false, None::<&str>)?;
-    let recording = MenuItem::with_id(app, "recording", "Начать запись", false, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Настройки", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Выйти", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", crate::language::text("Открыть", "Open"), true, None::<&str>)?;
+    let replay = MenuItem::with_id(app, "replay", crate::language::text("Сохранить повтор", "Save replay"), false, None::<&str>)?;
+    let recording = MenuItem::with_id(app, "recording", crate::language::text("Начать запись", "Start recording"), false, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", crate::language::text("Настройки", "Settings"), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", crate::language::text("Выйти", "Quit"), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &replay, &recording, &settings, &quit])?;
     TrayIconBuilder::with_id("main-tray")
         .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -125,11 +125,15 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
             let mut retry = None;
             let state = handle.state::<crate::commands::HostState>();
             if let Ok((snapshot, recording_enabled)) = state.tray_status() {
-                let current = (snapshot.replay_active, snapshot.continuous_recording_active, recording_enabled);
+                let current = (snapshot.replay_active, snapshot.continuous_recording_active, recording_enabled, crate::language::text("ru", "en"));
                 if previous != Some(current) {
-                    let updated = replay.set_enabled(current.0)
+                    let updated = open.set_text(crate::language::text("Открыть", "Open"))
+                        .and_then(|_| replay.set_text(crate::language::text("Сохранить повтор", "Save replay")))
+                        .and_then(|_| settings.set_text(crate::language::text("Настройки", "Settings")))
+                        .and_then(|_| quit.set_text(crate::language::text("Выйти", "Quit")))
+                        .and_then(|_| replay.set_enabled(current.0))
                         .and_then(|_| recording.set_enabled(current.1 || current.2))
-                        .and_then(|_| recording.set_text(if current.1 { "Остановить запись" } else { "Начать запись" }));
+                        .and_then(|_| recording.set_text(if current.1 { crate::language::text("Остановить запись", "Stop recording") } else { crate::language::text("Начать запись", "Start recording") }));
                     if updated.is_ok() { previous = Some(current); }
                     else { retry = Some(Duration::from_secs(1)); }
                 }

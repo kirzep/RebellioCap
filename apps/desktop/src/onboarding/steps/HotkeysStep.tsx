@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import { Button } from '../../components/Primitives';
 import { Checkbox } from '../../components/ui/checkbox';
 import React, { useEffect, useState } from 'react';
@@ -45,16 +46,16 @@ function virtualKeyFromEvent(event: KeyboardEvent): number | null {
 
 function hotkeyError(hotkey: Hotkey): string | null {
   if (hotkey.key === 0x09 || hotkey.key === 0x1b) {
-    return 'Tab и Esc используются для отмены перехвата. Выберите другую основную клавишу.';
+    return t('Tab и Esc используются для отмены перехвата. Выберите другую основную клавишу.');
   }
-  if (hotkey.win) return 'Сочетания с клавишей Win зарезервированы системой.';
-  if (hotkey.key === 0x7b) return 'F12 нельзя зарегистрировать как глобальную горячую клавишу.';
-  if (hotkey.alt && hotkey.key === 0x09) return 'Alt + Tab зарезервировано для переключения окон.';
-  if (hotkey.alt && hotkey.key === 0x20) return 'Alt + Пробел открывает системное меню окна.';
-  if (hotkey.alt && hotkey.key === 0x73) return 'Alt + F4 закрывает активное окно.';
-  if ((hotkey.ctrl || hotkey.alt) && hotkey.key === 0x1b) return 'Это сочетание с Esc зарезервировано системой.';
-  if (hotkey.ctrl && hotkey.alt && hotkey.key === 0x2e) return 'Ctrl + Alt + Delete зарезервировано системой.';
-  if (!isValidHotkey(hotkey)) return 'Эта клавиша не поддерживается. Используйте букву, цифру, F-клавишу, Пробел или Delete.';
+  if (hotkey.win) return t('Сочетания с клавишей Win зарезервированы системой.');
+  if (hotkey.key === 0x7b) return t('F12 нельзя зарегистрировать как глобальную горячую клавишу.');
+  if (hotkey.alt && hotkey.key === 0x09) return t('Alt + Tab зарезервировано для переключения окон.');
+  if (hotkey.alt && hotkey.key === 0x20) return t('Alt + Пробел открывает системное меню окна.');
+  if (hotkey.alt && hotkey.key === 0x73) return t('Alt + F4 закрывает активное окно.');
+  if ((hotkey.ctrl || hotkey.alt) && hotkey.key === 0x1b) return t('Это сочетание с Esc зарезервировано системой.');
+  if (hotkey.ctrl && hotkey.alt && hotkey.key === 0x2e) return t('Ctrl + Alt + Delete зарезервировано системой.');
+  if (!isValidHotkey(hotkey)) return t('Эта клавиша не поддерживается. Используйте букву, цифру, F-клавишу, Пробел или Delete.');
   return null;
 }
 
@@ -65,6 +66,7 @@ export function HotkeysStep({
   onCaptureEnd,
   errors = [],
 }: HotkeysStepProps) {
+  useTranslation();
   const [recordingTarget, setRecordingTarget] = useState<HotkeyTarget | null>(null);
   const [capturePreparing, setCapturePreparing] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export function HotkeysStep({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.repeat) return;
       if (event.code === 'Tab' || event.key === 'Tab' || event.keyCode === 0x09) {
-        cancelCapture('Изменение отменено. Фокус переведён дальше.');
+        cancelCapture(t('Изменение отменено. Фокус переведён дальше.'));
         return;
       }
       if (event.code === 'Escape' || event.key === 'Escape' || event.keyCode === 0x1b) {
@@ -210,8 +212,8 @@ export function HotkeysStep({
   return (
     <div className={styles.stepContent} data-testid="hotkeys-step">
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>Горячие клавиши</h2>
-        <p className={styles.copy}>Сохраняйте момент одним нажатием. Эти сочетания работают в любом приложении.</p>
+        <h2 className={styles.title}>{t("Горячие клавиши")}</h2>
+        <p className={styles.copy}>{t("Сохраняйте момент одним нажатием. Эти сочетания работают в любом приложении.")}</p>
       </div>
 
       <div className={styles.hotkeyList}>
@@ -221,11 +223,11 @@ export function HotkeysStep({
               {formatReplaySaveLabel(draft.replay_seconds ?? 30)}
             </span>
             <kbd className={styles.hotkeyValue} data-testid="hotkey-replay-display">
-              {recordingTarget === 'replay' ? 'Ожидание сочетания…' : formatHotkey(saveReplay)}
+              {recordingTarget === 'replay' ? t('Ожидание сочетания…') : formatHotkey(saveReplay)}
             </kbd>
             {replayValidation && (
               <p id="save-replay-hotkey-error" className={styles.fieldError} role="alert">
-                {replayValidation.message}
+                {t(replayValidation.message)}
               </p>
             )}
           </div>
@@ -234,8 +236,8 @@ export function HotkeysStep({
             variant={recordingTarget === 'replay' ? 'primary' : 'secondary'}
             aria-label={
               recordingTarget === 'replay'
-                ? 'Отменить изменение сочетания для сохранения Replay'
-                : 'Изменить сочетание для сохранения Replay'
+                ? t('Отменить изменение сочетания для сохранения Replay')
+                : t('Изменить сочетание для сохранения Replay')
             }
             aria-invalid={Boolean(
               replayValidation || hasDuplicateError || (captureError && recordingTarget === 'replay')
@@ -248,19 +250,19 @@ export function HotkeysStep({
             }
             data-testid="record-replay-hotkey-button"
           >
-            {recordingTarget === 'replay' ? 'Отмена' : 'Изменить'}
+            {recordingTarget === 'replay' ? t('Отмена') : t('Изменить')}
           </Button>
         </div>
 
         <div className={styles.hotkeyRow}>
           <div>
-            <span className={styles.fieldLabel}>Начать / остановить запись</span>
+            <span className={styles.fieldLabel}>{t("Начать / остановить запись")}</span>
             <kbd className={styles.hotkeyValue} data-testid="hotkey-recording-display">
-              {recordingTarget === 'recording' ? 'Ожидание сочетания…' : formatHotkey(toggleRecording)}
+              {recordingTarget === 'recording' ? t('Ожидание сочетания…') : formatHotkey(toggleRecording)}
             </kbd>
             {recordingValidation && (
               <p id="toggle-recording-hotkey-error" className={styles.fieldError} role="alert">
-                {recordingValidation.message}
+                {t(recordingValidation.message)}
               </p>
             )}
           </div>
@@ -269,8 +271,8 @@ export function HotkeysStep({
             variant={recordingTarget === 'recording' ? 'primary' : 'secondary'}
             aria-label={
               recordingTarget === 'recording'
-                ? 'Отменить изменение сочетания обычной записи'
-                : 'Изменить сочетание обычной записи'
+                ? t('Отменить изменение сочетания обычной записи')
+                : t('Изменить сочетание обычной записи')
             }
             aria-invalid={Boolean(
               recordingValidation || hasDuplicateError || (captureError && recordingTarget === 'recording')
@@ -283,15 +285,15 @@ export function HotkeysStep({
             }
             data-testid="record-recording-hotkey-button"
           >
-            {recordingTarget === 'recording' ? 'Отмена' : 'Изменить'}
+            {recordingTarget === 'recording' ? t('Отмена') : t('Изменить')}
           </Button>
         </div>
       </div>
 
       {recordingTarget && (
         <div className={styles.capturePanel} role="status">
-          <p>Нажмите сочетание с буквой, цифрой или F-клавишей.</p>
-          <p className={styles.fieldHint}>Esc — отменить. Tab — отменить и перейти дальше.</p>
+          <p>{t("Нажмите сочетание с буквой, цифрой или F-клавишей.")}</p>
+          <p className={styles.fieldHint}>{t("Esc — отменить. Tab — отменить и перейти дальше.")}</p>
         </div>
       )}
 
@@ -312,7 +314,7 @@ export function HotkeysStep({
           role="alert"
           data-testid="hotkeys-duplicate-error"
         >
-          {duplicateValidation?.message ?? 'Горячие клавиши не должны совпадать.'}
+          {duplicateValidation?.message ?? t('Горячие клавиши не должны совпадать.')}
         </p>
       )}
       {captureNotice && !captureError && !recordingTarget && (
@@ -331,17 +333,17 @@ export function HotkeysStep({
           data-testid="continuous-recording-checkbox"
         />
         <span>
-          <strong>Разрешить обычную запись</strong>
+          <strong>{t("Разрешить обычную запись")}</strong>
           <small>
             {draft.continuous_recording_enabled === false
-              ? 'Команда обычной записи будет недоступна. Сочетание сохранится на будущее.'
-              : 'Сочетание запускает и останавливает отдельную непрерывную запись.'}
+              ? t('Команда обычной записи будет недоступна. Сочетание сохранится на будущее.')
+              : t('Сочетание запускает и останавливает отдельную непрерывную запись.')}
           </small>
         </span>
       </label>
       {continuousValidation && (
         <p id="continuous-recording-enabled-error" className={styles.fieldError} role="alert">
-          {continuousValidation.message}
+          {t(continuousValidation.message)}
         </p>
       )}
 
@@ -364,8 +366,7 @@ export function HotkeysStep({
         }}
         data-testid="hotkeys-reset-button"
       >
-        Восстановить стандартные
-      </Button>
+        {t("Восстановить стандартные")}</Button>
     </div>
   );
 }

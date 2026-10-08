@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import { Field, FieldGroup, FieldSet, FieldLegend, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
@@ -55,6 +56,7 @@ export function VideoStep({
   onCatalogBusyChange,
   guided = false,
 }: VideoStepProps) {
+  useTranslation();
   const [monitors, setMonitors] = useState<MonitorChoice[]>(() => monitorCatalogCache.get(hostBridge) ?? []);
   const [catalogState, setCatalogState] = useState<CatalogState>(() =>
     monitorCatalogCache.get(hostBridge)?.length ? 'ready' : 'loading');
@@ -194,11 +196,11 @@ export function VideoStep({
   useEffect(() => {
     const issue =
       catalogState === 'empty'
-        ? 'Не найден доступный экран.'
+        ? t('Не найден доступный экран.')
         : catalogState === 'error'
-          ? catalogError?.summary ?? 'Не удалось проверить доступные экраны.'
+          ? catalogError?.summary ?? t('Не удалось проверить доступные экраны.')
           : selectedMonitorMissing
-            ? 'Сохранённый экран сейчас недоступен. Выберите другой экран.'
+            ? t('Сохранённый экран сейчас недоступен. Выберите другой экран.')
             : null;
     onAvailabilityIssueChange?.(issue);
     return () => onAvailabilityIssueChange?.(null);
@@ -276,15 +278,15 @@ export function VideoStep({
   return (
     <div className={styles.stepContent} data-testid="video-step">
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>{guided ? 'Что будем записывать?' : 'Экран'}</h2>
+        <h2 className={styles.title}>{guided ? t('Что будем записывать?') : t('Экран')}</h2>
         <p className={styles.copy}>
-          {guided ? 'Выберите экран и качество. Остальное мы уже настроили.' : 'Записывается всё содержимое выбранного экрана.'}
+          {guided ? t('Выберите экран и качество. Остальное мы уже настроили.') : t('Записывается всё содержимое выбранного экрана.')}
         </p>
       </div>
 
       <FieldGroup className={styles.formStack}>
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="video-monitor" className={styles.fieldLabel}>Экран</FieldLabel>
+          <FieldLabel htmlFor="video-monitor" className={styles.fieldLabel}>{t("Экран")}</FieldLabel>
           <NativeSelect
             id="video-monitor"
             className="w-full"
@@ -306,63 +308,57 @@ export function VideoStep({
             }}
             data-testid="video-monitor-select"
           >
-            {catalogState === 'loading' && <NativeSelectOption value="">Ищем доступные экраны…</NativeSelectOption>}
+            {catalogState === 'loading' && <NativeSelectOption value="">{t("Ищем доступные экраны…")}</NativeSelectOption>}
             {(catalogState === 'empty' || catalogState === 'error') && (
-              <NativeSelectOption value="">Доступных экранов нет</NativeSelectOption>
+              <NativeSelectOption value="">{t("Доступных экранов нет")}</NativeSelectOption>
             )}
             {selectedMonitorMissing && (
               <NativeSelectOption value={draft.monitor_id ?? ''} disabled>
-                Сохранённый экран недоступен
-              </NativeSelectOption>
+                {t("Сохранённый экран недоступен")}</NativeSelectOption>
             )}
             {monitors.map((monitor) => (
               <NativeSelectOption key={monitor.id} value={monitor.id}>
                 {friendlyMonitorName(monitor.name)} · {monitor.width}×{monitor.height}
-                {monitor.primary ? ' · Основной' : ''}
+                {monitor.primary ? t(' · Основной') : ''}
               </NativeSelectOption>
             ))}
           </NativeSelect>
 
           {monitorValidation && (
             <p id="video-monitor-error" className={styles.fieldError} role="alert">
-              {monitorValidation.message}
+              {t(monitorValidation.message)}
             </p>
           )}
 
           {catalogState === 'loading' && (
-            <p className={styles.srOnly} role="status">Получаем список экранов…</p>
+            <p className={styles.srOnly} role="status">{t("Получаем список экранов…")}</p>
           )}
           {catalogState === 'empty' && (
             <ErrorNotice
-              title="Доступные экраны не найдены"
+              title={t("Доступные экраны не найдены")}
               action={(
                 <div className={styles.compactActions}>
                   <Button size="compact" variant="tertiary" onClick={() => setReloadToken((value) => value + 1)}>
-                    Повторить
-                  </Button>
+                    {t("Повторить")}</Button>
                   <Button size="compact" variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-                    Диагностика
-                  </Button>
+                    {t("Диагностика")}</Button>
                 </div>
               )}
             >
-              Windows не сообщил ни об одном доступном экране.
-            </ErrorNotice>
+              {t("Windows не сообщил ни об одном доступном экране.")}</ErrorNotice>
           )}
           {catalogState === 'error' && (
             <ErrorNotice
-              title="Не удалось получить список экранов"
+              title={t("Не удалось получить список экранов")}
               technicalDetails={catalogError
-                ? `Код: ${catalogError.code}\n${catalogError.technicalCause}`
+                ? t("Код: {0}\n{1}", catalogError.code, catalogError.technicalCause)
                 : undefined}
               action={(
                 <div className={styles.compactActions}>
                   <Button size="compact" variant="tertiary" onClick={() => setReloadToken((value) => value + 1)}>
-                    Повторить
-                  </Button>
+                    {t("Повторить")}</Button>
                   <Button size="compact" variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-                    Диагностика
-                  </Button>
+                    {t("Диагностика")}</Button>
                 </div>
               )}
             >
@@ -371,45 +367,41 @@ export function VideoStep({
           )}
           {diagnosticsError && (
             <ErrorNotice
-              title="Не удалось открыть диагностику"
-              technicalDetails={`Код: ${diagnosticsError.code}\n${diagnosticsError.technicalCause}`}
+              title={t("Не удалось открыть диагностику")}
+              technicalDetails={t("Код: {0}\n{1}", diagnosticsError.code, diagnosticsError.technicalCause)}
               action={(
                 <Button size="compact" variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-                  Повторить
-                </Button>
+                  {t("Повторить")}</Button>
               )}
             >
-              {diagnosticsError.summary}
+              {t(diagnosticsError.summary)}
             </ErrorNotice>
           )}
           {selectedMonitorMissing && (
             <p className={styles.inlineWarning} role="alert">
-              Этот экран сейчас недоступен. Выберите устройство из списка.
-            </p>
+              {t("Этот экран сейчас недоступен. Выберите устройство из списка.")}</p>
           )}
         </Field>
 
         <FieldSet className={styles.fieldset}>
-          <FieldLegend className={styles.fieldLabel}>Качество записи</FieldLegend>
+          <FieldLegend className={styles.fieldLabel}>{t("Качество записи")}</FieldLegend>
           <p className={styles.fieldHint}>
-            Запись сохраняется в SDR. HDR и преобразование HDR в SDR пока не поддерживаются;
-            для корректных цветов отключите HDR в настройках экрана Windows перед записью.
-          </p>
+            {t("Запись сохраняется в SDR. HDR и преобразование HDR в SDR пока не поддерживаются;\n            для корректных цветов отключите HDR в настройках экрана Windows перед записью.")}</p>
           <ToggleGroup type="single" value={quality} variant="outline" spacing={2} className="flex w-full flex-wrap"
             onValueChange={(value) => {
               if (value === 'balanced' || value === 'native' || value === 'manual') selectQuality(value);
-            }} aria-label="Качество записи">
+            }} aria-label={t("Качество записи")}>
             {([
-              ['balanced', 'Сбалансированное'],
-              ['native', 'Как у экрана'],
-              ['manual', 'Вручную'],
+              ['balanced', t('Сбалансированное')],
+              ['native', t('Как у экрана')],
+              ['manual', t('Вручную')],
             ] as const).map(([value, label]) => (
               <ToggleGroupItem
                 key={value}
                 value={value}
                 className="min-h-11 h-auto flex-1 px-3 py-2 whitespace-normal"
               >
-                {label}
+                {t(label)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -417,7 +409,7 @@ export function VideoStep({
 
         <div className={styles.resultRow} aria-live="polite">
           <div>
-            <span className={styles.eyebrow}>Итог записи</span>
+            <span className={styles.eyebrow}>{t("Итог записи")}</span>
             <strong className={styles.resultValue}>
               {formatVideoMode(draft.width, draft.height, draft.fps, draft.bitrate)}
             </strong>
@@ -429,7 +421,7 @@ export function VideoStep({
             aria-controls="video-advanced-settings"
             onClick={() => setAdvancedOpen((value) => !value)}
           >
-            {advancedOpen ? 'Скрыть параметры' : 'Дополнительные параметры'}
+            {advancedOpen ? t('Скрыть параметры') : t('Дополнительные параметры')}
           </Button>
         </div>
 
@@ -437,8 +429,7 @@ export function VideoStep({
           <div id="video-advanced-settings" className={styles.advancedPanel}>
             <div className={styles.inputGrid}>
               <FieldLabel className={styles.inputLabel} htmlFor="video-width">
-                Ширина
-                <Input
+                {t("Ширина")}<Input
                   id="video-width"
                   type="text"
                   inputMode="numeric"
@@ -453,13 +444,12 @@ export function VideoStep({
                 />
                 {widthValidation && (
                   <span id="video-width-error" className={styles.fieldError} role="alert">
-                    {widthValidation.message}
+                    {t(widthValidation.message)}
                   </span>
                 )}
               </FieldLabel>
               <FieldLabel className={styles.inputLabel} htmlFor="video-height">
-                Высота
-                <Input
+                {t("Высота")}<Input
                   id="video-height"
                   type="text"
                   inputMode="numeric"
@@ -474,13 +464,12 @@ export function VideoStep({
                 />
                 {heightValidation && (
                   <span id="video-height-error" className={styles.fieldError} role="alert">
-                    {heightValidation.message}
+                    {t(heightValidation.message)}
                   </span>
                 )}
               </FieldLabel>
               <FieldLabel className={styles.inputLabel} htmlFor="video-fps">
-                Частота кадров
-                <NativeSelect
+                {t("Частота кадров")}<NativeSelect
                   id="video-fps"
                   className="w-full"
                   value={fpsSelectValue}
@@ -496,20 +485,19 @@ export function VideoStep({
                   }}
                   data-testid="video-fps-select"
                 >
-                  <NativeSelectOption value="30">30 кадров/с</NativeSelectOption>
-                  <NativeSelectOption value="60">60 кадров/с</NativeSelectOption>
-                  <NativeSelectOption value="120">120 кадров/с</NativeSelectOption>
-                  <NativeSelectOption value="custom">Другое значение</NativeSelectOption>
+                  <NativeSelectOption value="30">{t("30 кадров/с")}</NativeSelectOption>
+                  <NativeSelectOption value="60">{t("60 кадров/с")}</NativeSelectOption>
+                  <NativeSelectOption value="120">{t("120 кадров/с")}</NativeSelectOption>
+                  <NativeSelectOption value="custom">{t("Другое значение")}</NativeSelectOption>
                 </NativeSelect>
                 {fpsValidation && fpsSelectValue !== 'custom' && (
                   <span id="video-fps-error" className={styles.fieldError} role="alert">
-                    {fpsValidation.message}
+                    {t(fpsValidation.message)}
                   </span>
                 )}
               </FieldLabel>
               <FieldLabel className={styles.inputLabel} htmlFor="video-bitrate">
-                Битрейт, Мбит/с
-                <Input
+                {t("Битрейт, Мбит/с")}<Input
                   id="video-bitrate"
                   type="text"
                   inputMode="decimal"
@@ -540,7 +528,7 @@ export function VideoStep({
                 />
                 {bitrateValidation && (
                   <span id="video-bitrate-error" className={styles.fieldError} role="alert">
-                    {bitrateValidation.message}
+                    {t(bitrateValidation.message)}
                   </span>
                 )}
               </FieldLabel>
@@ -548,8 +536,7 @@ export function VideoStep({
 
             {fpsSelectValue === 'custom' && (
               <FieldLabel className={styles.inputLabel} htmlFor="video-custom-fps">
-                FPS вручную
-                <Input
+                {t("FPS вручную")}<Input
                   id="video-custom-fps"
                   type="text"
                   inputMode="numeric"
@@ -564,19 +551,17 @@ export function VideoStep({
                 />
                 {fpsValidation && (
                   <span id="video-fps-error" className={styles.fieldError} role="alert">
-                    {fpsValidation.message}
+                    {t(fpsValidation.message)}
                   </span>
                 )}
               </FieldLabel>
             )}
 
             <p id="video-bitrate-hint" className={styles.fieldHint}>
-              Размеры — чётные числа от 64 до 16384, FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.
-            </p>
+              {t("Размеры — чётные числа от 64 до 16384, FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.")}</p>
             {stretchesImage && (
               <p className={styles.inlineWarning} role="status">
-                Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.
-              </p>
+                {t("Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.")}</p>
             )}
           </div>
         )}

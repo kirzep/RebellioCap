@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Testing](testing.md) · [Licensing](../LICENSE.md)
 
-Desktop manifests declare **0.1.9**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
+Desktop manifests declare **0.1.10**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
 
 ## Build a local package
 
@@ -53,7 +53,7 @@ Release builds check once in the background when the main screen starts. Develop
 
 After confirmation, the application downloads the full installer and verifies its signature **before stopping recording**. Download or signature failure leaves recording running and allows a retry. Installation saves the current recording, disables Replay and discards its unsaved buffer. Close the editor and finish exports before updating. The NSIS installer runs in passive mode and requests a restart of the application. Installer launch failure is shown in the application; recording can be started again. Configuration and saved clips remain outside the installed program files and are retained.
 
-The first updater-enabled version is **0.1.9**. Existing 0.1.7 users need to install it manually once; subsequent published versions can be installed from the application. Full-package updates are supported; delta updates and automatic rollback are not included.
+The first updater-enabled version is **0.1.10**. Existing 0.1.7 users need to install it manually once; subsequent published versions can be installed from the application. Full-package updates are supported; delta updates and automatic rollback are not included.
 
 ### Installer/update acceptance
 

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
+import { applyLanguageSettings, disposeLanguageInitialization } from '../i18n';
 HTMLElement.prototype.scrollIntoView = vi.fn();
 
 Object.defineProperty(window, 'matchMedia', { writable: true, value: vi.fn().mockImplementation((media: string) => ({
@@ -9,6 +10,11 @@ Object.defineProperty(window, 'matchMedia', { writable: true, value: vi.fn().moc
   addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
 })) });
 
+beforeEach(() => {
+  disposeLanguageInitialization();
+  applyLanguageSettings({ preference: 'system', language: 'ru' });
+});
 afterEach(() => {
   cleanup();
+  disposeLanguageInitialization();
 });

@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { WindowTitlebar } from './WindowTitlebar';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, PanelLeft, Settings2, Settings, Scissors } from 'lucide-react';
@@ -40,6 +41,7 @@ export interface WindowShellProps {
 export function WindowShell({ children, navigation, settingsNavigation, availableUpdate, onInstallUpdate,
   activeNavigation, onNavigate, contentWidth, headerActions, windowStatus, footer, onBack, backLabel = 'Назад',
   contentLabel, className, contentClassName }: WindowShellProps) {
+  useTranslation();
   const contentRef = useRef<HTMLElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('rebelliocap.sidebar-collapsed') === 'true'; }
@@ -70,8 +72,8 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
   const hasNavigation = Boolean(navigation?.length);
   const titlebar = <WindowTitlebar>
     {hasNavigation && <Button variant="ghost" size="icon" type="button" className={styles.sidebarToggle}
-      aria-label={sidebarCollapsed ? 'Развернуть боковое меню' : 'Свернуть боковое меню'}
-      title={sidebarCollapsed ? 'Развернуть боковое меню' : 'Свернуть боковое меню'}
+      aria-label={sidebarCollapsed ? t('Развернуть боковое меню') : t('Свернуть боковое меню')}
+      title={sidebarCollapsed ? t('Развернуть боковое меню') : t('Свернуть боковое меню')}
       aria-expanded={!sidebarCollapsed} aria-controls="workspace-navigation" onClick={toggleSidebar}>
       <PanelLeft aria-hidden="true" />
     </Button>}
@@ -104,7 +106,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
           <div className={styles.brand}><DeveloperBrand className={styles.brandLogo} /><span>RebellioCap</span></div>
           <SidebarGroup>
             <SidebarGroupContent>
-              <nav id="workspace-navigation" aria-label="Разделы приложения">
+              <nav id="workspace-navigation" aria-label={t("Разделы приложения")}>
                 <SidebarMenu>
                   {navigation?.map((item) => {
                     const customIcon = ['recording', 'clips', 'video', 'audio', 'replay', 'hotkeys'].includes(item.id);
@@ -113,12 +115,12 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
                       <SidebarMenuButton type="button" size="lg" className={styles.navButton}
                         isActive={item.id === activeNavigation}
                         aria-current={item.id === activeNavigation ? 'page' : undefined}
-                        aria-label={item.label} title={item.label}
+                        aria-label={t(item.label)} title={t(item.label)}
                         disabled={item.disabled || !onNavigate} onClick={(event) => {
                           keyboardNavigation.current = event.detail === 0;
                           onNavigate?.(item.id);
                         }}>
-                        {item.id === 'editor' ? <Scissors aria-hidden="true" /> : customIcon ? <AppIcon name={item.id as AppIconName} /> : <Settings2 aria-hidden="true" />}<span className={styles.navLabel}>{item.label}</span>
+                        {item.id === 'editor' ? <Scissors aria-hidden="true" /> : customIcon ? <AppIcon name={item.id as AppIconName} /> : <Settings2 aria-hidden="true" />}<span className={styles.navLabel}>{t(item.label)}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>;
                   })}
@@ -134,13 +136,13 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
             <SidebarMenuButton type="button" size="lg" className={cn(styles.navButton, styles.settingsButton)}
               isActive={settingsNavigation.id === activeNavigation}
               aria-current={settingsNavigation.id === activeNavigation ? 'page' : undefined}
-              aria-label={settingsNavigation.label} title={settingsNavigation.label}
+              aria-label={t(settingsNavigation.label)} title={t(settingsNavigation.label)}
               disabled={settingsNavigation.disabled || !onNavigate}
               onClick={event => {
                 keyboardNavigation.current = event.detail === 0;
                 onNavigate?.(settingsNavigation.id);
               }}>
-              <Settings aria-hidden="true" /><span className={styles.navLabel}>{settingsNavigation.label}</span>
+              <Settings aria-hidden="true" /><span className={styles.navLabel}>{t(settingsNavigation.label)}</span>
             </SidebarMenuButton>
           </SidebarMenuItem></SidebarMenu>
         </SidebarFooter>}

@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, RefreshCw, Search, MoreHorizontal, Pencil, Trash2, Folder, Monitor, ArrowLeft } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
@@ -35,6 +36,7 @@ function enqueueThumbnail(task: () => Promise<void>) {
 }
 
 function ClipThumbnail({ bridge, clip }: { bridge: HostBridge; clip: SavedClip }) {
+  useTranslation();
   const anchor = useRef<HTMLSpanElement>(null);
   const [src, setSrc] = useState<string>();
   const [unavailable, setUnavailable] = useState(false);
@@ -66,11 +68,12 @@ function ClipThumbnail({ bridge, clip }: { bridge: HostBridge; clip: SavedClip }
   }, [bridge, clip.name, clip.relativePath, clip.bytes, clip.modifiedMs]);
   return <span ref={anchor} className={styles.preview}>
     {src && <img src={src} alt="" onError={() => { setSrc(undefined); setUnavailable(true); }} />}
-    {unavailable && <span className={styles.noPreview}>Превью недоступно</span>}
+    {unavailable && <span className={styles.noPreview}>{t("Превью недоступно")}</span>}
   </span>;
 }
 
 function FolderIcon({ bridge, folder, revision }: { bridge: HostBridge; folder: string; revision: string }) {
+  useTranslation();
   const [src, setSrc] = useState<string>();
   useEffect(() => {
     let active = true;
@@ -86,14 +89,15 @@ function FolderIcon({ bridge, folder, revision }: { bridge: HostBridge; folder: 
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
   }, [bridge, folder, revision]);
   return <span className={styles.folderIcon}>{folder === 'Desktop'
-    ? <Monitor size={24} aria-label="Рабочий стол" />
-    : src ? <img src={src} alt={`Значок ${folder}`} onError={() => setSrc(undefined)} />
-    : <Folder size={24} aria-label="Папка игры" />}</span>;
+    ? <Monitor size={24} aria-label={t("Рабочий стол")} />
+    : src ? <img src={src} alt={t("Значок {0}", folder)} onError={() => setSrc(undefined)} />
+    : <Folder size={24} aria-label={t("Папка игры")} />}</span>;
 }
 
 export function ClipsScreen({ bridge, directory, compact = false, onShowAll, refreshToken }: {
   bridge: HostBridge; directory?: string; compact?: boolean; onShowAll?: () => void; refreshToken?: string;
 }) {
+  useTranslation();
   const libraryRef = useRef<HTMLElement>(null);
   const [clips, setClips] = useState<SavedClip[]>([]);
   const [nativePage, setNativePage] = useState<ClipCatalogPage | null>(null);
@@ -108,7 +112,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
   }, [bridge, catalogOwner]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [errorTitle, setErrorTitle] = useState('Не удалось загрузить клипы');
+  const [errorTitle, setErrorTitle] = useState(t('Не удалось загрузить клипы'));
   const requestRef = useRef(0);
   const [query, setQuery] = useState('');
   const [view, setView] = useState(initialView);
@@ -219,59 +223,59 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
     } catch (error) { setErrorTitle('Не удалось открыть клип'); setError(normalizeError(error).summary); }
     finally { setOpening(null); }
   }
-  return <section ref={libraryRef} className={styles.library} aria-label={compact ? 'Последние клипы' : 'Все клипы'}>
+  return <section ref={libraryRef} className={styles.library} aria-label={compact ? t('Последние клипы') : t('Все клипы')}>
     {editor && <ClipEditor clipName={editor.name} onClose={() => setEditor(null)} />}
     {playback && <ClipPlayer key={playback.media.id} name={playback.clip.name} media={playback.media} onClose={() => setPlayback(null)} onRelease={id => { void bridge.releaseClipPlayback?.(id).catch(() => {}); }} />}
-    {opening && <InlineStatus tone="busy">Подготавливаем клип для просмотра…</InlineStatus>}
+    {opening && <InlineStatus tone="busy">{t("Подготавливаем клип для просмотра…")}</InlineStatus>}
     <header className={styles.header}>
-      <div><h2>{compact ? 'Последние клипы' : busy ? 'Загружаем библиотеку' : `Файлы · ${nativePage?.totalClips ?? clips.length}`}</h2></div>
-      {compact ? <Button variant="tertiary" size="compact" onClick={onShowAll}>Все клипы →</Button>
-        : <Button variant="tertiary" size="compact" leadingIcon={<RefreshCw />} busy={busy} onClick={() => void load()}>Обновить</Button>}
+      <div><h2>{compact ? t('Последние клипы') : busy ? t('Загружаем библиотеку') : t("Файлы · {0}", nativePage?.totalClips ?? clips.length)}</h2></div>
+      {compact ? <Button variant="tertiary" size="compact" onClick={onShowAll}>{t("Все клипы →")}</Button>
+        : <Button variant="tertiary" size="compact" leadingIcon={<RefreshCw />} busy={busy} onClick={() => void load()}>{t("Обновить")}</Button>}
     </header>
     {!compact && <div className={styles.toolbar}>
-      <div className={styles.viewSwitch} aria-label="Вид библиотеки">
-        <button aria-pressed={view === 'all'} onClick={() => changeView('all')}>Все клипы</button>
-        <button aria-pressed={view === 'folders'} onClick={() => changeView('folders')}>По папкам</button>
+      <div className={styles.viewSwitch} aria-label={t("Вид библиотеки")}>
+        <button aria-pressed={view === 'all'} onClick={() => changeView('all')}>{t("Все клипы")}</button>
+        <button aria-pressed={view === 'folders'} onClick={() => changeView('folders')}>{t("По папкам")}</button>
       </div>
-      {view === 'folders' && selectedFolder && <button className={styles.back} onClick={() => setSelectedFolder(null)}><ArrowLeft size={16} />Все папки<span>{selectedFolder}</span></button>}
-      <label className={styles.search}><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Найти клип или папку" aria-label="Поиск клипов" /></label></div>}
-    {!compact && <Button variant="tertiary" size="compact" leadingIcon={<Pencil />} onClick={() => setEditor({})}>Редактор клипов · Новый проект / .rebcap</Button>}
-    {error && <ErrorNotice title={errorTitle} action={<Button size="compact" onClick={() => void load()}>Обновить список</Button>}>{error}</ErrorNotice>}
-    {busy ? <InlineStatus tone="busy">Загружаем клипы…</InlineStatus> : !error && empty ?
-      <div className={styles.empty}><AppIcon name="clips" size={28} /><h3>{query ? 'Клипы не найдены' : 'Здесь появятся ваши клипы'}</h3><p>{query ? 'Попробуйте другое название.' : 'Сохраните повтор или завершите запись. Файлы из папки записи появятся здесь.'}</p></div>
+      {view === 'folders' && selectedFolder && <button className={styles.back} onClick={() => setSelectedFolder(null)}><ArrowLeft size={16} />{t("Все папки")}<span>{selectedFolder}</span></button>}
+      <label className={styles.search}><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Найти клип или папку")} aria-label={t("Поиск клипов")} /></label></div>}
+    {!compact && <Button variant="tertiary" size="compact" leadingIcon={<Pencil />} onClick={() => setEditor({})}>{t("Редактор клипов · Новый проект / .rebcap")}</Button>}
+    {error && <ErrorNotice title={errorTitle} action={<Button size="compact" onClick={() => void load()}>{t("Обновить список")}</Button>}>{t(error)}</ErrorNotice>}
+    {busy ? <InlineStatus tone="busy">{t("Загружаем клипы…")}</InlineStatus> : !error && empty ?
+      <div className={styles.empty}><AppIcon name="clips" size={28} /><h3>{query ? t('Клипы не найдены') : t('Здесь появятся ваши клипы')}</h3><p>{query ? t('Попробуйте другое название.') : t('Сохраните повтор или завершите запись. Файлы из папки записи появятся здесь.')}</p></div>
       : showFolders ? <div className={styles.grid}>{visibleFolders.map(([folder, items]) => <article className={styles.clip} key={folder}>
-        <button className={styles.thumbnail} onClick={() => setSelectedFolder(folder)} aria-label={`Открыть папку ${folder}`}>
+        <button className={styles.thumbnail} onClick={() => setSelectedFolder(folder)} aria-label={t("Открыть папку {0}", folder)}>
           <ClipThumbnail bridge={bridge} clip={items[0]} />
         </button>
         <div className={styles.folderTitle}><FolderIcon bridge={bridge} folder={folder} revision={`${clipId(items[0])}:${clipTime(items[0])}:${refreshToken ?? ''}`} /><h3 title={folder}>{folder}</h3></div>
-        <p>{nativePage?.folders.find(item => item.name === folder)?.count ?? items.length} клипов · {new Date(clipTime(items[0])).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</p>
+        <p>{nativePage?.folders.find(item => item.name === folder)?.count ?? items.length} {' '}{t("клипов ·")}{' '}{new Date(clipTime(items[0])).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</p>
       </article>)}</div>
       : <div className={styles.grid}>{visible.map(clip => <article className={styles.clip} key={clipId(clip)}>
-        <button className={styles.thumbnail} disabled={opening !== null} onClick={() => void open(clip)} aria-label={`Открыть ${clip.name}`}>
+        <button className={styles.thumbnail} disabled={opening !== null} onClick={() => void open(clip)} aria-label={t("Открыть {0}", clip.name)}>
           <ClipThumbnail bridge={bridge} clip={clip} />
-          <span className={styles.play}><Play size={20} /></span><span className={styles.extension}>{clip.recovery?'Копия':clip.name.split('.').pop()?.toUpperCase()}</span>
+          <span className={styles.play}><Play size={20} /></span><span className={styles.extension}>{clip.recovery?t('Копия'):clip.name.split('.').pop()?.toUpperCase()}</span>
         </button><div className={styles.clipTitle}><h3 title={clip.name}>{clip.name}</h3>
-          <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className={styles.more} aria-label={`Действия с ${clip.name}`}><MoreHorizontal size={18} /></button></DropdownMenu.Trigger>
+          <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className={styles.more} aria-label={t("Действия с {0}", clip.name)}><MoreHorizontal size={18} /></button></DropdownMenu.Trigger>
             <DropdownMenu.Portal><DropdownMenu.Content className={styles.menu} align="end" sideOffset={5} collisionPadding={12}>
-              <DropdownMenu.Item className={styles.menuItem} onSelect={() => setEditor({name: clipId(clip)})}><Pencil size={15} />Редактировать клип</DropdownMenu.Item>
-              <DropdownMenu.Item className={styles.menuItem} onSelect={() => edit(clip, 'rename')}><Pencil size={15} />Переименовать</DropdownMenu.Item>
-              <DropdownMenu.Item className={`${styles.menuItem} ${styles.deleteItem}`} onSelect={() => edit(clip, 'delete')}><Trash2 size={15} />Удалить</DropdownMenu.Item>
+              <DropdownMenu.Item className={styles.menuItem} onSelect={() => setEditor({name: clipId(clip)})}><Pencil size={15} />{t("Редактировать клип")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={styles.menuItem} onSelect={() => edit(clip, 'rename')}><Pencil size={15} />{t("Переименовать")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={`${styles.menuItem} ${styles.deleteItem}`} onSelect={() => edit(clip, 'delete')}><Trash2 size={15} />{t("Удалить")}</DropdownMenu.Item>
             </DropdownMenu.Content></DropdownMenu.Portal>
           </DropdownMenu.Root>
-        </div>{clip.recovery&&<p>Незавершённая запись · конец может отсутствовать</p>}<p>{!compact && view === 'all' && <span>{clipFolder(clip)} · </span>}{new Date(clipTime(clip)).toLocaleDateString('ru-RU', {day:'numeric', month:'short'})} · {(clip.bytes / 1024 / 1024).toLocaleString('ru-RU', {maximumFractionDigits:1})} МБ</p>
+        </div>{clip.recovery&&<p>{t("Незавершённая запись · конец может отсутствовать")}</p>}<p>{!compact && view === 'all' && <span>{clipFolder(clip)} · </span>}{new Date(clipTime(clip)).toLocaleDateString('ru-RU', {day:'numeric', month:'short'})} · {(clip.bytes / 1024 / 1024).toLocaleString('ru-RU', {maximumFractionDigits:1})} {' '}{t("МБ")}</p>
       </article>)}</div>}
-    {!compact && !busy && !error && pageCount > 1 && <nav className={styles.pagination} aria-label="Страницы библиотеки">
-      <Button variant="tertiary" size="compact" disabled={page === 0} onClick={() => goToPage(page - 1)}>Предыдущая страница</Button>
-      <span role="status">Страница {page + 1} из {pageCount}</span>
-      <Button variant="tertiary" size="compact" disabled={page === pageCount - 1} onClick={() => goToPage(page + 1)}>Следующая страница</Button>
+    {!compact && !busy && !error && pageCount > 1 && <nav className={styles.pagination} aria-label={t("Страницы библиотеки")}>
+      <Button variant="tertiary" size="compact" disabled={page === 0} onClick={() => goToPage(page - 1)}>{t("Предыдущая страница")}</Button>
+      <span role="status">{t("Страница")}{' '}{page + 1} {' '}{t("из")}{' '}{pageCount}</span>
+      <Button variant="tertiary" size="compact" disabled={page === pageCount - 1} onClick={() => goToPage(page + 1)}>{t("Следующая страница")}</Button>
     </nav>}
-    {!compact && directory && <p className={styles.directory}>Папка записи <span>{directory}</span></p>}
-    <ConfirmDialog open={dialogOpen} title={editing?.action === 'delete' ? 'Удалить клип?' : 'Переименовать клип'}
-      description={editing?.action === 'delete' ? `«${editing.clip.name}» будет перемещён в корзину Windows.` : 'Расширение файла сохранится автоматически.'}
-      confirmLabel={editing?.action === 'delete' ? 'Удалить' : 'Сохранить'} destructive={editing?.action === 'delete'} busy={mutationBusy} busyLabel={editing?.action === 'delete' ? 'Удаляем…' : 'Сохраняем…'}
+    {!compact && directory && <p className={styles.directory}>{t("Папка записи")}{' '}<span>{directory}</span></p>}
+    <ConfirmDialog open={dialogOpen} title={editing?.action === 'delete' ? t('Удалить клип?') : t('Переименовать клип')}
+      description={editing?.action === 'delete' ? t("«{0}» будет перемещён в корзину Windows.", editing.clip.name) : t('Расширение файла сохранится автоматически.')}
+      confirmLabel={editing?.action === 'delete' ? t('Удалить') : t('Сохранить')} destructive={editing?.action === 'delete'} busy={mutationBusy} busyLabel={editing?.action === 'delete' ? t('Удаляем…') : t('Сохраняем…')}
       onConfirm={() => void mutate()} onCancel={() => setDialogOpen(false)}>
-      {editing?.action === 'rename' && <label className={styles.renameLabel}>Название клипа<input className={styles.renameInput} value={newName} onChange={e => setNewName(e.target.value)} maxLength={180} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void mutate(); } }} /></label>}
-      {mutationError && <p role="alert" className={styles.mutationError}>{mutationError}</p>}
+      {editing?.action === 'rename' && <label className={styles.renameLabel}>{t("Название клипа")}<input className={styles.renameInput} value={newName} onChange={e => setNewName(e.target.value)} maxLength={180} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void mutate(); } }} /></label>}
+      {mutationError && <p role="alert" className={styles.mutationError}>{t(mutationError)}</p>}
     </ConfirmDialog>
   </section>;
 }

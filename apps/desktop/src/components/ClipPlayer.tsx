@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import {NativeSelect,NativeSelectOption} from './ui/native-select';
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Dialog } from 'radix-ui';
@@ -16,6 +17,7 @@ function rangeFill(value: number): CSSProperties { return { '--fill': `${value}%
 export function ClipPlayer({ name, media, onClose, onRelease }: {
   name: string; media: ClipPlayback; onClose: () => void; onRelease?: (id: string) => void;
 }) {
+  useTranslation();
   const video = useRef<HTMLVideoElement>(null);
   const audio = useRef<(HTMLAudioElement | null)[]>([]);
   const panel = useRef<HTMLDivElement>(null);
@@ -170,7 +172,7 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
   }, [mixerOpen]);
 
   const activeTracks = volumes.filter(volume => volume > 0).length;
-  const channels = media.tracks.map((track, index) => ({ track, index })).sort((a, b) => Number(a.track.label === 'Системный звук + микрофон') - Number(b.track.label === 'Системный звук + микрофон'));
+  const channels = media.tracks.map((track, index) => ({ track, index })).sort((a, b) => Number(a.track.label === t('Системный звук + микрофон')) - Number(b.track.label === t('Системный звук + микрофон')));
 
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal><Dialog.Overlay className={styles.backdrop} /><Dialog.Content ref={panel} className={styles.player} data-controls-visible={controlsVisible} aria-describedby={undefined} onKeyDown={keyboard}
@@ -180,10 +182,10 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
       <header className={styles.header}>
         <div className={styles.heading}><Dialog.Title title={name}>{name}</Dialog.Title></div>
         {resolution && <span className={styles.metadata}>{resolution}</span>}
-        <Dialog.Close className={styles.close} aria-label="Закрыть просмотр" title="Закрыть · Esc"><X size={18} /></Dialog.Close>
+        <Dialog.Close className={styles.close} aria-label={t("Закрыть просмотр")} title={t("Закрыть · Esc")}><X size={18} /></Dialog.Close>
       </header>
       <div className={styles.stage} data-playing={playing}>
-        <video ref={element => { if (element) video.current = element; }} src={media.video} autoPlay={autoplay.current} muted playsInline preload="auto" aria-label="Видео клипа"
+        <video ref={element => { if (element) video.current = element; }} src={media.video} autoPlay={autoplay.current} muted playsInline preload="auto" aria-label={t("Видео клипа")}
           onClick={togglePlayback} onDoubleClick={() => void toggleFullscreen()} onLoadedMetadata={readMetadata} onDurationChange={readMetadata}
           onLoadedData={() => setBuffering(false)} onCanPlay={() => setBuffering(false)} onTimeUpdate={() => setPosition(video.current?.currentTime ?? 0)}
           onPlay={() => { if (pauseWhenHidden()) return; setPlaying(true); setError(null); playAudio(); }} onPlaying={() => { if (pauseWhenHidden()) return; setBuffering(false); playAudio(); }}
@@ -192,48 +194,48 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
           onSeeked={() => { setPosition(video.current?.currentTime ?? 0); if ((video.current?.readyState ?? 0) >= 2) setBuffering(false); synchronize(true); playAudio(); }}
           onRateChange={() => { setSpeed(video.current?.playbackRate ?? 1); synchronize(); }}
           onError={() => { pauseAudio(); setPlaying(false); setBuffering(false); setError('Не удалось воспроизвести видео. Возможно, кодек не поддерживается системой.'); }} />
-        {buffering && !error ? <div className={styles.loading} role="status"><LoaderCircle size={28} /><span>Загружаем видео…</span></div>
-          : !playing && !error && <button className={styles.centerPlay} onClick={togglePlayback} aria-label="Воспроизвести клип"><Play size={27} fill="currentColor" strokeWidth={1.4} /></button>}
+        {buffering && !error ? <div className={styles.loading} role="status"><LoaderCircle size={28} /><span>{t("Загружаем видео…")}</span></div>
+          : !playing && !error && <button className={styles.centerPlay} onClick={togglePlayback} aria-label={t("Воспроизвести клип")}><Play size={27} fill="currentColor" strokeWidth={1.4} /></button>}
         <div className={styles.controls}>
           <input className={`${styles.range} ${styles.timeline}`} type="range" min="0" max={duration || 0} step="0.01" value={Math.min(position, duration)} disabled={!duration}
-            aria-label="Позиция воспроизведения" aria-valuetext={`${clock(position)} из ${clock(duration)}`} style={rangeFill(duration ? position / duration * 100 : 0)} onChange={event => seek(Number(event.target.value))} />
+            aria-label={t("Позиция воспроизведения")} aria-valuetext={t("{0} из {1}", clock(position), clock(duration))} style={rangeFill(duration ? position / duration * 100 : 0)} onChange={event => seek(Number(event.target.value))} />
           <div className={styles.transport}>
-            <button className={styles.playButton} onClick={togglePlayback} aria-label={playing ? 'Пауза' : 'Воспроизвести'} title={playing ? 'Пауза · Пробел' : 'Воспроизвести · Пробел'}>{playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button>
-            <button className={styles.iconButton} onClick={() => seek((video.current?.currentTime ?? 0) - 5)} disabled={!duration} aria-label="Назад на 5 секунд" title="Назад на 5 секунд · ←"><RotateCcw size={19} /><span className={styles.skipAmount}>5</span></button>
-            <button className={styles.iconButton} onClick={() => seek((video.current?.currentTime ?? 0) + 5)} disabled={!duration} aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд · →"><RotateCw size={19} /><span className={styles.skipAmount}>5</span></button>
+            <button className={styles.playButton} onClick={togglePlayback} aria-label={playing ? t('Пауза') : t('Воспроизвести')} title={playing ? t('Пауза · Пробел') : t('Воспроизвести · Пробел')}>{playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button>
+            <button className={styles.iconButton} onClick={() => seek((video.current?.currentTime ?? 0) - 5)} disabled={!duration} aria-label={t("Назад на 5 секунд")} title={t("Назад на 5 секунд · ←")}><RotateCcw size={19} /><span className={styles.skipAmount}>5</span></button>
+            <button className={styles.iconButton} onClick={() => seek((video.current?.currentTime ?? 0) + 5)} disabled={!duration} aria-label={t("Вперёд на 5 секунд")} title={t("Вперёд на 5 секунд · →")}><RotateCw size={19} /><span className={styles.skipAmount}>5</span></button>
             <span className={styles.time}><span>{clock(position)}</span><span className={styles.timeDivider}>/</span><span>{clock(duration)}</span></span>
             <div className={styles.transportEnd}>
               {media.tracks.length > 0 && <button ref={soundButton} className={styles.iconButton} data-active={mixerOpen} onClick={() => setMixerOpen(open => !open)}
-                aria-label="Звук и дорожки" aria-expanded={mixerOpen} aria-controls={soundId} title="Звук и дорожки">{activeTracks ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>}
-              <label className={styles.speed}><NativeSelect aria-label="Скорость воспроизведения" value={speed} onChange={event => changeSpeed(Number(event.target.value))}>{[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <NativeSelectOption key={value} value={value}>{value}×</NativeSelectOption>)}</NativeSelect></label>
-              <button className={styles.iconButton} onClick={() => void toggleFullscreen()} aria-label={fullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'} title="Полноэкранный режим · F">{fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
+                aria-label={t("Звук и дорожки")} aria-expanded={mixerOpen} aria-controls={soundId} title={t("Звук и дорожки")}>{activeTracks ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>}
+              <label className={styles.speed}><NativeSelect aria-label={t("Скорость воспроизведения")} value={speed} onChange={event => changeSpeed(Number(event.target.value))}>{[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <NativeSelectOption key={value} value={value}>{value}×</NativeSelectOption>)}</NativeSelect></label>
+              <button className={styles.iconButton} onClick={() => void toggleFullscreen()} aria-label={fullscreen ? t('Выйти из полноэкранного режима') : t('Полноэкранный режим')} title={t("Полноэкранный режим · F")}>{fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
             </div>
           </div>
         </div>
-      {media.tracks.length > 0 && <section ref={soundPanel} id={soundId} className={styles.mixer} hidden={!mixerOpen} aria-label="Аудиомикшер"
+      {media.tracks.length > 0 && <section ref={soundPanel} id={soundId} className={styles.mixer} hidden={!mixerOpen} aria-label={t("Аудиомикшер")}
         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMixer(); } }}>
-        <div className={styles.mixerHeading}><h3><SlidersHorizontal size={14} />Звук и дорожки</h3><button className={styles.close} onClick={closeMixer} aria-label="Закрыть настройки звука"><X size={15} /></button></div>
+        <div className={styles.mixerHeading}><h3><SlidersHorizontal size={14} />{t("Звук и дорожки")}</h3><button className={styles.close} onClick={closeMixer} aria-label={t("Закрыть настройки звука")}><X size={15} /></button></div>
         <div className={styles.tracks}>{channels.map(({ track, index }) => {
-          const mixed = track.label === 'Системный звук + микрофон';
-          const microphone = track.label === 'Микрофон';
+          const mixed = track.label === t('Системный звук + микрофон');
+          const microphone = track.label === t('Микрофон');
           const enabled = volumes[index] > 0;
-          const Icon = mixed ? AudioLines : microphone ? Mic : track.label === 'Системный звук' ? Monitor : Volume2;
+          const Icon = mixed ? AudioLines : microphone ? Mic : track.label === t('Системный звук') ? Monitor : Volume2;
           return <div key={track.path} className={`${styles.channel} ${mixed ? styles.mixed : ''}`} data-muted={!enabled}>
             <div className={styles.channelHeading}>
               <span className={styles.channelIcon}><Icon size={19} strokeWidth={1.6} /></span>
-              <div className={styles.channelName}><span>{mixed ? 'Объединённая дорожка' : track.label}</span>{mixed && <small>Микрофон + системный звук</small>}</div>
+              <div className={styles.channelName}><span>{mixed ? t('Объединённая дорожка') : track.label}</span>{mixed && <small>{t("Микрофон + системный звук")}</small>}</div>
               <button className={styles.muteButton} data-muted={!enabled} onClick={() => setVolume(index, enabled ? 0 : previousVolumes.current[index])}
-                aria-label={`${enabled ? 'Отключить' : 'Включить'} ${track.label}`} aria-pressed={!enabled} title={enabled ? 'Отключить дорожку' : 'Включить дорожку'}>{enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
+                aria-label={`${enabled ? t('Отключить') : t('Включить')} ${track.label}`} aria-pressed={!enabled} title={enabled ? t('Отключить дорожку') : t('Включить дорожку')}>{enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
             </div>
-            <div className={styles.channelVolume}><input className={styles.range} type="range" min="0" max="100" value={volumes[index]} aria-label={`Громкость ${track.label}`} style={rangeFill(volumes[index])}
-              onChange={event => setVolume(index, Number(event.target.value))} /><output aria-label={`Уровень ${track.label}`}>{volumes[index]}<span>%</span></output></div>
+            <div className={styles.channelVolume}><input className={styles.range} type="range" min="0" max="100" value={volumes[index]} aria-label={t("Громкость {0}", track.label)} style={rangeFill(volumes[index])}
+              onChange={event => setVolume(index, Number(event.target.value))} /><output aria-label={t("Уровень {0}", track.label)}>{volumes[index]}<span>%</span></output></div>
           </div>;
         })}</div>
       </section>}
       </div>
       {media.tracks.map((track, index) => <audio key={track.path} ref={element => { if (element) { audio.current[index] = element; element.volume = volumes[index] / 100; } }} src={track.path} preload="auto"
         onError={() => { video.current?.pause(); setError(`Не удалось воспроизвести дорожку «${track.label}».`); }} />)}
-      {error && <p role="alert" className={styles.error}>{error}</p>}
+      {error && <p role="alert" className={styles.error}>{t(error)}</p>}
     </Dialog.Content></Dialog.Portal>
   </Dialog.Root>;
 }

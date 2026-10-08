@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import logo from '../assets/rebelliocap-logo.svg';
@@ -7,6 +8,7 @@ const subscribers = new Set<() => void>();
 function publish(enabled: boolean) { developerEnabled = enabled; subscribers.forEach(callback => callback()); }
 function subscribe(callback: () => void) { subscribers.add(callback); return () => { subscribers.delete(callback); }; }
 export function DeveloperBrand({ className }: { className?: string }) {
+  useTranslation();
   const clicks = useRef(0);
   const [notice, setNotice] = useState(false);
   const [error, setError] = useState(false);
@@ -28,11 +30,12 @@ export function DeveloperBrand({ className }: { className?: string }) {
       <img src={logo} className={className} alt="" draggable={false} />
     </button>
     {(notice || error) && <div role={error ? 'alert' : 'status'} className="pointer-events-none fixed bottom-6 right-6 z-50 rounded-xl border bg-card px-5 py-3 text-sm font-semibold shadow-lg">
-      {error ? 'Не удалось включить режим разработчика.' : 'Режим разработчика включен'}
+      {error ? t('Не удалось включить режим разработчика.') : t('Режим разработчика включен')}
     </div>}
   </>;
 }
 export function DeveloperLogsPanel() {
+  useTranslation();
   const enabled = useSyncExternalStore(subscribe, () => developerEnabled);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -53,11 +56,11 @@ export function DeveloperLogsPanel() {
   }
   if (!enabled) return null;
   return <section className="space-y-4 rounded-2xl border p-5" aria-labelledby="developer-settings-title">
-    <div><h3 id="developer-settings-title" className="font-semibold">Для разработчика</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Подробные логи приложения и движка. До 8 МБ, не старше 7 дней. В архив не входят записи и клипы.</p></div>
+    <div><h3 id="developer-settings-title" className="font-semibold">{t("Для разработчика")}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{t("Подробные логи приложения и движка. До 8 МБ, не старше 7 дней. В архив не входят записи и клипы.")}</p></div>
     <button type="button" className="rounded-lg border px-4 py-2 text-sm font-medium" disabled={busy || !('__TAURI_INTERNALS__' in window)} onClick={() => void download()}>
-      {busy ? 'Сохраняем…' : 'Скачать логи приложения'}
+      {busy ? t('Сохраняем…') : t('Скачать логи приложения')}
     </button>
-    {message && <p role={error ? 'alert' : 'status'} className="break-all text-sm">{message}</p>}
+    {message && <p role={error ? 'alert' : 'status'} className="break-all text-sm">{t(message)}</p>}
   </section>;
 }

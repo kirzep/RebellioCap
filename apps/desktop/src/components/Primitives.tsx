@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import React, { useEffect, useId, useRef } from 'react';
 import { cn } from 'cn';
 import { Button as ShadcnButton } from './ui/button';
@@ -6,6 +7,10 @@ import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 import { Field, FieldLabel, FieldDescription, FieldError, FieldSet, FieldLegend } from './ui/field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import styles from './Primitives.module.css';
+
+function translatedNode(value: React.ReactNode): React.ReactNode {
+  return typeof value === 'string' ? t(value) : value;
+}
 
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger';
 export type ButtonSize = 'default' | 'compact' | 'icon';
@@ -26,6 +31,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   { children, className, variant = 'secondary', size = 'default', busy = false,
     busyLabel, leadingIcon, trailingIcon, fullWidth = false, disabled, type = 'button', ...props }, ref
 ) {
+  useTranslation();
   return (
     <ShadcnButton
       ref={ref} {...props} type={type}
@@ -34,7 +40,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       disabled={disabled || busy} aria-busy={busy || undefined}
     >
       {busy ? <Spinner aria-hidden="true" data-icon="inline-start" /> : leadingIcon && <span data-icon="inline-start" aria-hidden="true">{leadingIcon}</span>}
-      {size === 'icon' ? (!busy && children) : <span className="min-w-0 break-words">{busy ? busyLabel ?? children : children}</span>}
+      {size === 'icon' ? (!busy && children) : <span className="min-w-0 break-words">{translatedNode(busy ? busyLabel ?? children : children)}</span>}
       {!busy && trailingIcon && size !== 'icon' && <span data-icon="inline-end" aria-hidden="true">{trailingIcon}</span>}
     </ShadcnButton>
   );
@@ -64,12 +70,13 @@ function joinIds(...ids: Array<string | undefined>): string | undefined {
 }
 export function FormField({ id, label, children, hint, error, required = false, group = false,
   className, controlClassName, labelAction }: FormFieldProps) {
+  useTranslation();
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
-  const labelContent = <>{label}{required && <><span aria-hidden="true"> *</span><span className="sr-only">Обязательное поле</span></>}</>;
+  const labelContent = <>{translatedNode(label)}{required && <><span aria-hidden="true"> *</span><span className="sr-only">{t("Обязательное поле")}</span></>}</>;
   const messages = <>
-    {hint && <FieldDescription id={hintId}>{hint}</FieldDescription>}
-    {error && <FieldError id={errorId}>{error}</FieldError>}
+    {hint && <FieldDescription id={hintId}>{translatedNode(hint)}</FieldDescription>}
+    {error && <FieldError id={errorId}>{translatedNode(error)}</FieldError>}
   </>;
   if (group) {
     return (
@@ -108,11 +115,12 @@ export interface InlineStatusProps extends React.HTMLAttributes<HTMLDivElement> 
   live?: 'off' | 'polite' | 'assertive';
 }
 export function InlineStatus({ children, className, tone = 'neutral', live = 'polite', ...props }: InlineStatusProps) {
+  useTranslation();
   return (
     <div {...props} className={cn(styles.inlineStatus, styles[`status${tone[0].toUpperCase()}${tone.slice(1)}`], className)}
       role={props.role ?? 'status'} aria-live={live} aria-atomic="true" aria-busy={tone === 'busy' || undefined}>
       {tone === 'busy' ? <Spinner aria-hidden="true" /> : <span className={styles.statusMarker} aria-hidden="true" />}
-      <span>{children}</span>
+      <span>{translatedNode(children)}</span>
     </div>
   );
 }
@@ -127,15 +135,16 @@ export interface ErrorNoticeProps extends Omit<React.HTMLAttributes<HTMLDivEleme
 }
 export function ErrorNotice({ title, children, tone = 'danger', action, technicalDetails,
   technicalLabel = 'Технические подробности', className, ...props }: ErrorNoticeProps) {
+  useTranslation();
   return (
     <Alert {...props} className={cn(styles.errorNotice, styles[`notice${tone[0].toUpperCase()}${tone.slice(1)}`], className)} variant={tone === 'danger' ? 'destructive' : 'default'}
       role={props.role ?? (tone === 'danger' ? 'alert' : 'status')}>
-      <AlertTitle className="line-clamp-none">{title}</AlertTitle>
+      <AlertTitle className="line-clamp-none">{translatedNode(title)}</AlertTitle>
       <AlertDescription className="min-w-0 gap-3">
-        {children && <div className="min-w-0 break-words">{children}</div>}
+        {children && <div className="min-w-0 break-words">{translatedNode(children)}</div>}
         {action}
         {technicalDetails && <details className="w-full min-w-0">
-          <summary>{technicalLabel}</summary>
+          <summary>{t(technicalLabel)}</summary>
           <div className="whitespace-pre-wrap break-words font-mono text-xs">{technicalDetails}</div>
         </details>}
       </AlertDescription>
@@ -186,8 +195,8 @@ export function ConfirmDialog({ open, title, description, children, confirmLabel
         onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
         onInteractOutside={(event) => { if (busy || !closeOnBackdrop) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription id={descriptionId} asChild><div>{description}</div></DialogDescription>}
+          <DialogTitle>{translatedNode(title)}</DialogTitle>
+          {description && <DialogDescription id={descriptionId} asChild><div>{translatedNode(description)}</div></DialogDescription>}
         </DialogHeader>
         {children && <div className="min-w-0">{children}</div>}
         <DialogFooter>

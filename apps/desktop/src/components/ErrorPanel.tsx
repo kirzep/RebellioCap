@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import React from 'react';
 import type { AppAction, AppError } from '../bridge/contracts';
 import { Button, ErrorNotice } from './Primitives';
@@ -33,6 +34,7 @@ function primaryAction(actions: readonly AppAction[]): AppAction | undefined {
 }
 
 export function ErrorPanel({ error, onAction }: ErrorPanelProps) {
+  useTranslation();
   const isStructured = typeof error === 'object' && error !== null;
   const actions: AppAction[] = isStructured
     ? availableActions(error, Boolean(onAction))
@@ -43,9 +45,9 @@ export function ErrorPanel({ error, onAction }: ErrorPanelProps) {
 
   const technicalDetails = isStructured
     ? [
-        `Код: ${error.code}`,
-        `Подсистема: ${error.subsystem}`,
-        `Сообщение: ${error.technicalCause || error.summary}`,
+        t("Код: {0}", error.code),
+        t("Подсистема: {0}", error.subsystem),
+        t("Сообщение: {0}", error.technicalCause || error.summary),
       ]
         .join('\n')
     : undefined;
@@ -64,12 +66,12 @@ export function ErrorPanel({ error, onAction }: ErrorPanelProps) {
         ))}
       </div>
     ) : undefined;
-  const noticeTitle = isStructured ? error.summary : 'Не удалось продолжить';
+  const noticeTitle = isStructured ? error.summary : t('Не удалось продолжить');
 
   return (
     <section className={styles.panel} data-testid="error-panel">
       <ErrorNotice
-        title={<h1 className={styles.title}>{noticeTitle}</h1>}
+        title={<h1 className={styles.title}>{t(noticeTitle)}</h1>}
         action={actionControls}
         technicalDetails={technicalDetails}
       >

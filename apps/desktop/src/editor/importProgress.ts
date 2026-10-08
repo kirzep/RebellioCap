@@ -1,3 +1,4 @@
+import {t} from '../i18n';
 import {getCurrentWebviewWindow} from '@tauri-apps/api/webviewWindow';
 
 const phases={selecting:'Выберите файл в системном диалоге',reading_project:'Читаем проект',analyzing:'Проверяем медиа',checking_cache:'Проверяем исходник и кэш',preparing_preview:'Готовим превью',publishing:'Завершаем подготовку'};
@@ -10,7 +11,7 @@ function valid(value:unknown):value is ImportProgress {
   &&(p.filename===undefined||typeof p.filename==='string'&&p.filename.length<=512);
 }
 export function formatImportProgress(p:ImportProgress):string {
- return [phases[p.phase],p.total>0&&p.completed<p.total?`исходник ${p.completed+1} из ${p.total}`:undefined,p.filename].filter(Boolean).join(' · ');
+ return [t(phases[p.phase]),p.total>0&&p.completed<p.total?t('исходник {0} из {1}',p.completed+1,p.total):undefined,p.filename].filter(Boolean).join(' · ');
 }
 export async function subscribeImportProgress(owner:string,operationId:string,onProgress:(progress:ImportProgress)=>void,isActive:()=>boolean=()=>true):Promise<()=>void> {
  if(!('__TAURI_INTERNALS__' in window))return ()=>{};

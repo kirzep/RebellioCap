@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { HostBridge } from '../bridge/contracts';
@@ -130,8 +131,8 @@ function draftAsActive(draft: OnboardingDraft): ActiveConfig {
 
 function firstValidationMessage(errors: ValidationError[]): string {
   if (errors.length === 0) return '';
-  if (errors.length === 1) return errors[0].message;
-  return `${errors[0].message}. Ещё полей с ошибками: ${errors.length - 1}.`;
+  if (errors.length === 1) return t(errors[0].message);
+  return t("{0}. Ещё полей с ошибками: {1}.", t(errors[0].message), errors.length - 1);
 }
 
 function sectionForValidationField(field: string): RuntimeSettingsSection {
@@ -153,25 +154,25 @@ function sectionForValidationField(field: string): RuntimeSettingsSection {
 }
 
 function describeConfirmedEngine(snapshot: EngineSnapshot | null): string {
-  if (!snapshot) return 'состояние службы не подтверждено';
-  if (snapshot.continuousRecordingActive) return 'обычная запись идёт';
-  if (snapshot.replayActive) return 'Replay включён';
+  if (!snapshot) return t('состояние службы не подтверждено');
+  if (snapshot.continuousRecordingActive) return t('обычная запись идёт');
+  if (snapshot.replayActive) return t('Replay включён');
 
   switch (snapshot.lifecycle) {
     case 'starting':
-      return 'Replay включается';
+      return t('Replay включается');
     case 'recovering':
-      return 'служба восстанавливает запись';
+      return t('служба восстанавливает запись');
     case 'degraded':
-      return 'служба работает с ошибками';
+      return t('служба работает с ошибками');
     case 'blocked':
-      return 'запуск заблокирован';
+      return t('запуск заблокирован');
     case 'failed':
-      return 'служба остановлена из-за ошибки';
+      return t('служба остановлена из-за ошибки');
     case 'ready':
     case 'stopped':
     default:
-      return 'Replay выключен';
+      return t('Replay выключен');
   }
 }
 
@@ -192,6 +193,7 @@ export function RuntimeSettings({
   sidebarNavigation = false,
   onSectionChange,
 }: RuntimeSettingsProps) {
+  useTranslation();
   const [section, updateSection] = useState<RuntimeSettingsSection>(initialSection);
   function setSection(next: RuntimeSettingsSection) { updateSection(next); onSectionChange?.(next); }
   useLayoutEffect(() => { updateSection(initialSection); }, [initialSection]);
@@ -200,7 +202,7 @@ export function RuntimeSettings({
   const [isCheckingDevices, setIsCheckingDevices] = useState(false);
   const [applyError, setApplyError] = useState<AppError | null>(null);
   const [operationErrorTitle, setOperationErrorTitle] = useState(
-    'Не удалось применить настройки'
+    t('Не удалось применить настройки')
   );
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [appliedMessage, setAppliedMessage] = useState<string | null>(null);
@@ -565,22 +567,22 @@ export function RuntimeSettings({
   const hotkeyStopNoticeTitle =
     replayWasActiveBeforeHotkeyStop === true
       ? hotkeysDifferFromActive
-        ? 'Replay выключен до применения настроек'
-        : 'Replay временно выключен'
+        ? t('Replay выключен до применения настроек')
+        : t('Replay временно выключен')
       : hotkeysDifferFromActive
-        ? 'Служба записи остановлена до применения настроек'
-        : 'Служба записи остановлена';
+        ? t('Служба записи остановлена до применения настроек')
+        : t('Служба записи остановлена');
 
   const hotkeyStopNoticeMessage =
     replayWasActiveBeforeHotkeyStop === true
       ? hotkeysDifferFromActive
-        ? 'Примените изменения или верните действующие значения.'
-        : 'Глобальные клавиши не сработают, пока вы редактируете сочетание.'
+        ? t('Примените изменения или верните действующие значения.')
+        : t('Глобальные клавиши не сработают, пока вы редактируете сочетание.')
       : replayWasActiveBeforeHotkeyStop === false
         ? hotkeysDifferFromActive
-          ? 'Изменения ещё не применены. Replay останется выключен, как и до редактирования.'
-          : 'Replay был выключен до редактирования и автоматически не включится.'
-        : 'Прежнее состояние Replay не подтверждено, поэтому он не будет включён автоматически.';
+          ? t('Изменения ещё не применены. Replay останется выключен, как и до редактирования.')
+          : t('Replay был выключен до редактирования и автоматически не включится.')
+        : t('Прежнее состояние Replay не подтверждено, поэтому он не будет включён автоматически.');
 
   return (
     <section
@@ -595,18 +597,18 @@ export function RuntimeSettings({
           : undefined
       }
     >
-      <h1 className="sr-only">Настройки записи</h1>
+      <h1 className="sr-only">{t("Настройки записи")}</h1>
 
       <div className={styles.settingsGrid}>
-        {!sidebarNavigation && <nav aria-label="Разделы настроек">
+        {!sidebarNavigation && <nav aria-label={t("Разделы настроек")}>
           <ToggleGroup type="single" value={section} variant="outline" spacing={2}
-            className="flex w-full flex-wrap justify-start" aria-label="Разделы настроек"
+            className="flex w-full flex-wrap justify-start" aria-label={t("Разделы настроек")}
             onValueChange={(value) => {
               if (sections.some((item) => item.id === value)) setSection(value as RuntimeSettingsSection);
             }}>
             {sections.map((item) => (
               <ToggleGroupItem key={item.id} value={item.id} className="min-h-11 h-auto px-4 py-2 whitespace-normal">
-                {item.label}
+                {t(item.label)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -653,25 +655,24 @@ export function RuntimeSettings({
 
       <div className={styles.messages}>
         {validationErrors.length > 0 && (
-          <ErrorNotice title="Проверьте настройки" tone="warning">
+          <ErrorNotice title={t("Проверьте настройки")} tone="warning">
             {firstValidationMessage(validationErrors)}
           </ErrorNotice>
         )}
         {applyError && (
           <ErrorNotice
             title={operationErrorTitle}
-            technicalDetails={`Код: ${applyError.code}\n${applyError.technicalCause}`}
+            technicalDetails={t("Код: {0}\n{1}", applyError.code, applyError.technicalCause)}
             action={
-              isDirty && operationErrorTitle === 'Не удалось применить настройки' ? (
+              isDirty && operationErrorTitle === t('Не удалось применить настройки') ? (
                 <Button variant="tertiary" size="compact" onClick={resetCandidate}>
-                  Вернуть действующие значения
-                </Button>
+                  {t("Вернуть действующие значения")}</Button>
               ) : undefined
             }
           >
-            <p>{applyError.summary} Введённые значения сохранены в форме.</p>
+            <p>{t(applyError.summary)} {' '}{t("Введённые значения сохранены в форме.")}</p>
             <p>
-              Последний подтверждённый профиль: {' '}
+              {t("Последний подтверждённый профиль:")}{' '}
               {formatVideoMode(
                 activeConfig.width,
                 activeConfig.height,
@@ -689,8 +690,7 @@ export function RuntimeSettings({
             action={
               replayWasActiveBeforeHotkeyStop === true && !hotkeysDifferFromActive ? (
                 <Button variant="secondary" busy={isResuming} onClick={() => void resumeReplay()}>
-                  Включить Replay снова
-                </Button>
+                  {t("Включить Replay снова")}</Button>
               ) : undefined
             }
           >
@@ -700,8 +700,7 @@ export function RuntimeSettings({
       </div>
 
       {isDirty && <div className={styles.restartNotice}>
-        Replay перезапустится; несохранённый повтор будет потерян.
-      </div>}
+        {t("Replay перезапустится; несохранённый повтор будет потерян.")}</div>}
 
       {(section !== 'application' || isDirty) && <div className={styles.actions}>
         <Button
@@ -710,45 +709,43 @@ export function RuntimeSettings({
           disabled={!isDirty || isApplying || isCheckingDevices}
           data-testid="cancel-settings-button"
         >
-          Сбросить изменения
-        </Button>
+          {t("Сбросить изменения")}</Button>
         <Button
           variant="primary"
           busy={isApplying || isCheckingDevices}
-          busyLabel={isCheckingDevices ? 'Проверяем устройства…' : 'Применяем…'}
+          busyLabel={isCheckingDevices ? t('Проверяем устройства…') : t('Применяем…')}
           onClick={() => void requestApply(false)}
           disabled={!isDirty}
           data-testid="apply-settings-button"
         >
-          Применить
-        </Button>
+          {t("Применить")}</Button>
       </div>}
 
       <ConfirmDialog
         open={showApplyConfirmation}
         title={
           snapshot?.continuousRecordingActive
-            ? 'Остановить запись и применить настройки?'
-            : 'Применить настройки при неподтверждённом состоянии?'
+            ? t('Остановить запись и применить настройки?')
+            : t('Применить настройки при неподтверждённом состоянии?')
         }
         description={
           snapshot
-            ? 'Текущая обычная запись завершится. Replay запустится с новой конфигурацией, но обычная запись автоматически не возобновится.'
-            : 'Состояние службы не подтверждено. Если обычная запись идёт, она завершится. Replay запустится с новой конфигурацией после подтверждения службы записи.'
+            ? t('Текущая обычная запись завершится. Replay запустится с новой конфигурацией, но обычная запись автоматически не возобновится.')
+            : t('Состояние службы не подтверждено. Если обычная запись идёт, она завершится. Replay запустится с новой конфигурацией после подтверждения службы записи.')
         }
         confirmLabel={
           snapshot?.continuousRecordingActive
-            ? 'Остановить и применить'
-            : 'Применить и включить Replay'
+            ? t('Остановить и применить')
+            : t('Применить и включить Replay')
         }
         cancelLabel={
           snapshot?.continuousRecordingActive
-            ? 'Продолжить запись'
-            : 'Продолжить редактирование'
+            ? t('Продолжить запись')
+            : t('Продолжить редактирование')
         }
         destructive
         busy={isApplying}
-        busyLabel="Применяем…"
+        busyLabel={t("Применяем…")}
         onConfirm={() => void performApply(closeAfterApply)}
         onCancel={() => {
           setShowApplyConfirmation(false);
@@ -760,41 +757,41 @@ export function RuntimeSettings({
         open={Boolean(hotkeyPrompt)}
         title={
           hotkeyDialogReplayActive === true
-            ? 'Временно выключить Replay?'
-            : 'Остановить службу записи для изменения сочетания?'
+            ? t('Временно выключить Replay?')
+            : t('Остановить службу записи для изменения сочетания?')
         }
         description={
           !snapshot
-            ? 'Состояние службы не подтверждено. Перед перехватом сочетания безопасно остановим Replay и возможную текущую запись.'
+            ? t('Состояние службы не подтверждено. Перед перехватом сочетания безопасно остановим Replay и возможную текущую запись.')
             : snapshot.continuousRecordingActive
               ? hotkeyDialogReplayActive === true
-                ? 'Чтобы безопасно перехватить новое сочетание, нужно остановить Replay и завершить текущую запись.'
-                : 'Чтобы безопасно перехватить новое сочетание, нужно завершить текущую запись и остановить службу записи.'
+                ? t('Чтобы безопасно перехватить новое сочетание, нужно остановить Replay и завершить текущую запись.')
+                : t('Чтобы безопасно перехватить новое сочетание, нужно завершить текущую запись и остановить службу записи.')
               : hotkeyDialogReplayActive === true
-                ? 'Чтобы глобальная горячая клавиша не сработала во время редактирования, нужно временно выключить Replay.'
-                : 'Чтобы безопасно перехватить новое сочетание, нужно временно остановить службу записи.'
+                ? t('Чтобы глобальная горячая клавиша не сработала во время редактирования, нужно временно выключить Replay.')
+                : t('Чтобы безопасно перехватить новое сочетание, нужно временно остановить службу записи.')
         }
         confirmLabel={
           hotkeyDialogReplayActive === true
-            ? 'Выключить и изменить'
-            : 'Остановить и изменить'
+            ? t('Выключить и изменить')
+            : t('Остановить и изменить')
         }
-        cancelLabel="Отмена"
+        cancelLabel={t("Отмена")}
         destructive={Boolean(snapshot?.continuousRecordingActive)}
         busy={isStoppingForHotkey}
-        busyLabel="Выключаем…"
+        busyLabel={t("Выключаем…")}
         onConfirm={() => void confirmHotkeyStop()}
         onCancel={cancelHotkeyStop}
       />
 
       <ConfirmDialog
         open={showLeaveConfirmation}
-        title="Сохранить изменения?"
-        description="Настройки в форме ещё не применены."
-        confirmLabel="Применить"
-        cancelLabel="Продолжить редактирование"
+        title={t("Сохранить изменения?")}
+        description={t("Настройки в форме ещё не применены.")}
+        confirmLabel={t("Применить")}
+        cancelLabel={t("Продолжить редактирование")}
         busy={isApplying}
-        busyLabel="Применяем…"
+        busyLabel={t("Применяем…")}
         onConfirm={() => {
           setShowLeaveConfirmation(false);
           void requestApply(true);
@@ -804,12 +801,11 @@ export function RuntimeSettings({
         <Button
           variant="tertiary"
           busy={isResuming}
-          busyLabel="Возобновляем Replay…"
+          busyLabel={t("Возобновляем Replay…")}
           disabled={isApplying}
           onClick={() => void discardAndClose()}
         >
-          Не сохранять
-        </Button>
+          {t("Не сохранять")}</Button>
       </ConfirmDialog>
     </section>
   );

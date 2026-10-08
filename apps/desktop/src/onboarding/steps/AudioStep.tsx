@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import { FieldGroup, FieldLabel } from '../../components/ui/field';
 import { NativeSelect, NativeSelectOption } from '../../components/ui/native-select';
 import React, { useEffect, useRef, useState } from 'react';
@@ -46,19 +47,19 @@ function endpointId(selection?: AudioSelection | null): string | null {
 function measurementText(state: MeasurementState): string {
   switch (state.phase) {
     case 'measuring':
-      return 'Слушаем примерно 3 секунды…';
+      return t('Слушаем примерно 3 секунды…');
     case 'signal':
-      return 'Сигнал обнаружен.';
+      return t('Сигнал обнаружен.');
     case 'silence':
-      return 'Сигнал не обнаружен. Проверьте устройство и его громкость.';
+      return t('Сигнал не обнаружен. Проверьте устройство и его громкость.');
     case 'cancelled':
-      return 'Проверка отменена.';
+      return t('Проверка отменена.');
     case 'unavailable':
-      return 'Устройство недоступно.';
+      return t('Устройство недоступно.');
     case 'error':
-      return state.error?.summary ?? 'Не удалось проверить звук.';
+      return state.error?.summary ?? t('Не удалось проверить звук.');
     default:
-      return 'Звук ещё не проверяли.';
+      return t('Звук ещё не проверяли.');
   }
 }
 
@@ -71,6 +72,7 @@ export function AudioStep({
   onAvailabilityIssueChange,
   onCatalogBusyChange,
 }: AudioStepProps) {
+  useTranslation();
   const [catalog, setCatalog] = useState<AudioCatalog>(() => audioCatalogCache.get(hostBridge) ?? EMPTY_CATALOG);
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>(() =>
     audioCatalogCache.has(hostBridge) ? 'ready' : 'loading');
@@ -171,11 +173,11 @@ export function AudioStep({
     const selectedDeviceNeedsCatalog = Boolean(systemEndpoint || microphoneEndpoint);
     const issue =
       catalogState === 'error' && selectedDeviceNeedsCatalog
-        ? catalogError?.summary ?? 'Не удалось проверить выбранные аудиоустройства.'
+        ? catalogError?.summary ?? t('Не удалось проверить выбранные аудиоустройства.')
         : systemUnavailable
-          ? 'Выбранное устройство звука компьютера недоступно. Выберите другое или отключите звук.'
+          ? t('Выбранное устройство звука компьютера недоступно. Выберите другое или отключите звук.')
           : microphoneUnavailable
-            ? 'Выбранный микрофон недоступен. Выберите другой или отключите микрофон.'
+            ? t('Выбранный микрофон недоступен. Выберите другой или отключите микрофон.')
             : null;
 
     onAvailabilityIssueChange?.(issue);
@@ -368,17 +370,17 @@ export function AudioStep({
           onChange={(event) => changeSelection(source, event.target.value)}
           data-testid={testId}
         >
-          <NativeSelectOption value="disabled">Не записывать</NativeSelectOption>
+          <NativeSelectOption value="disabled">{t("Не записывать")}</NativeSelectOption>
           {savedChoiceMissing && (
             <NativeSelectOption value={selectedId ?? ''} disabled>
-              {catalogState === 'loading' ? 'Получаем список устройств…' : 'Сохранённое устройство недоступно'}
+              {catalogState === 'loading' ? t('Получаем список устройств…') : t('Сохранённое устройство недоступно')}
             </NativeSelectOption>
           )}
           {choices.map((choice) => (
             <NativeSelectOption key={choice.id} value={choice.id} disabled={!choice.available}>
               {choice.name}
-              {choice.is_default ? ' · По умолчанию' : ''}
-              {!choice.available ? ' · Недоступно' : ''}
+              {choice.is_default ? t(' · По умолчанию') : ''}
+              {!choice.available ? t(' · Недоступно') : ''}
             </NativeSelectOption>
           ))}
         </NativeSelect>
@@ -386,28 +388,25 @@ export function AudioStep({
         {catalogState === 'ready' && choices.length === 0 && (
           <div className={styles.compactActions} role="status">
             <span className={styles.fieldHint}>
-              Доступных устройств нет. Можно оставить «Не записывать».
-            </span>
+              {t("Доступных устройств нет. Можно оставить «Не записывать».")}</span>
             <Button
               size="compact"
               variant="tertiary"
               onClick={() => setReloadToken((value) => value + 1)}
             >
-              Обновить список
-            </Button>
+              {t("Обновить список")}</Button>
           </div>
         )}
 
         {validation && (
           <p id={errorId} className={styles.fieldError} role="alert">
-            {validation.message}
+            {t(validation.message)}
           </p>
         )}
 
         {unavailable && (
           <p className={styles.inlineWarning} role="alert">
-            Выбранное устройство сейчас недоступно. Выберите другое или отключите источник.
-          </p>
+            {t("Выбранное устройство сейчас недоступно. Выберите другое или отключите источник.")}</p>
         )}
 
         {liveLevels && selectedId && <LiveAudioMeter bridge={hostBridge} endpointId={selectedId} label={title} available={catalogState === 'ready' && !unavailable} />}
@@ -440,17 +439,17 @@ export function AudioStep({
                 data-testid={source === 'microphone' ? 'audio-check-button' : 'audio-system-check-button'}
               >
                 {isMeasuring
-                  ? 'Отменить'
+                  ? t('Отменить')
                   : cancellationPending
-                    ? 'Отменяем…'
-                    : 'Проверить звук'}
+                    ? t('Отменяем…')
+                    : t('Проверить звук')}
               </Button>
             </div>
 
             {measurement.phase === 'error' && measurement.error && (
               <ErrorNotice
-                title="Проверка звука не выполнена"
-                technicalDetails={`Код: ${measurement.error.code}\n${measurement.error.technicalCause}`}
+                title={t("Проверка звука не выполнена")}
+                technicalDetails={t("Код: {0}\n{1}", measurement.error.code, measurement.error.technicalCause)}
               >
                 {measurement.error.summary}
               </ErrorNotice>
@@ -460,7 +459,7 @@ export function AudioStep({
               <div
                 className={styles.audioMeter}
                 role="meter"
-                aria-label={`Максимальный уровень: ${Math.round(measurement.peak * 100)}%`}
+                aria-label={t("Максимальный уровень: {0}%", Math.round(measurement.peak * 100))}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(measurement.peak * 100)}
@@ -482,8 +481,7 @@ export function AudioStep({
             onClick={() => changeSelection('microphone', 'disabled')}
             data-testid="audio-disable-mic-button"
           >
-            Не записывать микрофон
-          </Button>
+            {t("Не записывать микрофон")}</Button>
         )}
       </section>
     );
@@ -492,34 +490,31 @@ export function AudioStep({
   return (
     <div className={styles.stepContent} data-testid="audio-step">
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>Звук</h2>
-        <p className={styles.copy}>Выберите источники. Уровень звука поможет проверить сигнал.</p>
+        <h2 className={styles.title}>{t("Звук")}</h2>
+        <p className={styles.copy}>{t("Выберите источники. Уровень звука поможет проверить сигнал.")}</p>
       </div>
 
       {catalogState === 'loading' && (
-        <p className={styles.srOnly} role="status">Получаем список аудиоустройств…</p>
+        <p className={styles.srOnly} role="status">{t("Получаем список аудиоустройств…")}</p>
       )}
       {catalogState === 'error' && (
         <ErrorNotice
-          title="Не удалось получить список аудиоустройств"
+          title={t("Не удалось получить список аудиоустройств")}
           technicalDetails={catalogError
-            ? `Код: ${catalogError.code}\n${catalogError.technicalCause}`
+            ? t("Код: {0}\n{1}", catalogError.code, catalogError.technicalCause)
             : undefined}
           action={(
             <div className={styles.compactActions}>
               <Button size="compact" variant="tertiary" onClick={() => setReloadToken((value) => value + 1)}>
-                Повторить
-              </Button>
+                {t("Повторить")}</Button>
               <Button size="compact" variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-                Диагностика
-              </Button>
+                {t("Диагностика")}</Button>
               <Button
                 size="compact"
                 variant="tertiary"
                 onClick={disableAllAudio}
               >
-                Продолжить без звука
-              </Button>
+                {t("Продолжить без звука")}</Button>
             </div>
           )}
         >
@@ -528,30 +523,29 @@ export function AudioStep({
       )}
       {diagnosticsError && (
         <ErrorNotice
-          title="Не удалось открыть диагностику"
-          technicalDetails={`Код: ${diagnosticsError.code}\n${diagnosticsError.technicalCause}`}
+          title={t("Не удалось открыть диагностику")}
+          technicalDetails={t("Код: {0}\n{1}", diagnosticsError.code, diagnosticsError.technicalCause)}
           action={(
             <Button size="compact" variant="tertiary" onClick={() => void handleOpenDiagnostics()}>
-              Повторить
-            </Button>
+              {t("Повторить")}</Button>
           )}
         >
-          {diagnosticsError.summary}
+          {t(diagnosticsError.summary)}
         </ErrorNotice>
       )}
 
       <FieldGroup className={styles.audioGroups}>
         {renderSource(
           'system',
-          'Звук компьютера',
-          'Записывается звук выбранного устройства вывода, не только звук игры.',
+          t('Звук компьютера'),
+          t('Записывается звук выбранного устройства вывода, не только звук игры.'),
           'audio-system',
           'audio-system-select'
         )}
         {renderSource(
           'microphone',
-          'Микрофон',
-          'Если включить микрофон, ваш голос попадёт в запись.',
+          t('Микрофон'),
+          t('Если включить микрофон, ваш голос попадёт в запись.'),
           'audio-microphone',
           'audio-mic-select'
         )}

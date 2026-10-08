@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { requestNavigation } from '../editor/navigationGuard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +23,7 @@ export interface AppProps {
 }
 
 export function App({ hostBridge = defaultHost }: AppProps) {
+  useTranslation();
   const [route, setRoute] = useState<Route>({ kind: 'loading' });
   const [state, setState] = useState<StoredState | null>(null);
   const [snapshot, setSnapshot] = useState<EngineSnapshot | null>(null);
@@ -170,7 +172,7 @@ export function App({ hostBridge = defaultHost }: AppProps) {
 
   const rawBlockedError =
     route.kind === 'blocked'
-      ? route.error ?? error ?? 'Не удалось запустить RebellioCap.'
+      ? route.error ?? error ?? t('Не удалось запустить RebellioCap.')
       : null;
   const blockedError =
     rawBlockedError && typeof rawBlockedError !== 'string' && !state?.active
@@ -185,8 +187,8 @@ export function App({ hostBridge = defaultHost }: AppProps) {
   return (
     <div className="rebelliocap-app" data-testid="app-root" data-route={route.kind}>
       {trayError && <div role="alert" className="fixed bottom-6 right-6 z-50 max-w-md">
-        <ErrorNotice title="Не удалось выполнить действие из трея">{trayError.summary}</ErrorNotice>
-        <button type="button" onClick={() => setTrayError(null)}>Закрыть сообщение</button>
+        <ErrorNotice title={t("Не удалось выполнить действие из трея")}>{t(trayError.summary)}</ErrorNotice>
+        <button type="button" onClick={() => setTrayError(null)}>{t("Закрыть сообщение")}</button>
       </div>}
       {route.kind === 'loading' && <LoadingScreen />}
 
@@ -225,12 +227,12 @@ export function App({ hostBridge = defaultHost }: AppProps) {
 
       {route.kind === 'blocked' && (
         <WindowShell
-          context="Требуется внимание"
+          context={t("Требуется внимание")}
           contentWidth="form"
-          contentLabel="Ошибка запуска"
+          contentLabel={t("Ошибка запуска")}
         >
           <ErrorPanel
-            error={blockedError ?? 'Не удалось запустить RebellioCap.'}
+            error={blockedError ?? t('Не удалось запустить RebellioCap.')}
             onAction={handleBlockedAction}
           />
         </WindowShell>

@@ -1,16 +1,17 @@
+import { t, useTranslation } from '../i18n';
 import React from 'react';
 import { WindowShell } from '../components/WindowShell';
 import styles from './SetupScreens.module.css';
 
 export function LoadingScreen() {
+  useTranslation();
   return (
-    <WindowShell context="Запуск" contentWidth="form" contentLabel="Запуск RebellioCap">
+    <WindowShell context={t("Запуск")} contentWidth="form" contentLabel={t("Запуск RebellioCap")}>
       <div className={`${styles.page} ${styles.loading}`} data-testid="loading-screen">
-        <h1 className="sr-only">Запуск RebellioCap</h1>
+        <h1 className="sr-only">{t("Запуск RebellioCap")}</h1>
         <span className={styles.spinner} aria-hidden="true" />
         <p className={styles.loadingText} role="status" aria-live="polite">
-          Запускаем RebellioCap…
-        </p>
+          {t("Запускаем RebellioCap…")}</p>
       </div>
     </WindowShell>
   );

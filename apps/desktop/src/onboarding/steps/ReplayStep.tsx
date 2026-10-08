@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import { Field, FieldGroup, FieldSet, FieldLegend, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
@@ -22,6 +23,7 @@ export interface ReplayStepProps {
 const DURATION_PRESETS = [15, 30, 60, 120] as const;
 
 export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBudgetBytes }: ReplayStepProps) {
+  useTranslation();
   const [memoryInput, setMemoryInput] = useState(String(draft.replay_memory_limit_mb ?? ''));
   const [memoryEditing, setMemoryEditing] = useState(false);
   useEffect(() => { if (!memoryEditing) setMemoryInput(String(draft.replay_memory_limit_mb ?? '')); }, [draft.replay_memory_limit_mb, memoryEditing]);
@@ -86,15 +88,14 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
   return (
     <div className={styles.stepContent} data-testid="replay-step">
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>Повторы и файлы</h2>
+        <h2 className={styles.title}>{t("Повторы и файлы")}</h2>
         <p className={styles.copy}>
-          Выберите, сколько последних секунд сохранять и куда складывать клипы.
-        </p>
+          {t("Выберите, сколько последних секунд сохранять и куда складывать клипы.")}</p>
       </div>
 
       <FieldGroup className={styles.formStack}>
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="replay-duration-preset" className={styles.fieldLabel}>Длительность Replay</FieldLabel>
+          <FieldLabel htmlFor="replay-duration-preset" className={styles.fieldLabel}>{t("Длительность Replay")}</FieldLabel>
           <NativeSelect
             id="replay-duration-preset"
             className="w-full"
@@ -120,15 +121,14 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
             }}
           >
             {DURATION_PRESETS.map((seconds) => (
-              <NativeSelectOption key={seconds} value={seconds}>{seconds} секунд</NativeSelectOption>
+              <NativeSelectOption key={seconds} value={seconds}>{seconds} {' '}{t("секунд")}</NativeSelectOption>
             ))}
-            <NativeSelectOption value="custom">Другая длительность</NativeSelectOption>
+            <NativeSelectOption value="custom">{t("Другая длительность")}</NativeSelectOption>
           </NativeSelect>
 
           {durationPreset === 'custom' && (
             <FieldLabel className={styles.inputLabel} htmlFor="replay-seconds">
-              Секунды
-              <Input
+              {t("Секунды")}<Input
                 id="replay-seconds"
                 type="text"
                 inputMode="numeric"
@@ -157,44 +157,40 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
             </FieldLabel>
           )}
           <p id="replay-duration-hint" className={styles.fieldHint}>
-            {durationPreset === 'custom' ? 'От 1 секунды до 60 минут. ' : ''}
-            {estimateMb != null ? `Примерно ${estimateMb} МБ видеобуфера в памяти, плюс звук.` : 'Буфер хранится в оперативной памяти.'}
+            {durationPreset === 'custom' ? t('От 1 секунды до 60 минут. ') : ''}
+            {estimateMb != null ? t("Примерно {0} МБ видеобуфера в памяти, плюс звук.", estimateMb) : t('Буфер хранится в оперативной памяти.')}
           </p>
           {durationValidation && (
             <p id="replay-duration-error" className={styles.fieldError} role="alert">
-              {durationValidation.message}
+              {t(durationValidation.message)}
             </p>
           )}
         </Field>
 
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="replay-memory-mode" className={styles.fieldLabel}>Лимит памяти Replay</FieldLabel>
+          <FieldLabel htmlFor="replay-memory-mode" className={styles.fieldLabel}>{t("Лимит памяти Replay")}</FieldLabel>
           <NativeSelect id="replay-memory-mode" value={manualMemory ? 'manual' : 'auto'}
             onChange={event => onChange({ replay_memory_limit_mb: event.target.value === 'auto' ? 0 : 1024 })}>
-            <NativeSelectOption value="auto">Авто</NativeSelectOption>
-            <NativeSelectOption value="manual">Задать вручную</NativeSelectOption>
+            <NativeSelectOption value="auto">{t("Авто")}</NativeSelectOption>
+            <NativeSelectOption value="manual">{t("Задать вручную")}</NativeSelectOption>
           </NativeSelect>
           {manualMemory && <FieldLabel htmlFor="replay-memory-limit" className={styles.inputLabel}>
-            Лимит, МиБ
-            <Input id="replay-memory-limit" type="text" inputMode="numeric"
+            {t("Лимит, МиБ")}<Input id="replay-memory-limit" type="text" inputMode="numeric"
               value={memoryInput} onFocus={() => setMemoryEditing(true)} onBlur={() => setMemoryEditing(false)}
               aria-invalid={Boolean(memoryValidation)} aria-describedby={memoryValidation ? "replay-memory-hint replay-memory-error" : "replay-memory-hint"}
               onChange={event => { setMemoryInput(event.target.value); const value = event.target.value.trim(); onChange({ replay_memory_limit_mb: /^\d+$/.test(value) && Number(value) > 0 ? Number(value) : null }); }} />
           </FieldLabel>}
           <p id="replay-memory-hint" className={styles.fieldHint}>
-            {manualMemory ? 'От 64 до 8192 МиБ. При запуске лимит должен помещаться в половину свободной RAM и четверть общей RAM.' : 'Авто рассчитывает лимит по доступной RAM, максимум 1024 МиБ.'}
-            {' '}Это верхняя граница памяти для буфера и сохраняемых данных; память заранее не резервируется.
-            {memoryBudgetBytes != null && memoryBudgetBytes > 0 && ' Новое значение вступит в силу после применения настроек.'}
+            {manualMemory ? t('От 64 до 8192 МиБ. При запуске лимит должен помещаться в половину свободной RAM и четверть общей RAM.') : t('Авто рассчитывает лимит по доступной RAM, максимум 1024 МиБ.')}
+            {' '}{t("Это верхняя граница памяти для буфера и сохраняемых данных; память заранее не резервируется.")}{memoryBudgetBytes != null && memoryBudgetBytes > 0 && t(' Новое значение вступит в силу после применения настроек.')}
           </p>
-          {memoryValidation && <p id="replay-memory-error" className={styles.fieldError} role="alert">{memoryValidation.message}</p>}
+          {memoryValidation && <p id="replay-memory-error" className={styles.fieldError} role="alert">{t(memoryValidation.message)}</p>}
         </Field>
 
         <p className={styles.inlineWarning} role="status">
-          Replay автоматически сокращается при достижении лимита памяти.
-          Сохранённый клип может быть короче выбранной длительности.
-          {memoryBudgetBytes != null && memoryBudgetBytes > 0
-            ? ` Общий лимит буфера и сохраняемых данных в текущей сессии: ${Math.floor(memoryBudgetBytes / 1024 / 1024)} МиБ.`
-            : ' Общий лимит буфера и сохраняемых данных определяется выбранной настройкой при запуске.'}
+          {t("Replay автоматически сокращается при достижении лимита памяти.\r\n          Сохранённый клип может быть короче выбранной длительности.")}{memoryBudgetBytes != null && memoryBudgetBytes > 0
+            ? t(" Общий лимит буфера и сохраняемых данных в текущей сессии: {0} МиБ.", Math.floor(memoryBudgetBytes / 1024 / 1024))
+            : t(' Общий лимит буфера и сохраняемых данных определяется выбранной настройкой при запуске.')}
         </p>
 
         {draft.replay_mode !== 'ram' && (
@@ -204,9 +200,8 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
             data-testid="replay-disk-unsupported"
           >
             <span id="replay-mode-error">
-              {replayModeValidation?.message ?? 'Сохранённый дисковый буфер больше не поддерживается.'}{' '}
-              Replay работает только в оперативной памяти.
-            </span>
+              {replayModeValidation?.message ?? t('Сохранённый дисковый буфер больше не поддерживается.')}{' '}
+              {t("Replay работает только в оперативной памяти.")}</span>
             <Button
               type="button"
               variant="secondary"
@@ -214,19 +209,18 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
               onClick={() => onChange({ replay_mode: 'ram' })}
               data-testid="replay-mode-ram-button"
             >
-              Использовать RAM
-            </Button>
+              {t("Использовать RAM")}</Button>
           </div>
         )}
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="output-directory" className={styles.fieldLabel}>Папка клипов</FieldLabel>
+          <FieldLabel htmlFor="output-directory" className={styles.fieldLabel}>{t("Папка клипов")}</FieldLabel>
           <div className={styles.pathRow}>
             <Input
               id="output-directory"
               type="text"
               className="w-full"
               value={draft.output_directory ?? ''}
-              placeholder="Папка не выбрана"
+              placeholder={t("Папка не выбрана")}
               readOnly
               aria-invalid={Boolean(directoryValidation)}
               aria-describedby={
@@ -246,27 +240,25 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
               onClick={() => void handlePickFolder()}
               data-testid="choose-folder-button"
             >
-              Выбрать папку
-            </Button>
+              {t("Выбрать папку")}</Button>
           </div>
           {directoryValidation && (
             <p id="output-directory-error" className={styles.fieldError} role="alert">
-              {directoryValidation.message}
+              {t(directoryValidation.message)}
             </p>
           )}
           {folderError && (
             <ErrorNotice
               id="output-directory-picker-error"
-              title="Не удалось выбрать папку"
-              technicalDetails={`Код: ${folderError.code}\n${folderError.technicalCause}`}
+              title={t("Не удалось выбрать папку")}
+              technicalDetails={t("Код: {0}\n{1}", folderError.code, folderError.technicalCause)}
               action={(
                 <Button size="compact" variant="tertiary" onClick={() => void handlePickFolder()}>
-                  Повторить
-                </Button>
+                  {t("Повторить")}</Button>
               )}
               data-testid="folder-error"
             >
-              {folderError.summary}
+              {t(folderError.summary)}
             </ErrorNotice>
           )}
         </Field>
@@ -280,10 +272,10 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
               : 'recording-container-hint'
           }
         >
-          <FieldLegend className={styles.fieldLabel}>Формат файла</FieldLegend>
+          <FieldLegend className={styles.fieldLabel}>{t("Формат файла")}</FieldLegend>
           <RadioGroup value={container ?? ''} onValueChange={(value) => {
             if (value === 'mp4' || value === 'mkv') onChange({ container: value });
-          }} className={styles.radioRow} aria-label="Формат файла">
+          }} className={styles.radioRow} aria-label={t("Формат файла")}>
             {(['mp4', 'mkv'] as const).map((value) => (
               <label key={value} className={styles.radioLabel}>
                 <RadioGroupItem
@@ -296,11 +288,10 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
             ))}
           </RadioGroup>
           <p id="recording-container-hint" className={styles.fieldHint}>
-            MP4 подходит для большинства плееров и редакторов.
-          </p>
+            {t("MP4 подходит для большинства плееров и редакторов.")}</p>
           {containerValidation && (
             <p id="recording-container-error" className={styles.fieldError} role="alert">
-              {containerValidation.message}
+              {t(containerValidation.message)}
             </p>
           )}
         </FieldSet>

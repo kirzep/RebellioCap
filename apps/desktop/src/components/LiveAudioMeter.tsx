@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useEffect, useState } from 'react';
 import type { HostBridge } from '../bridge/contracts';
 import styles from './LiveAudioMeter.module.css';
@@ -5,6 +6,7 @@ import styles from './LiveAudioMeter.module.css';
 export function LiveAudioMeter({ bridge, endpointId, label, available }: {
   bridge: HostBridge; endpointId: string; label: string; available: boolean;
 }) {
+  useTranslation();
   const [peak, setPeak] = useState(0);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -32,8 +34,8 @@ export function LiveAudioMeter({ bridge, endpointId, label, available }: {
   }, [bridge, endpointId, available]);
   const percent = Math.round(peak * 100);
   return <div className={styles.container}>
-    <div className={styles.header}><span>{failed || !available ? 'Уровень недоступен' : 'Уровень звука'}</span><span className={styles.value}>{percent}%</span></div>
-    <div className={styles.track} role="meter" aria-label={`Уровень звука: ${label}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+    <div className={styles.header}><span>{failed || !available ? t('Уровень недоступен') : t('Уровень звука')}</span><span className={styles.value}>{percent}%</span></div>
+    <div className={styles.track} role="meter" aria-label={t("Уровень звука: {0}", label)} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
       <span className={styles.fill} style={{ width: `${percent}%` }} />
     </div>
   </div>;

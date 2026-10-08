@@ -6,6 +6,7 @@ pub mod engine;
 pub mod model;
 pub mod native;
 mod tray;
+mod language;
 pub mod notifications;
 pub mod logging;
 pub mod editor;
@@ -38,6 +39,7 @@ pub fn run() {
             let store = config::ConfigStore::from_local_app_data(&app.path().local_data_dir()?)?;
             logging::initialize(store.root())?;
             app.manage(logging::DeveloperState::default());
+            app.manage(language::LanguageState::new(store.root().to_path_buf()));
             app.manage(recording_names::RecordingNamesState::new(store.root().to_path_buf()));
             app.manage(notifications::NotificationState::new(store.root().to_path_buf()));
             if let Some(overlay) = app.get_webview_window("overlay") {
@@ -71,6 +73,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            language::get_language_settings,
+            language::set_language_settings,
             updater::check_for_update,
             updater::install_update,
             tray::take_pending_app_quit,

@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useWindowCloseGuard } from '../app/useWindowCloseGuard';
@@ -122,6 +123,7 @@ export function OnboardingScreen({
   onComplete,
   onBackToStart,
 }: OnboardingScreenProps) {
+  useTranslation();
   const [machine] = useState<OnboardingMachine>(() =>
     createOnboardingMachine(
       hostBridge,
@@ -406,20 +408,19 @@ export function OnboardingScreen({
           disabled={navigationLocked || (state.step === 1 && !onBackToStart)}
           data-testid="onboarding-back-button"
         >
-          {state.step === 1 ? 'К началу' : 'Назад'}
+          {state.step === 1 ? t('К началу') : t('Назад')}
         </Button>
 
         <div className={styles.footerRight}>
           {state.isSaving && (
             <InlineStatus tone="busy" className={styles.saveStatus}>
-              Сохраняем настройки…
-            </InlineStatus>
+              {t("Сохраняем настройки…")}</InlineStatus>
           )}
           <Button
             variant="primary"
             trailingIcon={<ArrowRight size={18} />}
             busy={state.isSaving}
-            busyLabel="Сохраняем…"
+            busyLabel={t("Сохраняем…")}
             onClick={() => void handleNext()}
             disabled={
               navigationLocked ||
@@ -427,7 +428,7 @@ export function OnboardingScreen({
             }
             data-testid="onboarding-next-button"
           >
-            {nextLabels[state.step] ?? 'Продолжить'}
+            {nextLabels[state.step] ?? t('Продолжить')}
           </Button>
         </div>
       </div>
@@ -441,7 +442,7 @@ export function OnboardingScreen({
       footer={footer}
     >
       <div className={styles.setupLayout} data-testid="onboarding-panel">
-        <h1 className="sr-only">Настройка записи</h1>
+        <h1 className="sr-only">{t("Настройка записи")}</h1>
 
         <div className={styles.formColumn}>
           <div
@@ -527,14 +528,14 @@ export function OnboardingScreen({
               <ErrorNotice
                 title={
                   validationGroups.some(([step]) => step !== state.step)
-                    ? 'Есть несохранённые изменения на другом шаге'
-                    : 'Проверьте настройки перед продолжением'
+                    ? t('Есть несохранённые изменения на другом шаге')
+                    : t('Проверьте настройки перед продолжением')
                 }
               >
                 <div className={styles.validationContent}>
                   <ul className={styles.validationList}>
                     {state.errors.map((error) => (
-                      <li key={`${error.field}-${error.code}`}>{error.message}</li>
+                      <li key={`${error.field}-${error.code}`}>{t(error.message)}</li>
                     ))}
                   </ul>
                   {validationGroups.some(([step]) => step !== state.step) && (
@@ -548,7 +549,7 @@ export function OnboardingScreen({
                             size="compact"
                             onClick={() => void navigateToStep(step)}
                           >
-                            Исправить на шаге {step}
+                            {t("Исправить на шаге")}{step}
                           </Button>
                         ))}
                     </div>
@@ -561,7 +562,7 @@ export function OnboardingScreen({
           {state.step === 5 && summaryBlockingIssue && (
             <div className={styles.noticeRegion}>
               <ErrorNotice
-                title="Перед тестом нужно исправить устройство"
+                title={t("Перед тестом нужно исправить устройство")}
                 tone="warning"
                 action={
                   <Button
@@ -569,11 +570,10 @@ export function OnboardingScreen({
                     size="compact"
                     onClick={() => void navigateToStep(summaryBlockingIssue.step)}
                   >
-                    Исправить
-                  </Button>
+                    {t("Исправить")}</Button>
                 }
               >
-                {summaryBlockingIssue.message}
+                {t(summaryBlockingIssue.message)}
               </ErrorNotice>
             </div>
           )}
@@ -581,11 +581,10 @@ export function OnboardingScreen({
           {operationError && (
             <div className={styles.noticeRegion}>
               <ErrorNotice
-                title={operationError.summary}
-                technicalDetails={`Код: ${operationError.code}\n${operationError.technicalCause}`}
+                title={t(operationError.summary)}
+                technicalDetails={t("Код: {0}\n{1}", operationError.code, operationError.technicalCause)}
               >
-                Настройки остались на экране. Исправьте причину и повторите действие.
-              </ErrorNotice>
+                {t("Настройки остались на экране. Исправьте причину и повторите действие.")}</ErrorNotice>
             </div>
           )}
         </div>
@@ -593,10 +592,10 @@ export function OnboardingScreen({
 
       <ConfirmDialog
         open={showExitConfirmation}
-        title="Вернуться к началу?"
-        description="Изменения на текущем шаге ещё не сохранены и будут потеряны."
-        confirmLabel="Вернуться к началу"
-        cancelLabel="Остаться в настройке"
+        title={t("Вернуться к началу?")}
+        description={t("Изменения на текущем шаге ещё не сохранены и будут потеряны.")}
+        confirmLabel={t("Вернуться к началу")}
+        cancelLabel={t("Остаться в настройке")}
         destructive
         onCancel={() => setShowExitConfirmation(false)}
         onConfirm={() => {
@@ -607,26 +606,26 @@ export function OnboardingScreen({
 
       <ConfirmDialog
         open={closeGuard.closeRequested}
-        title={testBusy ? 'Закрыть во время тестовой записи?' : 'Закрыть RebellioCap?'}
+        title={testBusy ? t('Закрыть во время тестовой записи?') : t('Закрыть RebellioCap?')}
         description={
           testBusy
-            ? 'Тест ещё не завершён и не будет считаться успешным. Служба записи будет штатно остановлена перед закрытием.'
+            ? t('Тест ещё не завершён и не будет считаться успешным. Служба записи будет штатно остановлена перед закрытием.')
             : navigationLocked
-              ? 'Текущая операция ещё не завершена. Служба записи будет штатно остановлена, а незавершённое действие не будет считаться успешным.'
-              : 'Изменения после последнего подтверждения службы записи будут потеряны.'
+              ? t('Текущая операция ещё не завершена. Служба записи будет штатно остановлена, а незавершённое действие не будет считаться успешным.')
+              : t('Изменения после последнего подтверждения службы записи будут потеряны.')
         }
-        confirmLabel="Закрыть RebellioCap"
-        cancelLabel="Остаться в настройке"
+        confirmLabel={t("Закрыть RebellioCap")}
+        cancelLabel={t("Остаться в настройке")}
         destructive
         busy={closeGuard.isClosing}
-        busyLabel="Завершаем…"
+        busyLabel={t("Завершаем…")}
         onConfirm={() => void closeGuard.confirmClose()}
         onCancel={closeGuard.cancelClose}
       >
         {closeGuard.closeError && (
           <ErrorNotice
-            title="Не удалось безопасно закрыть приложение"
-            technicalDetails={`Код: ${closeGuard.closeError.code}\n${closeGuard.closeError.technicalCause}`}
+            title={t("Не удалось безопасно закрыть приложение")}
+            technicalDetails={t("Код: {0}\n{1}", closeGuard.closeError.code, closeGuard.closeError.technicalCause)}
           >
             {closeGuard.closeError.summary}
           </ErrorNotice>

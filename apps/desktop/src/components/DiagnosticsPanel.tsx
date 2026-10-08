@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import type { AppError } from '../bridge/contracts';
 import { normalizeError } from '../bridge/host';
 import type { EngineSnapshot, SystemCheckResult } from '../config/model';
@@ -42,25 +43,25 @@ const stageMessages: Record<string, string> = {
 };
 
 function stageName(id: string): string {
-  return stageLabels[id] ?? 'Дополнительная проверка';
+  return stageLabels[id] ?? t('Дополнительная проверка');
 }
 
 function lifecycleLabel(lifecycle: EngineSnapshot['lifecycle']): string {
   const labels: Record<EngineSnapshot['lifecycle'], string> = {
-    starting: 'Replay включается',
-    ready: 'служба готова',
-    stopped: 'служба остановлена',
-    recovering: 'идёт восстановление',
-    degraded: 'работа с ошибками',
-    blocked: 'запуск заблокирован',
-    failed: 'остановка из-за ошибки',
+    starting: t('Replay включается'),
+    ready: t('служба готова'),
+    stopped: t('служба остановлена'),
+    recovering: t('идёт восстановление'),
+    degraded: t('работа с ошибками'),
+    blocked: t('запуск заблокирован'),
+    failed: t('остановка из-за ошибки'),
   };
   return labels[lifecycle];
 }
 
 function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 Б';
-  const units = ['Б', 'КиБ', 'МиБ', 'ГиБ'];
+  if (!Number.isFinite(bytes) || bytes <= 0) return t('0 Б');
+  const units = [t('Б'), t('КиБ'), t('МиБ'), t('ГиБ')];
   let value = bytes;
   let unitIndex = 0;
   while (value >= 1024 && unitIndex < units.length - 1) {
@@ -74,17 +75,17 @@ function formatBytes(bytes: number): string {
 }
 
 function stageDescription(stage: SystemCheckResult['stages'][number]): string {
-  if (stage.passed) return 'Проверка пройдена.';
+  if (stage.passed) return t('Проверка пройдена.');
   const message = stage.message.trim();
   if (stageMessages[message]) return stageMessages[message];
   if (/[А-Яа-яЁё]/.test(message)) return message;
-  return 'Проверка не пройдена. Код результата доступен в технических подробностях.';
+  return t('Проверка не пройдена. Код результата доступен в технических подробностях.');
 }
 
 function checkTechnicalDetails(result: SystemCheckResult): string {
   return result.stages
     .map((stage) => {
-      const message = stage.message.trim() || 'без сообщения';
+      const message = stage.message.trim() || t('без сообщения');
       return `${stage.id}: ${stage.passed ? 'passed' : 'failed'}\n${message}`;
     })
     .join('\n\n');
@@ -92,7 +93,7 @@ function checkTechnicalDetails(result: SystemCheckResult): string {
 
 function engineTechnicalDetails(snapshot: EngineSnapshot): string | undefined {
   if (!snapshot.lastError) return undefined;
-  const lines = [`Код: ${snapshot.lastError.code}`];
+  const lines = [t("Код: {0}", snapshot.lastError.code)];
   if (snapshot.lastError.hresult !== null) {
     lines.push(`HRESULT: ${snapshot.lastError.hresult}`);
   }
@@ -111,6 +112,7 @@ export function DiagnosticsPanel({
   onRunCheck,
   onOpenReport,
 }: DiagnosticsPanelProps) {
+  useTranslation();
   const lastError = snapshot.lastError
     ? normalizeError({
         code: snapshot.lastError.code,
@@ -127,84 +129,80 @@ export function DiagnosticsPanel({
     >
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Служебные сведения</p>
+          <p className={styles.eyebrow}>{t("Служебные сведения")}</p>
           <h2 id="recording-diagnostics-title" className={styles.title}>
-            Диагностика
-          </h2>
+            {t("Диагностика")}</h2>
         </div>
         <p className={styles.intro}>
-          Проверка не меняет настройки и не запускает мастер заново.
-        </p>
+          {t("Проверка не меняет настройки и не запускает мастер заново.")}</p>
       </header>
 
       <div className={styles.groups}>
         <section className={styles.group} aria-labelledby="diagnostics-engine-title">
           <h3 id="diagnostics-engine-title" className={styles.groupTitle}>
-            Состояние службы
-          </h3>
+            {t("Состояние службы")}</h3>
           <dl className={styles.summaryList}>
             <div>
-              <dt>Режим</dt>
+              <dt>{t("Режим")}</dt>
               <dd>{lifecycleLabel(snapshot.lifecycle)}</dd>
             </div>
             <div>
               <dt>Replay</dt>
-              <dd>{snapshot.replayActive ? 'включён' : 'выключен'}</dd>
+              <dd>{snapshot.replayActive ? t('включён') : t('выключен')}</dd>
             </div>
             <div>
-              <dt>Обычная запись</dt>
-              <dd>{snapshot.continuousRecordingActive ? 'идёт' : 'не выполняется'}</dd>
+              <dt>{t("Обычная запись")}</dt>
+              <dd>{snapshot.continuousRecordingActive ? t('идёт') : t('не выполняется')}</dd>
             </div>
           </dl>
 
           <details className={styles.technicalDetails} data-testid="engine-metrics">
-            <summary>Счётчики текущей сессии</summary>
+            <summary>{t("Счётчики текущей сессии")}</summary>
             <p className={styles.counterNote}>
-              Это не текущий FPS и не процент потери кадров.
-            </p>
+              {t("Это не текущий FPS и не процент потери кадров.")}</p>
             <dl className={styles.counterList}>
               <div>
-                <dt>Видеопакеты</dt>
+                <dt>{t("Видеопакеты")}</dt>
                 <dd data-testid="metric-video">{snapshot.metrics.videoPackets}</dd>
               </div>
               <div>
-                <dt>Аудиопакеты</dt>
+                <dt>{t("Аудиопакеты")}</dt>
                 <dd data-testid="metric-audio">{snapshot.metrics.audioPackets}</dd>
               </div>
               <div>
-                <dt>PCM-фреймы, отброшенные при смешивании</dt>
+                <dt>{t("PCM-фреймы, отброшенные при смешивании")}</dt>
                 <dd data-testid="metric-audio-mixing-drops">{snapshot.metrics.audioMixingDroppedFrames ?? 0}</dd>
               </div>
               <div>
-                <dt>Пропущенные сроки видеокадра</dt>
+                <dt>{t("Пропущенные сроки видеокадра")}</dt>
                 <dd data-testid="metric-drops">{snapshot.metrics.missedVideoDeadlines}</dd>
               </div>
               <div>
-                <dt>Данные Replay</dt>
+                <dt>{t("Данные Replay")}</dt>
                 <dd>{formatBytes(snapshot.metrics.replayBytes)}</dd>
               </div>
               <div>
-                <dt>Успешные сохранения</dt>
+                <dt>{t("Успешные сохранения")}</dt>
                 <dd data-testid="metric-saves">{snapshot.metrics.completedSaves}</dd>
               </div>
               <div>
-                <dt>Неудачные сохранения</dt>
+                <dt>{t("Неудачные сохранения")}</dt>
                 <dd>{snapshot.metrics.failedSaves}</dd>
               </div>
               <div>
-                <dt>Отклонённые сохранения</dt>
+                <dt>{t("Отклонённые сохранения")}</dt>
                 <dd>{snapshot.metrics.rejectedSaves}</dd>
               </div>
               <div>
-                <dt>Ошибки конвейера записи</dt>
+                <dt>{t("Ошибки конвейера записи")}</dt>
                 <dd>{snapshot.metrics.pipelineErrors}</dd>
               </div>
               <div>
-                <dt>Пакеты обычной записи</dt>
+                <dt>{t("Пакеты обычной записи")}</dt>
                 <dd>{snapshot.metrics.continuousPackets}</dd>
               </div>
               <div>
-                <dt>Сбои обычной записи</dt>
+                <dt>{t("Сбои обычной записи")}</dt>
                 <dd>{snapshot.metrics.continuousFailures}</dd>
               </div>
             </dl>
@@ -212,14 +210,14 @@ export function DiagnosticsPanel({
 
           {lastError ? (
             <ErrorNotice
-              title="Последняя ошибка службы"
+              title={t("Последняя ошибка службы")}
               tone="warning"
               technicalDetails={engineTechnicalDetails(snapshot)}
             >
-              {lastError.summary}
+              {t(lastError.summary)}
             </ErrorNotice>
           ) : (
-            <InlineStatus tone="neutral">Служба не сообщала ошибку в текущем состоянии.</InlineStatus>
+            <InlineStatus tone="neutral">{t("Служба не сообщала ошибку в текущем состоянии.")}</InlineStatus>
           )}
         </section>
 
@@ -227,34 +225,32 @@ export function DiagnosticsPanel({
           <div className={styles.groupHeading}>
             <div>
               <h3 id="diagnostics-check-title" className={styles.groupTitle}>
-                Проверка компьютера
-              </h3>
+                {t("Проверка компьютера")}</h3>
               <p className={styles.groupCopy}>
-                Проверяет доступность компонентов захвата и устройств.
-              </p>
+                {t("Проверяет доступность компонентов захвата и устройств.")}</p>
             </div>
             <Button
               variant="secondary"
               size="compact"
               busy={isChecking}
-              busyLabel="Проверяем…"
+              busyLabel={t("Проверяем…")}
               disabled={commandsDisabled || isOpeningReport}
               onClick={() => void onRunCheck()}
             >
-              {result || checkError ? 'Повторить проверку' : 'Проверить систему'}
+              {result || checkError ? t('Повторить проверку') : t('Проверить систему')}
             </Button>
           </div>
 
           {isChecking && !result && (
-            <InlineStatus tone="busy">Проверяем совместимость и доступность устройств…</InlineStatus>
+            <InlineStatus tone="busy">{t("Проверяем совместимость и доступность устройств…")}</InlineStatus>
           )}
 
           {checkError && (
             <ErrorNotice
-              title="Не удалось проверить компьютер"
-              technicalDetails={`Код: ${checkError.code}\n${checkError.technicalCause}`}
+              title={t("Не удалось проверить компьютер")}
+              technicalDetails={t("Код: {0}\n{1}", checkError.code, checkError.technicalCause)}
             >
-              {checkError.summary}
+              {t(checkError.summary)}
             </ErrorNotice>
           )}
 
@@ -262,8 +258,8 @@ export function DiagnosticsPanel({
             <>
               <InlineStatus tone={result.passed ? 'success' : 'warning'}>
                 {result.passed
-                  ? 'Все обязательные проверки пройдены.'
-                  : 'Есть проблема, которую нужно исправить перед надёжной записью.'}
+                  ? t('Все обязательные проверки пройдены.')
+                  : t('Есть проблема, которую нужно исправить перед надёжной записью.')}
               </InlineStatus>
               <ul className={styles.stageList}>
                 {result.stages.map((stage) => (
@@ -282,14 +278,14 @@ export function DiagnosticsPanel({
                 ))}
               </ul>
               <details className={styles.technicalDetails}>
-                <summary>Технические результаты проверки</summary>
+                <summary>{t("Технические результаты проверки")}</summary>
                 <pre>{checkTechnicalDetails(result)}</pre>
               </details>
             </>
           )}
 
           {!isChecking && !result && !checkError && (
-            <p className={styles.emptyCopy}>Проверка в этом сеансе ещё не выполнялась.</p>
+            <p className={styles.emptyCopy}>{t("Проверка в этом сеансе ещё не выполнялась.")}</p>
           )}
         </section>
 
@@ -297,38 +293,35 @@ export function DiagnosticsPanel({
           <div className={styles.groupHeading}>
             <div>
               <h3 id="diagnostics-report-title" className={styles.groupTitle}>
-                Технический отчёт
-              </h3>
+                {t("Технический отчёт")}</h3>
               <p className={styles.groupCopy}>
-                Отчёт создаётся службой записи после проверки компьютера.
-              </p>
+                {t("Отчёт создаётся службой записи после проверки компьютера.")}</p>
             </div>
             {result?.diagnostics_path && (
               <Button
                 variant="tertiary"
                 size="compact"
                 busy={isOpeningReport}
-                busyLabel="Открываем…"
+                busyLabel={t("Открываем…")}
                 disabled={commandsDisabled || isChecking}
                 onClick={() => void onOpenReport()}
               >
-                Открыть отчёт
-              </Button>
+                {t("Открыть отчёт")}</Button>
             )}
           </div>
 
           {result?.diagnostics_path ? (
             <code className={styles.reportPath}>{result.diagnostics_path}</code>
           ) : (
-            <p className={styles.emptyCopy}>Сначала выполните проверку системы.</p>
+            <p className={styles.emptyCopy}>{t("Сначала выполните проверку системы.")}</p>
           )}
 
           {openError && (
             <ErrorNotice
-              title="Не удалось открыть отчёт"
-              technicalDetails={`Код: ${openError.code}\n${openError.technicalCause}`}
+              title={t("Не удалось открыть отчёт")}
+              technicalDetails={t("Код: {0}\n{1}", openError.code, openError.technicalCause)}
             >
-              {openError.summary}
+              {t(openError.summary)}
             </ErrorNotice>
           )}
         </section>

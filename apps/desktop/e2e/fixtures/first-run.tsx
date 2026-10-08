@@ -71,4 +71,5 @@ const host: HostBridge = {
   openDiagnostics: unsupported, openTestClip: unsupported,
 };
 Object.assign(window, { firstRunState: state, firstRunSnapshot: snapshot });
+await (await import('../../src/i18n')).initializeLanguage();
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App hostBridge={host} /></React.StrictMode>);

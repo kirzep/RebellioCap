@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { Card, CardHeader, CardTitle, CardFooter } from './ui/card';
 import { Bookmark, Disc, Power, PowerOff } from 'lucide-react';
 import type { AppError } from '../bridge/contracts';
@@ -52,6 +53,7 @@ function ActionFeedback({
   success?: string | null;
   onOpenSettings?: (section?: 'video' | 'audio' | 'replay' | 'hotkeys') => void;
 }) {
+  useTranslation();
   if (error) {
     const structuredError = typeof error === 'string' ? null : error;
     const canOpenSettings = Boolean(
@@ -68,8 +70,8 @@ function ActionFeedback({
           onClick={() => onOpenSettings(settingsSectionForError(structuredError))}
         >
           {structuredError.actions.includes('choose-folder')
-            ? 'Выбрать папку'
-            : 'Изменить параметры'}
+            ? t('Выбрать папку')
+            : t('Изменить параметры')}
         </Button>
       ) : undefined;
     return (
@@ -79,7 +81,7 @@ function ActionFeedback({
         action={settingsAction}
         technicalDetails={
           structuredError
-            ? `Код: ${structuredError.code}\n${structuredError.technicalCause}`
+            ? t("Код: {0}\n{1}", structuredError.code, structuredError.technicalCause)
             : undefined
         }
       >
@@ -113,9 +115,10 @@ export function RecordingControls({
   onStopReplay,
   onOpenSettings,
 }: RecordingControlsProps) {
+  useTranslation();
   const replaySaveLabel = snapshot.replayActive && snapshot.replaySeconds > 0
     ? formatReplaySaveLabel(snapshot.replaySeconds)
-    : 'Сохранить повтор';
+    : t('Сохранить повтор');
   const saveHotkey = formatHotkey(activeConfig.save_replay_hotkey);
   const recordingHotkey = formatHotkey(activeConfig.toggle_recording_hotkey);
   const lifecycleTransitioning =
@@ -146,11 +149,10 @@ export function RecordingControls({
     !startReplayError.retryable;
 
   return (
-    <section className={styles.controls} aria-label="Управление записью" data-testid="recording-controls">
+    <section className={styles.controls} aria-label={t("Управление записью")} data-testid="recording-controls">
       {snapshot.metrics.continuousRecoveryPath && (
-        <ErrorNotice title="Сохранена аварийная копия записи">
-          Запись прервалась. Файл сохранён для восстановления; последний фрагмент может быть неполным.
-          <span style={{ display: 'block', overflowWrap: 'anywhere' }}>{snapshot.metrics.continuousRecoveryPath}</span>
+        <ErrorNotice title={t("Сохранена аварийная копия записи")}>
+          {t("Запись прервалась. Файл сохранён для восстановления; последний фрагмент может быть неполным.")}<span style={{ display: 'block', overflowWrap: 'anywhere' }}>{snapshot.metrics.continuousRecoveryPath}</span>
         </ErrorNotice>
       )}
       <div className={styles.actionGrid}>
@@ -158,9 +160,8 @@ export function RecordingControls({
           <CardHeader className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle id="replay-action-title" role="heading" aria-level={2}>
-                Мгновенный повтор
-              </CardTitle>
-              <p className={styles.actionDescription}>Сохраните последние {activeConfig.replay_seconds} секунд одним нажатием.</p>
+                {t("Мгновенный повтор")}</CardTitle>
+              <p className={styles.actionDescription}>{t("Сохраните последние")}{' '}{activeConfig.replay_seconds} {' '}{t("секунд одним нажатием.")}</p>
             </div>
             <kbd className={styles.hotkey}>{saveHotkey}</kbd>
           </CardHeader>
@@ -171,7 +172,7 @@ export function RecordingControls({
             variant="primary"
             fullWidth
             busy={isSavingReplay}
-            busyLabel="Сохраняем…"
+            busyLabel={t("Сохраняем…")}
             leadingIcon={<Bookmark aria-hidden="true" />}
             disabled={
               disabled || !replayReady || anyCommandPending || saveBlockedByError
@@ -185,15 +186,15 @@ export function RecordingControls({
           {!replayReady && !saveReplayError && (
             <InlineStatus tone={disabled ? 'warning' : 'neutral'}>
               {disabled
-                ? 'Нет связи со службой.'
+                ? t('Нет связи со службой.')
                 : snapshot.lifecycle === 'blocked' || snapshot.lifecycle === 'failed'
-                  ? 'Повтор станет доступен после исправления ошибки.'
-                  : 'Сначала включите Replay.'}
+                  ? t('Повтор станет доступен после исправления ошибки.')
+                  : t('Сначала включите Replay.')}
             </InlineStatus>
           )}
           <ActionFeedback
             error={saveReplayError}
-            errorTitle="Не удалось сохранить повтор"
+            errorTitle={t("Не удалось сохранить повтор")}
             success={saveReplaySuccess}
             onOpenSettings={onOpenSettings}
           />
@@ -206,9 +207,8 @@ export function RecordingControls({
           <CardHeader className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle id="continuous-action-title" role="heading" aria-level={2}>
-                Запись экрана
-              </CardTitle>
-              <p className={styles.actionDescription}>Запись от начала до остановки.</p>
+                {t("Запись экрана")}</CardTitle>
+              <p className={styles.actionDescription}>{t("Запись от начала до остановки.")}</p>
             </div>
             <kbd className={styles.hotkey}>{recordingHotkey}</kbd>
           </CardHeader>
@@ -219,7 +219,7 @@ export function RecordingControls({
             variant={snapshot.continuousRecordingActive ? 'danger' : 'secondary'}
             fullWidth
             busy={isTogglingContinuous}
-            busyLabel={snapshot.continuousRecordingActive ? 'Останавливаем…' : 'Запускаем…'}
+            busyLabel={snapshot.continuousRecordingActive ? t('Останавливаем…') : t('Запускаем…')}
             leadingIcon={
               snapshot.continuousRecordingActive ? (
                 <span className={styles.recordingDot} aria-hidden="true" />
@@ -236,7 +236,7 @@ export function RecordingControls({
             onClick={() => void onToggleContinuous()}
             data-testid="toggle-recording-button"
           >
-            {snapshot.continuousRecordingActive ? 'Остановить запись' : 'Начать запись'}
+            {snapshot.continuousRecordingActive ? t('Остановить запись') : t('Начать запись')}
           </Button>
 
 
@@ -244,15 +244,14 @@ export function RecordingControls({
             !snapshot.continuousRecordingActive &&
             !toggleContinuousError && (
               <div className={styles.disabledExplanation}>
-                <InlineStatus tone="neutral">Отключена в настройках.</InlineStatus>
+                <InlineStatus tone="neutral">{t("Отключена в настройках.")}</InlineStatus>
                 {onOpenSettings && (
                   <Button
                     variant="tertiary"
                     size="compact"
                     onClick={() => onOpenSettings('hotkeys')}
                   >
-                    Настроить
-                  </Button>
+                    {t("Настроить")}</Button>
                 )}
               </div>
             )}
@@ -260,8 +259,8 @@ export function RecordingControls({
             error={toggleContinuousError}
             errorTitle={
               snapshot.continuousRecordingActive
-                ? 'Не удалось остановить обычную запись'
-                : 'Не удалось начать обычную запись'
+                ? t('Не удалось остановить обычную запись')
+                : t('Не удалось начать обычную запись')
             }
             onOpenSettings={onOpenSettings}
           />
@@ -269,41 +268,40 @@ export function RecordingControls({
         </Card>
       </div>
 
-      <section className={styles.engineActions} aria-label="Управление Replay">
+      <section className={styles.engineActions} aria-label={t("Управление Replay")}>
 
         <div className={styles.engineButtons}>
           {lifecycleTransitioning ? (
             <InlineStatus tone="busy">
               {snapshot.lifecycle === 'starting'
-                ? 'Replay включается…'
-                : 'Служба восстанавливает запись…'}
+                ? t('Replay включается…')
+                : t('Служба восстанавливает запись…')}
             </InlineStatus>
           ) : canStopReplay ? (
             <Button
               variant="tertiary"
               busy={isStoppingReplay}
-              busyLabel="Выключаем…"
+              busyLabel={t("Выключаем…")}
               leadingIcon={<PowerOff aria-hidden="true" />}
               disabled={disabled || anyCommandPending}
               onClick={() => void onStopReplay()}
-              title="Выключить до следующего запуска приложения"
+              title={t("Выключить до следующего запуска приложения")}
               data-testid="stop-replay-button"
             >
-              Выключить Replay
-            </Button>
+              {t("Выключить Replay")}</Button>
           ) : canStartReplay ? (
             <Button
               variant="secondary"
               busy={isStartingReplay}
-              busyLabel="Включаем…"
+              busyLabel={t("Включаем…")}
               leadingIcon={<Power aria-hidden="true" />}
               disabled={disabled || anyCommandPending || startBlockedByError}
               onClick={() => void onStartReplay()}
               data-testid="start-replay-button"
             >
               {snapshot.lifecycle === 'blocked' || snapshot.lifecycle === 'failed'
-                ? 'Повторить запуск'
-                : 'Включить Replay'}
+                ? t('Повторить запуск')
+                : t('Включить Replay')}
             </Button>
           ) : null}
         </div>
@@ -314,8 +312,8 @@ export function RecordingControls({
               error={startReplayError ?? stopReplayError}
               errorTitle={
                 startReplayError
-                  ? 'Не удалось включить Replay'
-                  : 'Не удалось выключить Replay'
+                  ? t('Не удалось включить Replay')
+                  : t('Не удалось выключить Replay')
               }
               onOpenSettings={onOpenSettings}
             />

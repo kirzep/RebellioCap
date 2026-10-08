@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { requestNavigation } from '../editor/navigationGuard';
 import { isWindowHidden, subscribeWindowVisibility } from '../app/windowVisibility';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -89,14 +90,14 @@ function normalizeHomeError(error: unknown, fallback: string): AppError {
 }
 
 function describeAudio(selection: AudioSelection, choices: AudioChoice[] | null): string {
-  if (selection === 'disabled') return 'Не записывается';
+  if (selection === 'disabled') return t('Не записывается');
   const choice = choices?.find((item) => item.id === selection.endpoint);
   if (!choice) {
     return choices
-      ? `Устройство недоступно · ${selection.endpoint}`
-      : `Сохранённое устройство · ${selection.endpoint}`;
+      ? t("Устройство недоступно · {0}", selection.endpoint)
+      : t("Сохранённое устройство · {0}", selection.endpoint);
   }
-  return choice.available ? choice.name : `${choice.name} · недоступно`;
+  return choice.available ? choice.name : t("{0} · недоступно", choice.name);
 }
 
 function settingsSectionForNativeError(
@@ -147,27 +148,27 @@ function describeWindowClose(
   settingsDirty: boolean
 ): string {
   if (savePending) {
-    return 'Сначала дождёмся завершения сохранения, затем штатно остановим запись и закроем приложение.';
+    return t('Сначала дождёмся завершения сохранения, затем штатно остановим запись и закроем приложение.');
   }
   if (recordingActive && settingsDirty) {
-    return 'Текущая запись будет корректно завершена. Изменения в настройках не применены и будут потеряны.';
+    return t('Текущая запись будет корректно завершена. Изменения в настройках не применены и будут потеряны.');
   }
   if (recordingActive) {
-    return 'Текущая запись будет корректно завершена перед закрытием.';
+    return t('Текущая запись будет корректно завершена перед закрытием.');
   }
   if (stateUnknown && settingsDirty) {
-    return 'Текущее состояние записи не подтверждено. Служба записи будет штатно завершена, а неприменённые изменения настроек потеряны.';
+    return t('Текущее состояние записи не подтверждено. Служба записи будет штатно завершена, а неприменённые изменения настроек потеряны.');
   }
   if (stateUnknown) {
-    return 'Текущее состояние записи не подтверждено. При закрытии приложение штатно завершит работу службы записи.';
+    return t('Текущее состояние записи не подтверждено. При закрытии приложение штатно завершит работу службы записи.');
   }
   if (settingsBusy) {
-    return 'Сначала дождёмся завершения текущей операции, затем закроем приложение.';
+    return t('Сначала дождёмся завершения текущей операции, затем закроем приложение.');
   }
   if (settingsDirty) {
-    return 'Изменения в настройках не применены и будут потеряны после подтверждения.';
+    return t('Изменения в настройках не применены и будут потеряны после подтверждения.');
   }
-  return 'Текущая операция будет завершена перед закрытием приложения.';
+  return t('Текущая операция будет завершена перед закрытием приложения.');
 }
 
 export function HomeScreen({
@@ -178,6 +179,7 @@ export function HomeScreen({
   initialView = 'recording',
   initialSettingsSection = 'video',
 }: HomeScreenProps) {
+  useTranslation();
   const bridge: HostBridge = host ?? hostBridge ?? defaultHost;
   const [activeView, setActiveView] = useState<HomeView>(initialView);
   const destinationRef = useRef<HomeView>('recording');
@@ -703,8 +705,8 @@ export function HomeScreen({
   const activeMonitorName = activeConfig
     ? (activeMonitor ? friendlyMonitorName(activeMonitor.name) : undefined) ??
       (monitorCatalog
-        ? 'Сохранённый экран · недоступен'
-        : 'Сохранённый экран')
+        ? t('Сохранённый экран · недоступен')
+        : t('Сохранённый экран'))
     : '';
   const snapshotIsStale = snapshotRefreshError !== null;
   const closeStopsEngine =
@@ -784,7 +786,7 @@ export function HomeScreen({
     <WindowShell
       windowStatus={<RecordingStatus snapshot={snapshot} unavailable={Boolean(snapshotRefreshError)} />}
       navigation={navigation}
-      settingsNavigation={{ id: 'settings', label: 'Настройки', disabled: settingsBusy }}
+      settingsNavigation={{ id: 'settings', label: t('Настройки'), disabled: settingsBusy }}
       availableUpdate={availableUpdate}
       onInstallUpdate={availableUpdate && bridge.installUpdate ? async onProgress => {
         setSettingsBusy(true);
@@ -796,53 +798,49 @@ export function HomeScreen({
       activeNavigation={activeView}
       onNavigate={handleNavigation}
       contentWidth={activeView === 'settings' ? 'form' : 'wide'}
-      contentLabel={activeView === 'recording' ? 'Обзор' : activeView === 'clips' ? 'Клипы' : 'Настройки'}
+      contentLabel={activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}
     >
       <header className={styles.pageHeader}>
-        <div><p className={styles.breadcrumb}>Рабочая область <span>/</span> {activeView === 'recording' ? 'Обзор' : activeView === 'clips' ? 'Клипы' : 'Настройки'}</p>
-        <h1>{activeView === 'recording' ? 'Обзор записи' : activeView === 'clips' ? 'Ваши клипы' : HOME_NAVIGATION.find(item => item.id === settingsSection)?.label}</h1>
-        <p className={styles.pageDescription}>{activeView === 'recording' ? 'Записывайте экран и сохраняйте то, что хочется оставить.' : activeView === 'clips' ? 'Всё, что вы сохранили, в одном месте.' : 'Настройте запись под себя.'}</p></div>
+        <div><p className={styles.breadcrumb}>{t("Рабочая область")}{' '}<span>/</span> {activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}</p>
+        <h1>{activeView === 'recording' ? t('Обзор записи') : activeView === 'clips' ? t('Ваши клипы') : HOME_NAVIGATION.find(item => item.id === settingsSection)?.label}</h1>
+        <p className={styles.pageDescription}>{activeView === 'recording' ? t('Записывайте экран и сохраняйте то, что хочется оставить.') : activeView === 'clips' ? t('Всё, что вы сохранили, в одном месте.') : t('Настройте запись под себя.')}</p></div>
       </header>
       {activeView === 'recording' ? (
         <div className={styles.screen} data-testid="home-panel">
           {stateLoadError && activeConfig && (
             <ErrorNotice
-              title="Не удалось обновить настройки"
+              title={t("Не удалось обновить настройки")}
               tone="warning"
-              technicalDetails={`Код: ${stateLoadError.code}\n${stateLoadError.technicalCause}`}
+              technicalDetails={t("Код: {0}\n{1}", stateLoadError.code, stateLoadError.technicalCause)}
               action={
                 <Button size="compact" onClick={() => void loadState(false)}>
-                  Повторить
-                </Button>
+                  {t("Повторить")}</Button>
               }
             >
-              {stateLoadError.summary} Ниже показаны последние подтверждённые значения.
-            </ErrorNotice>
+              {t(stateLoadError.summary)} {t("Ниже показаны последние подтверждённые значения.")}</ErrorNotice>
           )}
 
           {!snapshot ? (
             <section className={styles.loadingState} aria-labelledby="recording-loading-title">
               <div>
                 <h1 id="recording-loading-title" className={styles.loadingTitle}>
-                  Получаем состояние записи…
-                </h1>
+                  {t("Получаем состояние записи…")}</h1>
                 <InlineStatus tone={snapshotRefreshError ? 'warning' : 'busy'}>
                   {snapshotRefreshError
-                    ? 'Служба записи пока не ответила'
-                    : 'Связываемся со службой записи'}
+                    ? t('Служба записи пока не ответила')
+                    : t('Связываемся со службой записи')}
                 </InlineStatus>
               </div>
               {snapshotRefreshError && (
                 <ErrorNotice
-                  title="Не удаётся получить состояние"
-                  technicalDetails={`Код: ${snapshotRefreshError.code}\n${snapshotRefreshError.technicalCause}`}
+                  title={t("Не удаётся получить состояние")}
+                  technicalDetails={t("Код: {0}\n{1}", snapshotRefreshError.code, snapshotRefreshError.technicalCause)}
                   action={
                     <Button size="compact" onClick={() => void refreshSnapshot(true)}>
-                      Повторить
-                    </Button>
+                      {t("Повторить")}</Button>
                   }
                 >
-                  {snapshotRefreshError.summary}
+                  {t(snapshotRefreshError.summary)}
                 </ErrorNotice>
               )}
             </section>
@@ -850,17 +848,15 @@ export function HomeScreen({
             <>
               {snapshotRefreshError && (
                 <ErrorNotice
-                  title="Не удаётся обновить состояние"
+                  title={t("Не удаётся обновить состояние")}
                   tone="warning"
-                  technicalDetails={`Код: ${snapshotRefreshError.code}\n${snapshotRefreshError.technicalCause}`}
+                  technicalDetails={t("Код: {0}\n{1}", snapshotRefreshError.code, snapshotRefreshError.technicalCause)}
                   action={
                     <Button size="compact" onClick={() => void refreshSnapshot(true)}>
-                      Повторить
-                    </Button>
+                      {t("Повторить")}</Button>
                   }
                 >
-                  {snapshotRefreshError.summary} Команды записи недоступны, пока связь не восстановлена.
-                </ErrorNotice>
+                  {t(snapshotRefreshError.summary)} {t("Команды записи недоступны, пока связь не восстановлена.")}</ErrorNotice>
               )}
 
               <EngineState
@@ -914,18 +910,16 @@ export function HomeScreen({
                   onOpenSettings={openSettings}
                 />
               ) : isLoadingState ? (
-                <InlineStatus tone="busy">Получаем действующие настройки…</InlineStatus>
+                <InlineStatus tone="busy">{t("Получаем действующие настройки…")}</InlineStatus>
               ) : (
                 <ErrorNotice
-                  title="Действующая конфигурация не найдена"
+                  title={t("Действующая конфигурация не найдена")}
                   action={
                     <Button size="compact" onClick={() => void loadState(true)}>
-                      Повторить
-                    </Button>
+                      {t("Повторить")}</Button>
                   }
                 >
-                  Команды записи недоступны. Настройки нужно восстановить через сохранённый профиль.
-                  {stateLoadError ? ` ${stateLoadError.summary}` : ''}
+                  {t("Команды записи недоступны. Настройки нужно восстановить через сохранённый профиль.")}{stateLoadError ? ` ${stateLoadError.summary}` : ''}
                 </ErrorNotice>
               )}
 
@@ -933,42 +927,38 @@ export function HomeScreen({
                 <details className={styles.configuration}>
                   <summary className={styles.configurationToggle}>
                     <SlidersHorizontal size={16} aria-hidden="true" />
-                    <span>Параметры записи</span>
+                    <span>{t("Параметры записи")}</span>
                     <ChevronDown size={16} className={styles.configurationChevron} aria-hidden="true" />
                   </summary>
 
                   {isCatalogLoading && !catalogLoadError && (
                     <InlineStatus tone="busy" className={styles.configurationStatus}>
-                      Уточняем названия и доступность устройств…
-                    </InlineStatus>
+                      {t("Уточняем названия и доступность устройств…")}</InlineStatus>
                   )}
 
                   {catalogLoadError && (
                     <ErrorNotice
-                      title="Не удалось обновить список устройств"
+                      title={t("Не удалось обновить список устройств")}
                       tone="warning"
                       className={styles.configurationStatus}
-                      technicalDetails={`Код: ${catalogLoadError.code}\n${catalogLoadError.technicalCause}`}
+                      technicalDetails={t("Код: {0}\n{1}", catalogLoadError.code, catalogLoadError.technicalCause)}
                       action={
                         <Button
                           variant="tertiary"
                           size="compact"
                           busy={isCatalogLoading}
-                          busyLabel="Обновляем…"
+                          busyLabel={t("Обновляем…")}
                           onClick={() => setCatalogReloadToken((value) => value + 1)}
                         >
-                          Повторить
-                        </Button>
+                          {t("Повторить")}</Button>
                       }
                     >
-                      {catalogLoadError.summary} Действующие настройки не изменены; названия и
-                      доступность устройств могут быть неактуальны.
-                    </ErrorNotice>
+                      {t(catalogLoadError.summary)} {t("Действующие настройки не изменены; названия и\r\n                      доступность устройств могут быть неактуальны.")}</ErrorNotice>
                   )}
 
                   <dl className={styles.configurationGrid}>
                     <div className={styles.configurationItem}>
-                      <dt>Экран</dt>
+                      <dt>{t("Экран")}</dt>
                       <dd>
                         <span>{activeMonitorName}</span>
                         <small>
@@ -982,24 +972,24 @@ export function HomeScreen({
                       </dd>
                     </div>
                     <div className={styles.configurationItem}>
-                      <dt>Звук</dt>
+                      <dt>{t("Звук")}</dt>
                       <dd>
                         <span>
-                          Система: {describeAudio(activeConfig.system_audio, audioCatalog?.system_audio ?? null)}
+                          {t("Система:")}{describeAudio(activeConfig.system_audio, audioCatalog?.system_audio ?? null)}
                         </span>
                         <small>
-                          Микрофон: {describeAudio(activeConfig.microphone, audioCatalog?.microphones ?? null)}
+                          {t("Микрофон:")}{describeAudio(activeConfig.microphone, audioCatalog?.microphones ?? null)}
                         </small>
                       </dd>
                     </div>
                     <div className={styles.configurationItem}>
-                      <dt>Папка</dt>
+                      <dt>{t("Папка")}</dt>
                       <dd>
                         <code className={styles.path}>{activeConfig.output_directory}</code>
                       </dd>
                     </div>
                     <div className={styles.configurationItem}>
-                      <dt>Файл</dt>
+                      <dt>{t("Файл")}</dt>
                       <dd>
                         <span>H.264 · {formatContainer(activeConfig.container)}</span>
                         <small>{formatBitrate(activeConfig.bitrate)}</small>
@@ -1016,68 +1006,61 @@ export function HomeScreen({
         <div className={styles.settingsView}>
           {!activeConfig && (
             <header className={styles.settingsHeader}>
-              <p className={styles.eyebrow}>Действующий профиль</p>
-              <h1 className={styles.settingsTitle}>Настройки записи</h1>
+              <p className={styles.eyebrow}>{t("Действующий профиль")}</p>
+              <h1 className={styles.settingsTitle}>{t("Настройки записи")}</h1>
               <p className={styles.settingsDescription}>
-                Изменения применяются к службе записи после подтверждения.
-              </p>
+                {t("Изменения применяются к службе записи после подтверждения.")}</p>
             </header>
           )}
 
           {stateLoadError && (
             <ErrorNotice
-              title="Не удалось обновить настройки"
+              title={t("Не удалось обновить настройки")}
               tone={activeConfig ? 'warning' : 'danger'}
-              technicalDetails={`Код: ${stateLoadError.code}\n${stateLoadError.technicalCause}`}
+              technicalDetails={t("Код: {0}\n{1}", stateLoadError.code, stateLoadError.technicalCause)}
               action={
                 <Button size="compact" onClick={() => void loadState(true)}>
-                  Повторить
-                </Button>
+                  {t("Повторить")}</Button>
               }
             >
-              {stateLoadError.summary}
+              {t(stateLoadError.summary)}
             </ErrorNotice>
           )}
 
           {settingsEngineError && (
             <ErrorNotice
-              title="Служба записи сообщила об ошибке"
-              technicalDetails={`Код: ${settingsEngineError.code}\n${settingsEngineError.technicalCause}`}
+              title={t("Служба записи сообщила об ошибке")}
+              technicalDetails={t("Код: {0}\n{1}", settingsEngineError.code, settingsEngineError.technicalCause)}
               data-testid="settings-engine-error"
             >
-              {settingsEngineError.summary} Проверьте соответствующие параметры и примените изменения.
-            </ErrorNotice>
+              {t(settingsEngineError.summary)} {t("Проверьте соответствующие параметры и примените изменения.")}</ErrorNotice>
           )}
 
           {snapshotRefreshError && (
             <ErrorNotice
-              title="Состояние службы записи не подтверждено"
+              title={t("Состояние службы записи не подтверждено")}
               tone="warning"
-              technicalDetails={`Код: ${snapshotRefreshError.code}\n${snapshotRefreshError.technicalCause}`}
+              technicalDetails={t("Код: {0}\n{1}", snapshotRefreshError.code, snapshotRefreshError.technicalCause)}
               action={
                 <Button size="compact" onClick={() => void refreshSnapshot(true)}>
-                  Повторить
-                </Button>
+                  {t("Повторить")}</Button>
               }
             >
-              {snapshotRefreshError.summary} Настройки можно редактировать, но перед опасными действиями
-              приложение повторно остановит возможную запись.
-            </ErrorNotice>
+              {t(snapshotRefreshError.summary)} {t("Настройки можно редактировать, но перед опасными действиями\r\n              приложение повторно остановит возможную запись.")}</ErrorNotice>
           )}
 
           {!activeConfig ? (
             isLoadingState ? (
-              <InlineStatus tone="busy">Получаем действующие настройки…</InlineStatus>
+              <InlineStatus tone="busy">{t("Получаем действующие настройки…")}</InlineStatus>
             ) : (
-              <ErrorNotice title="Действующая конфигурация не найдена">
-                Настройки нельзя открыть без подтверждённого профиля записи.
-              </ErrorNotice>
+              <ErrorNotice title={t("Действующая конфигурация не найдена")}>
+                {t("Настройки нельзя открыть без подтверждённого профиля записи.")}</ErrorNotice>
             )
           ) : (
             <>
               {!snapshot && !snapshotRefreshError && (
                 <div className={styles.settingsLoading}>
-                  <InlineStatus tone="busy">Получаем состояние службы записи…</InlineStatus>
+                  <InlineStatus tone="busy">{t("Получаем состояние службы записи…")}</InlineStatus>
                 </div>
               )}
               <RuntimeSettings
@@ -1106,8 +1089,8 @@ export function HomeScreen({
         open={closeGuard.closeRequested}
         title={
           snapshot?.continuousRecordingActive
-            ? 'Остановить запись и закрыть RebellioCap?'
-            : 'Закрыть RebellioCap?'
+            ? t('Остановить запись и закрыть RebellioCap?')
+            : t('Закрыть RebellioCap?')
         }
         description={describeWindowClose(
           saveCommand.pending,
@@ -1116,24 +1099,24 @@ export function HomeScreen({
           settingsBusy,
           settingsDirty
         )}
-        confirmLabel={closeStopsEngine ? 'Остановить и закрыть' : 'Закрыть'}
+        confirmLabel={closeStopsEngine ? t('Остановить и закрыть') : t('Закрыть')}
         cancelLabel={
           settingsDirty
-            ? 'Продолжить редактирование'
+            ? t('Продолжить редактирование')
             : snapshot?.continuousRecordingActive
-              ? 'Продолжить запись'
-              : 'Остаться в приложении'
+              ? t('Продолжить запись')
+              : t('Остаться в приложении')
         }
         destructive
         busy={closeGuard.isClosing}
-        busyLabel="Завершаем…"
+        busyLabel={t("Завершаем…")}
         onConfirm={() => void closeGuard.confirmClose()}
         onCancel={closeGuard.cancelClose}
       >
         {closeGuard.closeError && (
           <ErrorNotice
-            title="Не удалось безопасно закрыть приложение"
-            technicalDetails={`Код: ${closeGuard.closeError.code}\n${closeGuard.closeError.technicalCause}`}
+            title={t("Не удалось безопасно закрыть приложение")}
+            technicalDetails={t("Код: {0}\n{1}", closeGuard.closeError.code, closeGuard.closeError.technicalCause)}
           >
             {closeGuard.closeError.summary}
           </ErrorNotice>

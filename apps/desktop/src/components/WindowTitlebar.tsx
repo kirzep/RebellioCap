@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Copy, Minus, Square, X } from 'lucide-react';
@@ -6,6 +7,7 @@ import styles from './WindowTitlebar.module.css';
 
 /** The native close handler hides the window while recording continues. */
 export function WindowTitlebar({ children }: { children?: ReactNode }) {
+  useTranslation();
   const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const [maximized, setMaximized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,21 +60,21 @@ export function WindowTitlebar({ children }: { children?: ReactNode }) {
 
   if (!native && !children) return null;
   return (
-    <header className={styles.titlebar} aria-label="Панель окна">
+    <header className={styles.titlebar} aria-label={t("Панель окна")}>
       {children && <div className={styles.leading}>{children}</div>}
       <div className={styles.dragRegion} aria-hidden="true" onMouseDown={(event) => {
         if (event.button === 0) void run(event.detail === 2 ? 'toggleMaximize' : 'startDragging');
       }} />
-      {error && <span className={styles.error} role="alert">{error}</span>}
+      {error && <span className={styles.error} role="alert">{t(error)}</span>}
       {native && <div className={styles.controls}>
-        <Button variant="ghost" size="icon" className={styles.control} aria-label="Свернуть" title="Свернуть"
+        <Button variant="ghost" size="icon" className={styles.control} aria-label={t("Свернуть")} title={t("Свернуть")}
           onClick={() => void run('minimize')}><Minus aria-hidden="true" /></Button>
         <Button variant="ghost" size="icon" className={styles.control}
-          aria-label={maximized ? 'Восстановить размер' : 'Развернуть'} title={maximized ? 'Восстановить размер' : 'Развернуть'}
+          aria-label={maximized ? t('Восстановить размер') : t('Развернуть')} title={maximized ? t('Восстановить размер') : t('Развернуть')}
           onClick={() => void run('toggleMaximize')}>
           {maximized ? <Copy aria-hidden="true" /> : <Square aria-hidden="true" />}
         </Button>
-        <Button variant="ghost" size="icon" className={styles.close} aria-label="Свернуть в трей" title="Свернуть в трей"
+        <Button variant="ghost" size="icon" className={styles.close} aria-label={t("Свернуть в трей")} title={t("Свернуть в трей")}
           onClick={() => void run('close')}><X aria-hidden="true" /></Button>
       </div>}
     </header>

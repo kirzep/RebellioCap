@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { Button } from './ui/button';
 import React, { useRef } from 'react';
 import styles from './ProgressDots.module.css';
@@ -42,17 +43,18 @@ function StepItem({
   compact = false,
   onSelect,
 }: StepItemProps) {
+  useTranslation();
   const isCurrent = step.number === currentStep;
   const isComplete = step.number <= lastCompletedStep && !isCurrent;
   const isNavigable = step.number <= lastCompletedStep + 1;
   const isDisabled = !hasNavigation || !isNavigable || isCurrent;
   const accessibleState = isCurrent
-    ? 'Текущий шаг'
+    ? t('Текущий шаг')
     : !isNavigable
-      ? 'Недоступный шаг'
+      ? t('Недоступный шаг')
       : !hasNavigation
-        ? 'Шаг'
-        : 'Перейти к шагу';
+        ? t('Шаг')
+        : t('Перейти к шагу');
 
   const itemClassName = [
     styles.step,
@@ -77,7 +79,7 @@ function StepItem({
         <span className={styles.marker} aria-hidden="true">
           {isComplete ? '✓' : step.number}
         </span>
-        <span className={styles.label}>{step.label}</span>
+        <span className={styles.label}>{t(step.label)}</span>
       </Button>
     </li>
   );
@@ -90,6 +92,7 @@ export function ProgressDots({
   steps = SETUP_STEPS,
   className,
 }: ProgressDotsProps) {
+  useTranslation();
   const compactNavigationRef = useRef<HTMLDetailsElement>(null);
   const compactSummaryRef = useRef<HTMLElement>(null);
   const activeStep = steps.find((step) => step.number === currentStep) ?? steps[0];
@@ -104,7 +107,7 @@ export function ProgressDots({
   }
 
   return (
-    <nav aria-label="Шаги настройки" className={navigationClassName}>
+    <nav aria-label={t("Шаги настройки")} className={navigationClassName}>
       <ol className={styles.desktopList}>
         {steps.map((step) => (
           <StepItem
@@ -125,10 +128,10 @@ export function ProgressDots({
           aria-current="step"
         >
           <span className={styles.summaryLabel}>
-            Шаг {currentStep} из {steps.length}
+            {t("Шаг")}{currentStep} {' '}{t("из")}{' '}{steps.length}
             {activeStep ? ` · ${activeStep.compactLabel}` : ''}
           </span>
-          <span className={styles.summaryHint}>Все шаги</span>
+          <span className={styles.summaryHint}>{t("Все шаги")}</span>
         </summary>
         <ol className={styles.compactList}>
           {steps.map((step) => (

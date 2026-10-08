@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../i18n';
 import { Button } from '../../components/Primitives';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { HostBridge } from '../../bridge/contracts';
@@ -32,14 +33,14 @@ function audioName(
   choices: AudioCatalog['system_audio'],
   catalogLoaded: boolean
 ): string {
-  if (selection === 'disabled') return 'Не записывать';
-  if (!selection) return 'Не выбрано';
+  if (selection === 'disabled') return t('Не записывать');
+  if (!selection) return t('Не выбрано');
 
   const choice = choices.find((item) => item.id === selection.endpoint);
-  if (choice) return choice.available ? choice.name : `${choice.name} · недоступно`;
+  if (choice) return choice.available ? choice.name : t("{0} · недоступно", choice.name);
   return catalogLoaded
-    ? 'Устройство недоступно'
-    : 'Получаем название устройства…';
+    ? t('Устройство недоступно')
+    : t('Получаем название устройства…');
 }
 
 export function PreferencesStep({
@@ -50,6 +51,7 @@ export function PreferencesStep({
   onBlockingIssueChange,
   onBusyChange,
 }: PreferencesStepProps) {
+  useTranslation();
   const [monitors, setMonitors] = useState<MonitorChoice[]>([]);
   const [audioCatalog, setAudioCatalog] = useState<AudioCatalog>({
     system_audio: [],
@@ -94,14 +96,14 @@ export function PreferencesStep({
         setMonitors(monitorResult.value);
         setMonitorCatalogLoaded(true);
       } else {
-        warnings.push('экран');
+        warnings.push(t('экран'));
       }
 
       if (audioResult.status === 'fulfilled') {
         setAudioCatalog(audioResult.value);
         setAudioCatalogLoaded(true);
       } else {
-        warnings.push('аудиоустройства');
+        warnings.push(t('аудиоустройства'));
       }
 
       if (warnings.length > 0) {
@@ -128,12 +130,12 @@ export function PreferencesStep({
       ? draft.microphone.endpoint
       : null;
   const monitorLabel = selectedMonitor
-    ? `${friendlyMonitorName(selectedMonitor.name)} · ${selectedMonitor.width}×${selectedMonitor.height}${selectedMonitor.primary ? ' · Основной' : ''}`
+    ? `${friendlyMonitorName(selectedMonitor.name)} · ${selectedMonitor.width}×${selectedMonitor.height}${selectedMonitor.primary ? t(' · Основной') : ''}`
     : draft.monitor_id
       ? monitorCatalogLoaded
-        ? 'Экран недоступен'
-        : 'Получаем название экрана…'
-      : 'Экран не выбран';
+        ? t('Экран недоступен')
+        : t('Получаем название экрана…')
+      : t('Экран не выбран');
 
   const blockingIssue = useMemo<SummaryBlockingIssue | null>(() => {
     if (draft.monitor_id && monitorCatalogLoaded && !selectedMonitor) {
@@ -190,11 +192,11 @@ export function PreferencesStep({
   }> = [
     {
       step: 1,
-      title: 'Экран и видео',
+      title: t('Экран и видео'),
       values: [
-        { label: 'Экран', value: monitorLabel, unavailable: Boolean(draft.monitor_id && monitorCatalogLoaded && !selectedMonitor) },
+        { label: t('Экран'), value: monitorLabel, unavailable: Boolean(draft.monitor_id && monitorCatalogLoaded && !selectedMonitor) },
         {
-          label: 'Видео',
+          label: t('Видео'),
           value: formatVideoMode(
             draft.width,
             draft.height,
@@ -206,10 +208,10 @@ export function PreferencesStep({
     },
     {
       step: 2,
-      title: 'Звук',
+      title: t('Звук'),
       values: [
         {
-          label: 'Звук компьютера',
+          label: t('Звук компьютера'),
           value: audioName(draft.system_audio, audioCatalog.system_audio, audioCatalogLoaded),
           unavailable: Boolean(
             systemEndpoint &&
@@ -218,7 +220,7 @@ export function PreferencesStep({
           ),
         },
         {
-          label: 'Микрофон',
+          label: t('Микрофон'),
           value: audioName(draft.microphone, audioCatalog.microphones, audioCatalogLoaded),
           unavailable: Boolean(
             microphoneEndpoint &&
@@ -230,30 +232,30 @@ export function PreferencesStep({
     },
     {
       step: 3,
-      title: 'Replay и файлы',
+      title: t('Replay и файлы'),
       values: [
         {
           label: 'Replay',
           value: `${formatSeconds(draft.replay_seconds)} · ${
-            draft.replay_mode === 'disk' ? 'неподдерживаемый дисковый буфер' : 'в памяти'
+            draft.replay_mode === 'disk' ? t('неподдерживаемый дисковый буфер') : t('в памяти')
           }`,
           unavailable: draft.replay_mode === 'disk',
         },
         {
-          label: 'Папка и формат',
-          value: `${draft.output_directory || 'Папка не выбрана'} · ${formatContainer(draft.container)}`,
+          label: t('Папка и формат'),
+          value: `${draft.output_directory || t('Папка не выбрана')} · ${formatContainer(draft.container)}`,
         },
       ],
     },
     {
       step: 4,
-      title: 'Управление',
+      title: t('Управление'),
       values: [
-        { label: 'Сохранить Replay', value: formatHotkey(draft.save_replay_hotkey) },
+        { label: t('Сохранить Replay'), value: formatHotkey(draft.save_replay_hotkey) },
         {
-          label: 'Обычная запись',
+          label: t('Обычная запись'),
           value: draft.continuous_recording_enabled === false
-            ? `Отключена · ${formatHotkey(draft.toggle_recording_hotkey)} сохранено`
+            ? t("Отключена · {0} сохранено", formatHotkey(draft.toggle_recording_hotkey))
             : formatHotkey(draft.toggle_recording_hotkey),
         },
       ],
@@ -263,12 +265,12 @@ export function PreferencesStep({
   return (
     <div className={styles.stepContent} data-testid="preferences-step">
       <div className={styles.stepIntro}>
-        <h2 className={styles.title}>Всё верно?</h2>
-        <p className={styles.copy}>Проверьте настройки перед первым клипом.</p>
+        <h2 className={styles.title}>{t("Всё верно?")}</h2>
+        <p className={styles.copy}>{t("Проверьте настройки перед первым клипом.")}</p>
       </div>
 
       {catalogWarning && <p className={styles.inlineWarning} role="status">{catalogWarning}</p>}
-      {catalogBusy && <p className={styles.fieldHint} role="status">Проверяем доступность устройств…</p>}
+      {catalogBusy && <p className={styles.fieldHint} role="status">{t("Проверяем доступность устройств…")}</p>}
 
       <div className={styles.summaryTable}>
         {rows.map((row) => (
@@ -278,18 +280,17 @@ export function PreferencesStep({
               <Button
                 type="button"
                 variant="tertiary" size="compact"
-                aria-label={`Изменить: ${row.title}`}
+                aria-label={t("Изменить: {0}", row.title)}
                 onClick={() => onEditStep?.(row.step)}
                 disabled={!onEditStep}
                 data-testid={`summary-edit-step-${row.step}`}
               >
-                Изменить
-              </Button>
+                {t("Изменить")}</Button>
             </div>
             <dl>
               {row.values.map((item) => (
                 <div key={item.label} className={styles.summaryItem}>
-                  <dt>{item.label}</dt>
+                  <dt>{t(item.label)}</dt>
                   <dd className={item.unavailable ? styles.unavailableValue : undefined}>{item.value}</dd>
                 </div>
               ))}
@@ -298,7 +299,7 @@ export function PreferencesStep({
         ))}
       </div>
 
-      <p className={styles.fieldHint}>Крестик сворачивает приложение в трей. Запись продолжает работать.</p>
+      <p className={styles.fieldHint}>{t("Крестик сворачивает приложение в трей. Запись продолжает работать.")}</p>
     </div>
   );
 }

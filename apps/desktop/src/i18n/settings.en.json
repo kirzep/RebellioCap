@@ -1,0 +1,9 @@
+{
+  "Язык интерфейса": "Interface language",
+  "Как в Windows": "Use Windows language",
+  "Для русского языка Windows используется русский интерфейс, для остальных — английский.": "Russian is used for Russian Windows; English is used for all other Windows languages.",
+  "Язык меняется сразу и сохраняется для следующего запуска.": "The language changes immediately and is saved for the next launch.",
+  "Не удалось сохранить язык. Попробуйте ещё раз.": "Could not save the language. Try again.",
+  "Сохраняем язык…": "Saving language…",
+  "Запускаем RebellioCap…": "Starting RebellioCap…"
+}

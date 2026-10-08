@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -24,6 +25,7 @@ const actions: Record<string, { text: string; icon: string; tone: string }> = {
 };
 interface Batch { events: string[]; settings: NotificationSettings }
 export function NotificationOverlay() {
+  useTranslation();
   const [events, setEvents] = useState<{ kind: string; id: number }[]>([]);
   const [closing, setClosing] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(defaultNotificationSettings.overlayEnabled);
@@ -93,6 +95,6 @@ export function NotificationOverlay() {
   if (!overlayEnabled || !action || !current) return null;
   return <div key={current.id} role="status" className={`capture-notification ${closing ? 'is-closing' : ''}`} data-tone={action.tone}>
     <div className="capture-notification__icon"><img src={action.icon} alt="" draggable={false} width={42} height={42} /></div>
-    <strong className="capture-notification__text">{action.text}</strong>
+    <strong className="capture-notification__text">{t(action.text)}</strong>
   </div>;
 }
