@@ -154,9 +154,10 @@ try {
     (Join-Path $toolchainFixture '.tools/vcpkg/downloads/tools') | Out-Null
   $fixtureWriter = Join-Path $fixtureScripts 'write-milestone-manifest.ps1'
   Copy-Item -LiteralPath $manifestWriter -Destination $fixtureWriter
-  $configuredCmake = (Get-Command cmake.exe -CommandType Application).Source
-  $configuredNinja = (Get-Command ninja.exe -CommandType Application).Source
-  $configuredCompiler = (Get-Command cl.exe -CommandType Application).Source
+  # Application discovery may return several PATH matches; mirror executable lookup.
+  $configuredCmake = (Get-Command cmake.exe -CommandType Application | Select-Object -First 1).Source
+  $configuredNinja = (Get-Command ninja.exe -CommandType Application | Select-Object -First 1).Source
+  $configuredCompiler = (Get-Command cl.exe -CommandType Application | Select-Object -First 1).Source
   @(
     "CMAKE_COMMAND:INTERNAL=$configuredCmake"
     "CMAKE_MAKE_PROGRAM:FILEPATH=$configuredNinja"
