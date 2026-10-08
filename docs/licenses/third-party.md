@@ -14,6 +14,7 @@ effects, presets, assets, or runtime behavior from other capture applications.
 | nlohmann/json | manifest minimum `3.12.0` | MIT |
 | PresentMon | `2.5.1` | MIT |
 | React | `19.3.0` | MIT |
+| react-markdown and Markdown parsing dependencies | Versions pinned in `package-lock.json`; bundled release notes renderer | MIT / ISC / BSD; full notices in `markdown-dependencies.txt` |
 | thinking-orbs | `0.3.2`; composing indicator during onboarding test recording | MIT; copyright 2026 Jakub Antalik |
 | Tauri | `2.11.5` | Apache-2.0 / MIT |
 | Playwright | `1.63.0` | Apache-2.0 |

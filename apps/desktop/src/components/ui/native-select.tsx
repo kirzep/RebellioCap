@@ -15,7 +15,7 @@ function collectOptions(children: React.ReactNode): OptionProps[] {
 }
 
 function NativeSelect({ className, size = 'default', children, onChange, id, value, defaultValue,
-  disabled, ...props }: Omit<React.ComponentProps<'select'>, 'size'> & { size?: 'sm' | 'default' }) {
+  disabled, renderOption, contentClassName, ...props }: Omit<React.ComponentProps<'select'>, 'size'> & { size?: 'sm' | 'default'; contentClassName?: string; renderOption?: (value: string, label: React.ReactNode) => React.ReactNode }) {
   const nativeRef = React.useRef<HTMLSelectElement>(null);
   const [localValue, setLocalValue] = React.useState(String(defaultValue ?? ''));
   const options = collectOptions(children);
@@ -37,13 +37,13 @@ function NativeSelect({ className, size = 'default', children, onChange, id, val
     <Select.Root value={selected || EMPTY_VALUE} onValueChange={change} disabled={disabled} required={props.required}>
       <Select.Trigger id={id} data-slot="native-select" data-size={size}
         className={cn(styles.trigger, className)} aria-label={props['aria-label']} aria-invalid={props['aria-invalid']} aria-describedby={props['aria-describedby']}>
-        <Select.Value>{selectedOption?.children}</Select.Value><Select.Icon className={styles.icon}><ChevronDown size={16} /></Select.Icon>
+        <Select.Value>{renderOption ? renderOption(selected, selectedOption?.children) : selectedOption?.children}</Select.Value><Select.Icon className={styles.icon}><ChevronDown size={16} /></Select.Icon>
       </Select.Trigger>
-      <Select.Portal><Select.Content className={styles.content} position="popper" sideOffset={6} collisionPadding={12}>
+      <Select.Portal><Select.Content className={cn(styles.content, contentClassName)} position="popper" sideOffset={6} collisionPadding={12}>
         <Select.ScrollUpButton className={styles.scrollButton}><ChevronUp size={14} /></Select.ScrollUpButton>
         <Select.Viewport className={styles.viewport}>
           {options.map((option, index) => <Select.Item key={`${option.value}-${index}`} value={String(option.value ?? '') || EMPTY_VALUE} disabled={option.disabled} className={styles.option}>
-            <Select.ItemIndicator className={styles.check}><Check size={14} /></Select.ItemIndicator><Select.ItemText>{option.children}</Select.ItemText>
+            <Select.ItemIndicator className={styles.check}><Check size={14} /></Select.ItemIndicator><Select.ItemText>{renderOption ? renderOption(String(option.value ?? ''), option.children) : option.children}</Select.ItemText>
           </Select.Item>)}
         </Select.Viewport>
         <Select.ScrollDownButton className={styles.scrollButton}><ChevronDown size={14} /></Select.ScrollDownButton>

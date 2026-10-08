@@ -7,6 +7,8 @@ import { ConfirmDialog, ErrorNotice } from './Primitives';
 import { normalizeError } from '../bridge/host';
 import { cn } from 'cn';
 import styles from './WindowShell.module.css';
+import Markdown from 'react-markdown';
+import updateStyles from './UpdateNotice.module.css';
 
 export interface UpdateNoticeProps {
   update: AvailableUpdate;
@@ -52,11 +54,12 @@ export function UpdateNotice({ update, onInstall, disabled }: UpdateNoticeProps)
       description={t("Сначала скачаем и проверим обновление. Текущая запись остановится с сохранением файла, Replay будет выключен, а несохранённый повтор будет потерян. После установки обновления приложение перезапустится.")}
       confirmLabel={t("Обновить и перезапустить")} cancelLabel={t("Позже")} initialFocus="cancel"
       busy={busy} busyLabel={t("Обновляем…")} onConfirm={() => void install()} onCancel={() => setOpen(false)}>
-      {update.releaseNotes && <div className="whitespace-pre-wrap text-sm text-muted-foreground">{update.releaseNotes}</div>}
+      {update.releaseNotes && <div className={updateStyles.notes}><Markdown skipHtml
+        components={{ a: ({ children }) => <span>{children}</span>, img: () => null }}>{update.releaseNotes}</Markdown></div>}
       {busy && <div className="mt-3 space-y-2">
         <p role="status">{progress?.phase === 'installing' ? t('Устанавливаем обновление…') : progress?.phase === 'preparing' ? t('Завершаем запись перед обновлением…') : t('Скачиваем обновление…')}</p>
         {(!progress || progress.phase === 'downloading') && <>
-          <progress aria-label={t("Загрузка обновления")} className="w-full" max={progress?.totalBytes || undefined}
+          <progress aria-label={t("Загрузка обновления")} className={updateStyles.progress} max={progress?.totalBytes || undefined}
             value={progress?.totalBytes ? progress.downloadedBytes : undefined} />
           {progress && <p className="text-sm text-muted-foreground">
             {(progress.downloadedBytes / 1048576).toFixed(1)} {' '}{t("МБ")}{progress.totalBytes ? t(" из {0} МБ", (progress.totalBytes / 1048576).toFixed(1)) : ''}

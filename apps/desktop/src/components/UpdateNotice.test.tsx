@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WindowShell } from './WindowShell';
 import type { UpdateProgress } from '../bridge/contracts';
+import { UpdateNotice } from './UpdateNotice';
+import { SidebarProvider } from './ui/sidebar';
 
 afterEach(cleanup);
 function preview(onInstall = vi.fn().mockResolvedValue(undefined)) {
@@ -13,6 +15,16 @@ function preview(onInstall = vi.fn().mockResolvedValue(undefined)) {
   return onInstall;
 }
 describe('update offer', () => {
+  it('renders release Markdown instead of displaying its markers', () => {
+    render(<SidebarProvider><UpdateNotice update={{ version: '0.2.0', releaseNotes: '***\n\n## Изменения\n\n- **Исправлена запись**\n- `Replay`\n\n<script>bad()</script>' }} onInstall={vi.fn()} /></SidebarProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Доступно обновление 0.2.0' }));
+    expect(screen.getByRole('heading', { name: 'Изменения' })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').some(item => item.textContent === 'Исправлена запись')).toBe(true);
+    expect(screen.getByText('Исправлена запись').tagName).toBe('STRONG');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('***');
+    expect(screen.getByRole('dialog').querySelector('script')).toBeNull();
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('bad()');
+  });
   it('shows download progress and installation while preventing duplicate consent', async () => {
     let report: ((progress: UpdateProgress) => void) | undefined;
     let complete!: () => void;

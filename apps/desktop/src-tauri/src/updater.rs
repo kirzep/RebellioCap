@@ -141,6 +141,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn windows_updates_use_silent_per_user_installation() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(config["plugins"]["updater"]["windows"]["installMode"], "quiet");
+        assert_eq!(config["bundle"]["windows"]["nsis"]["installMode"], "currentUser");
+    }
+
+    #[test]
     fn announced_version_must_match_the_authenticated_installer_filename() {
         let signature = base64::engine::general_purpose::STANDARD.encode(
             "untrusted comment: test\nsignature\ntrusted comment: timestamp:1\tfile:RebellioCap_0.1.8_x64-setup.exe\nglobal\n");

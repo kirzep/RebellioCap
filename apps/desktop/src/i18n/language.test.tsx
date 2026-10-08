@@ -66,7 +66,8 @@ describe('language selection', () => {
   });
   it('changes the mounted selector immediately, persists browser override and reloads it', async () => {
     render(<LanguageSettings />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'Язык интерфейса' }), { target: { value: 'en' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Язык интерфейса' }), { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('option', { name: 'English' }));
     await screen.findByRole('combobox', { name: 'Interface language' });
     expect(localStorage.getItem('rebelliocap.language')).toBe('en');
     expect(document.documentElement.lang).toBe('en');
@@ -78,7 +79,8 @@ describe('language selection', () => {
     Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true });
     vi.mocked(invoke).mockRejectedValue(new Error('write denied'));
     render(<LanguageSettings />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'Язык интерфейса' }), { target: { value: 'en' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Язык интерфейса' }), { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('option', { name: 'English' }));
     await screen.findByRole('alert');
     expect(getLanguageSnapshot().language).toBe('ru');
     expect(invoke).toHaveBeenCalledWith('set_language_settings', { preference: 'en' });
