@@ -6,7 +6,7 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 
 ### Added
 
-- Signed Windows installer builds in the public repository, with draft releases and update manifests.
+- Signed Windows installer builds in the public repository, with published releases and update manifests, plus identical assets mirrored to the private repository.
 - Background update checks and an update button above Settings, with confirmation, download progress and installation from the application.
 - Signature and package-version checks before recording shutdown; updates preserve configuration and saved clips and require the editor to be closed.
 

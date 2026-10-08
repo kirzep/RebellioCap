@@ -112,6 +112,7 @@ jobs:
           key: windows-2025-rust-1.98.1-release-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-${{ github.sha }}
           restore-keys: |
             windows-2025-rust-1.98.1-release-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-
+            windows-2025-rust-1.98.1-release-v1-
       - name: Test Rust host
         run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build signed installer
@@ -134,7 +135,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  draft:
+  publish:
     if: github.repository == 'kirzep/RebellioCap'
     needs: build
     runs-on: windows-2025
@@ -146,6 +147,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: kirzep/RebellioCap
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: windows-installer-${{ inputs.tag || github.ref_name }}
@@ -171,4 +176,75 @@ jobs:
           [IO.File]::WriteAllText([IO.Path]::GetFullPath('release/SHA256SUMS'), ($sums -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
           $files = @(Get-ChildItem -LiteralPath release -File | ForEach-Object FullName)
           gh release upload $env:RELEASE_TAG @files --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Draft artifact upload failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Release artifact upload failed.' }
+      - name: Verify and publish release
+        run: |
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --directory release --verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Release verification failed.' }
+          gh release edit $env:RELEASE_TAG --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
+
+  mirror-private:
+    # Reuse the public signed package instead of rebuilding or sharing credentials.
+    if: github.repository == 'kirzep/ScopeClipper'
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - name: Validate mirrored version
+        run: |
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --validate-only
+          if ($LASTEXITCODE -ne 0) { throw 'Private source version does not match release tag.' }
+      - name: Wait for public release
+        run: |
+          $deadline = [DateTime]::UtcNow.AddMinutes(130)
+          do {
+            $info = gh release view $env:RELEASE_TAG --repo kirzep/RebellioCap --json isDraft,isPrerelease 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              $release = $info | ConvertFrom-Json
+              if (-not $release.isDraft -and -not $release.isPrerelease) { break }
+            }
+            $runs = gh run list --repo kirzep/RebellioCap --workflow desktop-release.yml --branch $env:RELEASE_TAG --limit 1 --json status,conclusion 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              $latest = @($runs | ConvertFrom-Json)
+              if ($latest.Count -gt 0 -and $latest[0].status -eq 'completed' -and
+                  $latest[0].conclusion -in @('failure', 'cancelled', 'timed_out')) {
+                throw 'The public release workflow failed; fix it before retrying the mirror.'
+              }
+            }
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Timed out waiting for the published public release.' }
+            Write-Host "Waiting for public release $env:RELEASE_TAG..."
+            Start-Sleep -Seconds 30
+          } while ($true)
+      - name: Download and verify public artifacts
+        run: |
+          gh release download $env:RELEASE_TAG --repo kirzep/RebellioCap --dir release
+          if ($LASTEXITCODE -ne 0) { throw 'Public artifact download failed.' }
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --directory release --verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Mirrored artifact verification failed.' }
+      - name: Publish matching private release
+        run: |
+          $existing = gh release view $env:RELEASE_TAG --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Refusing to replace an already published private release.' }
+          } else {
+            $notes = gh release view $env:RELEASE_TAG --repo kirzep/RebellioCap --json body --jq .body
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot read public release notes.' }
+            $notes | Set-Content -LiteralPath release-notes.md -Encoding utf8
+            gh release create $env:RELEASE_TAG --verify-tag --draft --title "RebellioCap $env:RELEASE_TAG" --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) { throw 'Private draft release creation failed.' }
+          }
+          $files = @(Get-ChildItem -LiteralPath release -File | ForEach-Object FullName)
+          gh release upload $env:RELEASE_TAG @files --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Private artifact upload failed.' }
+          gh release edit $env:RELEASE_TAG --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Private release publication failed.' }

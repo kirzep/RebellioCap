@@ -44,10 +44,44 @@ export function createReleaseArtifacts({ directory, tag, versions, notes = '', n
   return manifest;
 }
 
+export function verifyReleaseArtifacts({ directory, tag, versions }) {
+  const version = validateReleaseVersion(tag, versions);
+  const name = `RebellioCap_${version}_x64-setup.exe`;
+  const expected = [name, `${name}.sig`, 'latest.json'];
+  const files = readdirSync(directory).sort();
+  if (JSON.stringify(files) !== JSON.stringify([...expected, 'SHA256SUMS'].sort())) {
+    throw new Error('Release must contain exactly the installer, signature, manifest and checksums.');
+  }
+  const lines = readFileSync(join(directory, 'SHA256SUMS'), 'utf8').trim().split(/\r?\n/);
+  const entries = new Map();
+  for (const line of lines) {
+    const match = /^([a-f0-9]{64})  (.+)$/.exec(line);
+    if (!match || !expected.includes(match[2]) || entries.has(match[2])) {
+      throw new Error('Invalid release checksum entry.');
+    }
+    entries.set(match[2], match[1]);
+  }
+  for (const file of expected) {
+    const hash = createHash('sha256').update(readFileSync(join(directory, file))).digest('hex');
+    if (entries.get(file) !== hash) throw new Error(`Release checksum mismatch: ${file}.`);
+  }
+  const bytes = readFileSync(join(directory, name));
+  if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error('Installer is not a Windows executable.');
+  const signature = readFileSync(join(directory, `${name}.sig`), 'utf8').trim();
+  const manifest = JSON.parse(readFileSync(join(directory, 'latest.json'), 'utf8'));
+  const platform = manifest.platforms?.['windows-x86_64'];
+  if (!signature || manifest.version !== version || platform?.signature !== signature ||
+      platform?.url !== `https://github.com/kirzep/RebellioCap/releases/download/${tag}/${name}`) {
+    throw new Error('Release manifest does not match the signed public installer.');
+  }
+  return manifest;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values: options } = parseArgs({ options: {
     tag: { type: 'string' }, directory: { type: 'string' },
     'notes-file': { type: 'string' }, 'validate-only': { type: 'boolean', default: false },
+    'verify-only': { type: 'boolean', default: false },
   } });
   const root = fileURLToPath(new URL('../', import.meta.url));
   const tauri = JSON.parse(readFileSync(join(root, 'apps/desktop/src-tauri/tauri.conf.json')));
@@ -57,7 +91,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (!options.tag) throw new Error('--tag is required.');
   const versions = [tauri.version, desktop.version, cargoVersion];
   validateReleaseVersion(options.tag, versions);
-  if (!options['validate-only']) {
+  if (options['verify-only']) {
+    verifyReleaseArtifacts({ directory: options.directory ?? join(root, 'apps/desktop/src-tauri/target/release/bundle/nsis'), tag: options.tag, versions });
+  } else if (!options['validate-only']) {
     const notes = options['notes-file'] ? readFileSync(options['notes-file'], 'utf8') : '';
     createReleaseArtifacts({ directory: options.directory ?? join(root, 'apps/desktop/src-tauri/target/release/bundle/nsis'), tag: options.tag, versions, notes });
   }

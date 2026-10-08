@@ -103,5 +103,6 @@ jobs:
           key: windows-2025-rust-1.98.1-debug-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-${{ github.sha }}
           restore-keys: |
             windows-2025-rust-1.98.1-debug-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-
+            windows-2025-rust-1.98.1-debug-v1-
       - name: Rust host checks
         run: ./scripts/invoke-dev.ps1 -Command @('cargo', 'test', '--locked', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml')

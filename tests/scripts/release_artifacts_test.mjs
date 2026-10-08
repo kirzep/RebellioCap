@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { createReleaseArtifacts, validateReleaseVersion } from '../../scripts/release-artifacts.mjs';
+import { createHash } from 'node:crypto';
+import { createReleaseArtifacts, validateReleaseVersion, verifyReleaseArtifacts } from '../../scripts/release-artifacts.mjs';
 
 test('CLI uses the default bundle directory when --directory is absent', () => {
   const root = mkdtempSync(join(tmpdir(), 'release-cli-test-'));
@@ -45,9 +46,36 @@ test('manifest points to the signed public installer and includes exact bytes in
     assert.equal(manifest.platforms['windows-x86_64'].url, 'https://github.com/kirzep/RebellioCap/releases/download/v0.1.8/RebellioCap_0.1.8_x64-setup.exe');
     assert.equal(JSON.parse(readFileSync(join(root, 'latest.json'))).notes, 'Исправления');
     assert.match(readFileSync(join(root, 'SHA256SUMS'), 'utf8'), /^[a-f0-9]{64}  RebellioCap_0.1.8_x64-setup.exe$/m);
+    assert.equal(verifyReleaseArtifacts({ directory: root, tag: 'v0.1.8', versions: ['0.1.8'] }).version, '0.1.8');
     rmSync(join(root, 'RebellioCap_0.1.8_x64-setup.exe.sig'));
     assert.throws(() => createReleaseArtifacts({ directory: root, tag: 'v0.1.8', versions: ['0.1.8'] }), /signature/i);
     writeFileSync(join(root, 'RebellioCap_0.1.8_x64-setup.exe.sig'), '');
     assert.throws(() => createReleaseArtifacts({ directory: root, tag: 'v0.1.8', versions: ['0.1.8'] }), /signature/i);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('release verification rejects changed bytes, mismatched metadata and unsafe checksum entries', () => {
+  const root = mkdtempSync(join(tmpdir(), 'release-verify-'));
+  const options = { directory: root, tag: 'v0.1.8', versions: ['0.1.8'] };
+  const reset = () => {
+    writeFileSync(join(root, 'RebellioCap_0.1.8_x64-setup.exe'), 'MZfixture');
+    writeFileSync(join(root, 'RebellioCap_0.1.8_x64-setup.exe.sig'), 'signed-update');
+    createReleaseArtifacts(options);
+  };
+  try {
+    reset();
+    writeFileSync(join(root, 'RebellioCap_0.1.8_x64-setup.exe'), 'MZchanged');
+    assert.throws(() => verifyReleaseArtifacts(options), /checksum mismatch/i);
+    reset();
+    writeFileSync(join(root, 'SHA256SUMS'), `${'0'.repeat(64)}  ../outside.exe\n`);
+    assert.throws(() => verifyReleaseArtifacts(options), /checksum entry/i);
+    reset();
+    const manifest = JSON.parse(readFileSync(join(root, 'latest.json')));
+    manifest.version = '0.1.9';
+    writeFileSync(join(root, 'latest.json'), JSON.stringify(manifest));
+    const sums = ['RebellioCap_0.1.8_x64-setup.exe', 'RebellioCap_0.1.8_x64-setup.exe.sig', 'latest.json']
+      .map(file => `${createHash('sha256').update(readFileSync(join(root, file))).digest('hex')}  ${file}`);
+    writeFileSync(join(root, 'SHA256SUMS'), sums.join('\n'));
+    assert.throws(() => verifyReleaseArtifacts(options), /manifest/i);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

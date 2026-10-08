@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Testing](testing.md) · [Licensing](../LICENSE.md)
 
-Desktop manifests declare **0.1.8**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
+Desktop manifests declare **0.1.9**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
 
 ## Build a local package
 
@@ -23,7 +23,7 @@ If WebView2 is missing, the installer downloads its bootstrapper. That requires 
 
 ## GitHub installer builds and application updates
 
-The release workflow runs only in the public `kirzep/RebellioCap` repository. It builds the exported source, including the release engine, FFmpeg, runtime DLLs and license files. Updates use the official Tauri updater with the public endpoint `https://github.com/kirzep/RebellioCap/releases/latest/download/latest.json`; no separate server or GitHub token in the installed application is required.
+The installer is built only in the public `kirzep/RebellioCap` repository. The private repository mirrors the same published installer, signature, manifest and checksums; it does not rebuild or need the signing Secrets. It builds the exported source, including the release engine, FFmpeg, runtime DLLs and license files. Updates use the official Tauri updater with the public endpoint `https://github.com/kirzep/RebellioCap/releases/latest/download/latest.json`; no separate server or GitHub token in the installed application is required.
 
 ### One-time signing configuration
 
@@ -40,12 +40,12 @@ These Secrets are read only by the release build. They are not required for ordi
 
 1. Set matching desktop versions in `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/src-tauri/tauri.conf.json` and refresh the lockfiles. The engine's component version is independent.
 2. Publish the reviewed source snapshot to this public repository using its normal export procedure.
-3. Create a stable tag such as `v0.1.8` on the public commit and push that exact tag. Alternatively run **Windows installer release** manually with an existing stable tag. Tags with prerelease suffixes and mismatched desktop versions are rejected.
-4. The workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It creates or refreshes a **draft** release; it refuses to overwrite an already published version. Generated release notes are copied into the update manifest.
-5. Download and check the draft installer, update behavior, redistribution requirements and the acceptance gates below. Correct the draft notes as needed; if the manifest notes must change, refresh the draft with a workflow rerun before publication.
-6. Publish the stable release after acceptance. The latest published stable release becomes the application update source. Drafts and prereleases are not offered to users.
+3. Create a stable tag such as `v0.1.9` on the public commit and push that exact tag. Alternatively run **Windows installer release** manually with an existing stable tag. Tags with prerelease suffixes and mismatched desktop versions are rejected.
+4. The public workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It uploads them to a draft, verifies checksums and manifest identity, then publishes the stable release automatically. Generated release notes are copied into the update manifest. Published versions are never overwritten.
+5. Push a tag with the same version on the matching private source commit. Its workflow waits for the public release, verifies downloaded artifacts and publishes identical assets in the private repository using its own workflow token. Alternatively dispatch that workflow with the existing private tag. No cross-repository token is required.
+6. The README download button opens the latest public release. The latest published stable release becomes the application update source. Drafts and prereleases are not offered to users.
 
-When signing or checking fails, no release is published automatically. A CI build proves the software checks and artifact generation actually performed; it does not establish GPU capture acceptance or the real installer lifecycle.
+A release tag authorizes publication after the automated software and artifact checks. Perform the installer, update and hardware acceptance below before tagging when those guarantees are required. CI does not establish GPU capture acceptance or the real installer lifecycle. Failed checks leave the release unpublished.
 
 ### Application behavior
 
@@ -53,7 +53,7 @@ Release builds check once in the background when the main screen starts. Develop
 
 After confirmation, the application downloads the full installer and verifies its signature **before stopping recording**. Download or signature failure leaves recording running and allows a retry. Installation saves the current recording, disables Replay and discards its unsaved buffer. Close the editor and finish exports before updating. The NSIS installer runs in passive mode and requests a restart of the application. Installer launch failure is shown in the application; recording can be started again. Configuration and saved clips remain outside the installed program files and are retained.
 
-The first updater-enabled version is **0.1.8**. Existing 0.1.7 users need to install it manually once; subsequent published versions can be installed from the application. Full-package updates are supported; delta updates and automatic rollback are not included.
+The first updater-enabled version is **0.1.9**. Existing 0.1.7 users need to install it manually once; subsequent published versions can be installed from the application. Full-package updates are supported; delta updates and automatic rollback are not included.
 
 ### Installer/update acceptance
 

@@ -8,6 +8,8 @@
 
 Запись экрана, мгновенные повторы и редактор клипов для Windows.
 
+[![Скачать для Windows](https://img.shields.io/badge/Скачать-Windows_EXE-0078D4?style=for-the-badge&logo=windows)](https://github.com/kirzep/RebellioCap/releases/latest)
+
 [![Проверки приложения](https://github.com/kirzep/RebellioCap/actions/workflows/desktop-ci.yml/badge.svg?branch=main)](https://github.com/kirzep/RebellioCap/actions/workflows/desktop-ci.yml)
 ![Windows x64](https://img.shields.io/badge/platform-Windows_x64-0078D4)
 ![NVIDIA NVENC](https://img.shields.io/badge/video-NVIDIA_NVENC-76B900)
@@ -67,7 +69,7 @@ RebellioCap хранит недавнюю запись в кольцевом б�
 
 ## Начало работы
 
-Сейчас репозиторий публикует **исходный код в разработке**. Версия desktop-пакета — `0.1.8`; проверенный бинарный релиз является отдельным этапом. Опубликованные сборки следует искать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases); условия подготовки описаны в [руководстве по релизам](docs/releases.md).
+EXE-установщик для Windows можно скачать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases/latest). Версия desktop-пакета — `0.1.9`. Публикуемые сборки проходят автоматические проверки; проверка оборудования и установки описана отдельно в [руководстве по релизам](docs/releases.md).
 
 Для записи нужны **Windows x64**, **NVIDIA с совместимым NVENC H.264** и **WebView2**. Подробности — в [системных требованиях](docs/system-requirements.md). Для сборки также нужны MSVC C++ Build Tools с Windows SDK и CMake/Ninja, Node.js 24 с npm и Rust 1.90+ с MSVC toolchain.
 
