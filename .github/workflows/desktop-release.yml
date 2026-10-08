@@ -61,7 +61,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed.' }
       - run: npm ci
       - name: Validate desktop version
-        run: node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --validate-only
+        run: |
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --validate-only
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop version validation failed.' }
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --write-notes release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Write short release notes before publishing this version.' }
       - run: node --test tests/scripts/release_artifacts_test.mjs
       - run: npm run test:crash-coverage
       - run: npm run test -w @rebelliocap/desktop
@@ -122,7 +126,7 @@ jobs:
         run: npm run desktop:build -- --ci
       - name: Create update manifest and checksums
         run: |
-          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --notes-file release-notes.md
           if ($LASTEXITCODE -ne 0) { throw 'Release artifact validation failed.' }
       - uses: actions/upload-artifact@v4
         with:
@@ -157,18 +161,21 @@ jobs:
           path: release
       - name: Create or refresh draft release
         run: |
+          node scripts/release-artifacts.mjs --tag $env:RELEASE_TAG --write-notes release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Short release notes are missing.' }
           $existing = gh release view $env:RELEASE_TAG --json isDraft 2>$null
           if ($LASTEXITCODE -eq 0) {
             if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Refusing to replace an already published release.' }
           } else {
-            gh release create $env:RELEASE_TAG --verify-tag --draft --title "RebellioCap $env:RELEASE_TAG" --generate-notes
+            gh release create $env:RELEASE_TAG --verify-tag --draft --title "RebellioCap $env:RELEASE_TAG" --notes-file release-notes.md
             if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }
           }
-          $notes = gh release view $env:RELEASE_TAG --json body --jq .body
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to read draft release notes.' }
+          gh release edit $env:RELEASE_TAG --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to update draft release notes.' }
+          $notes = Get-Content -LiteralPath release-notes.md -Raw
           $manifestPath = Join-Path 'release' 'latest.json'
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-          $manifest.notes = $notes -join "`n"
+          $manifest.notes = $notes.Trim()
           [IO.File]::WriteAllText([IO.Path]::GetFullPath($manifestPath), ($manifest | ConvertTo-Json -Depth 10) + "`n", [Text.UTF8Encoding]::new($false))
           $sums = @(Get-ChildItem -LiteralPath release -File | Where-Object Name -ne 'SHA256SUMS' | Sort-Object Name | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name

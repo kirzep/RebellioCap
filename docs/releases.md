@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Testing](testing.md) · [Licensing](../LICENSE.md)
 
-Desktop manifests declare **0.1.13**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
+Desktop manifests declare **0.1.16**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
 
 ## Build a local package
 
@@ -41,7 +41,7 @@ These Secrets are read only by the release build. They are not required for ordi
 1. Set matching desktop versions in `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/src-tauri/tauri.conf.json` and refresh the lockfiles. The engine's component version is independent.
 2. Publish the reviewed source snapshot to this public repository using its normal export procedure.
 3. Create a stable tag such as `v0.1.9` on the public commit and push that exact tag. Alternatively run **Windows installer release** manually with an existing stable tag. Tags with prerelease suffixes and mismatched desktop versions are rejected.
-4. The public workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It uploads them to a draft, verifies checksums and manifest identity, then publishes the stable release automatically. Generated release notes are copied into the update manifest. Published versions are never overwritten.
+4. The public workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It uploads them to a draft, verifies checksums and manifest identity, then publishes the stable release automatically. Short Russian notes are maintained for each version in [release-notes.md](release-notes.md), then copied into the release description and update manifest. Missing or empty notes stop publication before the installer build. Published installers and signatures are never overwritten. Corrections to descriptions or manifest notes must preserve installer/signature bytes, refresh checksums, and be mirrored in both repositories.
 5. Push a tag with the same version on the matching private source commit. Its workflow waits for the public release, verifies downloaded artifacts and publishes identical assets in the private repository using its own workflow token. Alternatively dispatch that workflow with the existing private tag. No cross-repository token is required.
 6. The README download button opens the latest public release. The latest published stable release becomes the application update source. Drafts and prereleases are not offered to users.
 
@@ -51,13 +51,13 @@ A release tag authorizes publication after the automated software and artifact c
 
 Release builds check once in the background when the main screen starts. Development builds do not check or install updates. An unavailable endpoint does not block startup or recording. When a newer stable version exists, a button above Settings offers it with release notes and explicit confirmation.
 
-After confirmation, the application downloads the full installer and verifies its signature **before stopping recording**. Download or signature failure leaves recording running and allows a retry. Installation saves the current recording, disables Replay and discards its unsaved buffer. Close the editor and finish exports before updating. The NSIS installer runs in passive mode and requests a restart of the application. Installer launch failure is shown in the application; recording can be started again. Configuration and saved clips remain outside the installed program files and are retained.
+After confirmation, the application downloads the full installer and verifies its signature **before stopping recording**. Download or signature failure leaves recording running and allows a retry. Installation saves the current recording, disables Replay and discards its unsaved buffer. Close the editor and finish exports before updating. The NSIS installer runs in quiet mode and requests a restart of the application. Installer launch failure is shown in the application; recording can be started again. Configuration and saved clips remain outside the installed program files and are retained.
 
 The first updater-enabled version is **0.1.13**. Existing 0.1.7 users need to install it manually once; subsequent published versions can be installed from the application. Full-package updates are supported; delta updates and automatic rollback are not included.
 
 ### Installer/update acceptance
 
-Before claiming end-to-end update acceptance, install an updater-enabled signed version on Windows, publish a second version to the intended update endpoint, and verify check → consent → download → signature → recording completion → passive install → restart. Check retained settings and clips, single-instance and autostart behavior. Test network and signature failure while recording, postpone/retry behavior and an open editor/export. This requires installed builds and published update artifacts; unit and browser tests alone do not establish it.
+Before claiming end-to-end update acceptance, install an updater-enabled signed version on Windows, publish a second version to the intended update endpoint, and verify check → consent → download → signature → recording completion → quiet install → restart. Check retained settings and clips, single-instance and autostart behavior. Test network and signature failure while recording, postpone/retry behavior and an open editor/export. This requires installed builds and published update artifacts; unit and browser tests alone do not establish it.
 
 ## Distribution acceptance gates
 

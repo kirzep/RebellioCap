@@ -15,6 +15,16 @@ export function validateReleaseVersion(tag, versions) {
   return version;
 }
 
+export function extractReleaseNotes(tag, markdown) {
+  const version = validateReleaseVersion(tag, [tag?.slice(1)]);
+  const sections = markdown.replace(/\r\n/g, '\n').split(/^## /m).slice(1);
+  const matching = sections.filter(section => section.split('\n', 1)[0].trim() === version);
+  if (matching.length !== 1) throw new Error(`Expected one release notes section for ${tag}.`);
+  const notes = matching[0].slice(matching[0].indexOf('\n') + 1).trim();
+  if (!/^[-*] \S/m.test(notes)) throw new Error(`Release notes for ${tag} must describe changes in a bullet list.`);
+  return notes;
+}
+
 export function createReleaseArtifacts({ directory, tag, versions, notes = '', now = new Date() }) {
   const version = validateReleaseVersion(tag, versions);
   const installers = readdirSync(directory).filter(name => name.endsWith('_x64-setup.exe'));
@@ -81,6 +91,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const { values: options } = parseArgs({ options: {
     tag: { type: 'string' }, directory: { type: 'string' },
     'notes-file': { type: 'string' }, 'validate-only': { type: 'boolean', default: false },
+    'write-notes': { type: 'string' },
     'verify-only': { type: 'boolean', default: false },
   } });
   const root = fileURLToPath(new URL('../', import.meta.url));
@@ -91,7 +102,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (!options.tag) throw new Error('--tag is required.');
   const versions = [tauri.version, desktop.version, cargoVersion];
   validateReleaseVersion(options.tag, versions);
-  if (options['verify-only']) {
+  if (options['write-notes']) {
+    writeFileSync(options['write-notes'], `${extractReleaseNotes(options.tag, readFileSync(join(root, 'docs/release-notes.md'), 'utf8'))}\n`);
+  } else if (options['verify-only']) {
     verifyReleaseArtifacts({ directory: options.directory ?? join(root, 'apps/desktop/src-tauri/target/release/bundle/nsis'), tag: options.tag, versions });
   } else if (!options['validate-only']) {
     const notes = options['notes-file'] ? readFileSync(options['notes-file'], 'utf8') : '';

@@ -6,7 +6,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReleaseArtifacts, validateReleaseVersion, verifyReleaseArtifacts } from '../../scripts/release-artifacts.mjs';
+import { createReleaseArtifacts, validateReleaseVersion, verifyReleaseArtifacts, extractReleaseNotes } from '../../scripts/release-artifacts.mjs';
+
+test('release notes select only the requested version and preserve Markdown', () => {
+  const markdown = '# Updates\r\n\r\n## 0.1.16\r\n\r\n- Исправлен **язык**.\r\n\r\n### Редактор\r\n- Сохранён монтаж.\r\n\r\n## 0.1.15\r\n- Старые изменения.\r\n';
+  assert.equal(extractReleaseNotes('v0.1.16', markdown), '- Исправлен **язык**.\n\n### Редактор\n- Сохранён монтаж.');
+});
+test('release publication rejects missing, duplicate or link-only notes', () => {
+  for (const markdown of ['## 0.1.15\n- Previous.', '## 0.1.16\n', '## 0.1.16\nFull Changelog: https://example.com', '## 0.1.16\n- One\n## 0.1.16\n- Two']) {
+    assert.throws(() => extractReleaseNotes('v0.1.16', markdown), /notes/i);
+  }
+});
 
 test('CLI uses the default bundle directory when --directory is absent', () => {
   const root = mkdtempSync(join(tmpdir(), 'release-cli-test-'));
@@ -19,11 +29,18 @@ test('CLI uses the default bundle directory when --directory is absent', () => {
     writeFileSync(join(root, 'apps/desktop/package.json'), '{"version":"0.1.8"}');
     writeFileSync(join(root, 'apps/desktop/src-tauri/tauri.conf.json'), '{"version":"0.1.8"}');
     writeFileSync(join(root, 'apps/desktop/src-tauri/Cargo.toml'), '[package]\nversion = "0.1.8"\n');
+    mkdirSync(join(root, 'docs'));
+    writeFileSync(join(root, 'docs/release-notes.md'), '## 0.1.8\n- Исправлена навигация.\n\n## 0.1.7\n- Старый релиз.\n');
+    const notesFile = join(root, 'notes.md');
+    const notesResult = spawnSync(process.execPath, [script, '--tag', 'v0.1.8', '--write-notes', notesFile], { encoding: 'utf8' });
+    assert.equal(notesResult.status, 0, notesResult.stderr);
+    assert.equal(readFileSync(notesFile, 'utf8'), '- Исправлена навигация.\n');
     writeFileSync(join(bundles, 'RebellioCap_0.1.8_x64-setup.exe'), 'MZfixture');
     writeFileSync(join(bundles, 'RebellioCap_0.1.8_x64-setup.exe.sig'), 'signed-update');
-    const result = spawnSync(process.execPath, [script, '--tag', 'v0.1.8'], { encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [script, '--tag', 'v0.1.8', '--notes-file', notesFile], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(readFileSync(join(bundles, 'latest.json'))).version, '0.1.8');
+    assert.equal(JSON.parse(readFileSync(join(bundles, 'latest.json'))).notes, '- Исправлена навигация.\n');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
