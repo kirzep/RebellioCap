@@ -19,7 +19,7 @@ Start with the visible error and the selected configuration. For a reproducible 
 
 ## Capture and recording
 
-**The selected screen is unavailable after upgrading.** Older versions saved a display address that Windows can change after a restart. Current versions save the monitor's device identity and resolve its current address when starting capture. A saved older address is migrated when it still matches a connected screen. If Windows has already changed it, select the intended screen once in Settings → Video and apply the change. Moving the display to another port or reinstalling its driver can also require reselection; the application does not substitute a different screen automatically.
+**The selected screen is unavailable after upgrading.** Older versions saved a display address that Windows can change after a restart. Current versions save the monitor's device identity and resolve its current address when starting capture. A saved older address is migrated when it still matches a connected screen. If Windows has already changed it, select the intended screen once in Settings → Screen and quality and apply the change. Moving the display to another port or reinstalling its driver can also require reselection; the application does not substitute a different screen automatically.
 
 **NVENC or native hardware checks fail.** Check [requirements](system-requirements.md): the GPU must support the requested H.264 configuration and the driver must expose the required API. The prerequisite driver threshold alone does not prove encoder compatibility. On hybrid/multi-adapter systems, also check that the chosen display is on a compatible capture adapter. Keep the exact diagnostic code in a report.
 
