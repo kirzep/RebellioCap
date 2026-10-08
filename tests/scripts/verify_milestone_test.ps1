@@ -144,6 +144,41 @@ try {
     saveContinuity = [PSCustomObject]@{ status = 'passed'; finalizeSeconds = 1; packetsContinuous = $true }
   } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $temporaryRoot 'performance.json')
   Remove-Item -LiteralPath (Join-Path $temporaryRoot 'manifest.json')
+
+  # CI configures with Visual Studio's CMake without downloading another copy.
+  # Exercise the real writer in that layout, independently of local tool caches.
+  $toolchainFixture = Join-Path $temporaryRoot 'toolchain-fixture'
+  $fixtureScripts = Join-Path $toolchainFixture 'scripts'
+  $fixtureBuild = Join-Path $toolchainFixture 'build/windows-debug'
+  New-Item -ItemType Directory -Force -Path $fixtureScripts, $fixtureBuild,
+    (Join-Path $toolchainFixture '.tools/vcpkg/downloads/tools') | Out-Null
+  $fixtureWriter = Join-Path $fixtureScripts 'write-milestone-manifest.ps1'
+  Copy-Item -LiteralPath $manifestWriter -Destination $fixtureWriter
+  $configuredCmake = (Get-Command cmake.exe -CommandType Application).Source
+  $configuredNinja = (Get-Command ninja.exe -CommandType Application).Source
+  $configuredCompiler = (Get-Command cl.exe -CommandType Application).Source
+  @(
+    "CMAKE_COMMAND:INTERNAL=$configuredCmake"
+    "CMAKE_MAKE_PROGRAM:FILEPATH=$configuredNinja"
+    "CMAKE_CXX_COMPILER:FILEPATH=$configuredCompiler"
+  ) | Set-Content -LiteralPath (Join-Path $fixtureBuild 'CMakeCache.txt')
+  $expectedCmakeVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($configuredCmake).ProductVersion
+  if ([string]::IsNullOrWhiteSpace($expectedCmakeVersion)) { $expectedCmakeVersion = $configuredCmake }
+  $originalGitDirectory = $env:GIT_DIR
+  $sourceGitDirectory = (& git -C $repositoryRoot rev-parse --absolute-git-dir).Trim()
+  if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source Git directory for manifest fixture.' }
+  try {
+    # Keep commit validation real while resolving tool paths from the fixture.
+    $env:GIT_DIR = $sourceGitDirectory
+    try { & $fixtureWriter -EvidenceRoot $temporaryRoot | Out-Null }
+    catch { throw "Manifest writer failed with configured Visual Studio CMake and an empty optional vcpkg tool cache: $($_.Exception.Message)" }
+    $written = Get-Content -LiteralPath (Join-Path $temporaryRoot 'manifest.json') -Raw | ConvertFrom-Json
+    if ($written.tools.cmake -ne $expectedCmakeVersion) {
+      throw "Manifest omitted the configured CMake identity: expected $expectedCmakeVersion, found $($written.tools.cmake)."
+    }
+  } finally { $env:GIT_DIR = $originalGitDirectory }
+  Remove-Item -LiteralPath (Join-Path $temporaryRoot 'manifest.json')
+
   & $manifestWriter -EvidenceRoot $temporaryRoot | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Manifest writer rejected valid raw evidence.' }
   $output = & $verifier -EvidenceRoot $temporaryRoot

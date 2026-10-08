@@ -1,0 +1,28 @@
+name: Feature proposal
+description: Describe a problem and the behavior that would solve it.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Proposals are reviewed as maintainer availability permits.
+        Keep examples free of private recordings, credentials and personal information.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to do, and what currently gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe what the user would see or do. A concrete example is helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and constraints
+      description: Existing workarounds, hardware requirements, compatibility needs or tradeoffs to consider.

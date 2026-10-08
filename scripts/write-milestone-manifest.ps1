@@ -67,7 +67,7 @@ function Get-StreamSummary([string] $name) {
 }
 
 function Get-ToolVersion([string] $path) {
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return 'unavailable' }
+  if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { return 'unavailable' }
   $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($path).ProductVersion
   if ([string]::IsNullOrWhiteSpace($version)) { return $path }
   return $version
@@ -88,7 +88,6 @@ $sourceCommit = [string]$performance.sourceCommit
 & git -C $repositoryRoot cat-file -e "$sourceCommit`^{commit}" 2>$null
 if ($LASTEXITCODE -ne 0) { throw "Performance evidence refers to an unknown source commit: $sourceCommit" }
 
-$cmake = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot '.tools\vcpkg\downloads\tools') -Filter cmake.exe -File -Recurse | Select-Object -First 1)
 $ffprobe = Join-Path $repositoryRoot '.tools\vcpkg_installed\x64-windows\tools\ffmpeg\ffprobe.exe'
 $presentMon = Join-Path $repositoryRoot '.tools\presentmon\PresentMon.exe'
 $cmakeCachePath = Join-Path $repositoryRoot 'build\windows-hardware-release\CMakeCache.txt'
@@ -100,6 +99,10 @@ $cacheLines = if (Test-Path -LiteralPath $cmakeCachePath) {
 } else {
   @()
 }
+# Identify the configured tool; vcpkg need not download its own CMake.
+$cmakeLine = @($cacheLines |
+  Where-Object { $_ -match '^CMAKE_COMMAND:INTERNAL=' } | Select-Object -First 1)
+$cmake = if ($cmakeLine.Count -eq 1) { $cmakeLine[0].Split('=', 2)[1] } else { '' }
 $compilerLine = @($cacheLines |
   Where-Object { $_ -match '^CMAKE_CXX_COMPILER:FILEPATH=' } | Select-Object -First 1)
 $compiler = if ($compilerLine.Count -eq 1) { $compilerLine[0].Split('=', 2)[1] } else { '' }
@@ -126,7 +129,7 @@ $manifest = [PSCustomObject]@{
     driver = [string]$doctor[0].fields.driver_version
   }
   tools = [PSCustomObject]@{
-    cmake = Get-ToolVersion $cmake[0].FullName
+    cmake = Get-ToolVersion $cmake
     ninja = Get-ToolVersion $ninja
     msvc = Get-ToolVersion $compiler
     ffprobe = Get-ToolVersion $ffprobe

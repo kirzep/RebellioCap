@@ -1,0 +1,21 @@
+name: Question
+description: Ask about building or using RebellioCap.
+title: "[Question]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with [Getting started](https://github.com/kirzep/RebellioCap/blob/main/docs/getting-started.md) and [Support](https://github.com/kirzep/RebellioCap/blob/main/SUPPORT.md).
+        Questions and attachments are public. Use the bug template for a reproducible failure and the private security channel for vulnerabilities.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Explain what you are trying to accomplish and which documentation you have already checked.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant context
+      description: Application version, Windows/GPU information or relevant build command. Remove personal paths and identifiers.

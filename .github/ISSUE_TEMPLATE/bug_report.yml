@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible build, recording, playback or interface failure.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [Troubleshooting](https://github.com/kirzep/RebellioCap/blob/main/docs/troubleshooting.md) and existing issues first.
+        This report is public. Review attachments and remove private media, paths and identifiers.
+        Report suspected vulnerabilities through [private vulnerability reporting](https://github.com/kirzep/RebellioCap/security/advisories/new).
+  - type: input
+    id: version
+    attributes:
+      label: Application version or source commit
+      placeholder: "Version shown in the app, release tag, or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Build or installation
+        - Capture or replay
+        - Continuous recording
+        - Audio
+        - Playback or clip gallery
+        - Editor or export
+        - Desktop interface or settings
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and relevant settings
+      description: Windows version; GPU/driver; selected display and resolution/refresh rate; audio devices; capture FPS, bitrate and replay duration. For build failures, include toolchain versions. Omit personal paths and device identifiers.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include whether the problem repeats and any sleep, display-change or device-disconnect event.
+      placeholder: |
+        1. Start with these settings...
+        2. Perform this action...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+      description: Include the exact visible error, if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Minimal reviewed evidence
+      description: Relevant error lines, a neutral screenshot/sample, or checks performed. List unavailable checks as not run. Do not upload a whole unreviewed log archive or personal recording.

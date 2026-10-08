@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/kirzep/RebellioCap/security/advisories/new
+    about: Share suspected vulnerabilities through GitHub private reporting; keep exploit details out of public issues.
+  - name: Support and diagnostics guide
+    url: https://github.com/kirzep/RebellioCap/blob/main/SUPPORT.md
+    about: Check troubleshooting guidance and review diagnostic data before sharing it.
