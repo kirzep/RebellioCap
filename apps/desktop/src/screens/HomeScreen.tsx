@@ -182,6 +182,8 @@ export function HomeScreen({
   useTranslation();
   const bridge: HostBridge = host ?? hostBridge ?? defaultHost;
   const [activeView, setActiveView] = useState<HomeView>(initialView);
+  const [editorSession, setEditorSession] = useState<{key:string;clipName?:string}|null>(null);
+  useEffect(() => { if(activeView === 'editor') setEditorSession(current => current ?? {key:crypto.randomUUID()}); }, [activeView]);
   const destinationRef = useRef<HomeView>('recording');
   const [settingsSection, setSettingsSection] =
     useState<RuntimeSettingsSection>(initialSettingsSection);
@@ -744,7 +746,15 @@ export function HomeScreen({
     disabled: settingsBusy && item.id !== activeView,
   }));
 
-  function handleNavigation(id: string) { requestNavigation(() => navigate(id)); }
+  function handleNavigation(id: string) { requestNavigation(() => navigate(id), true); }
+
+  function openClipEditor(clipName?: string) {
+    requestNavigation(() => {
+      setEditorSession({key:crypto.randomUUID(),clipName});
+      destinationRef.current = 'editor';
+      setActiveView('editor');
+    });
+  }
 
   function navigate(id: string) {
     if (settingsBusy) return;
@@ -767,7 +777,7 @@ export function HomeScreen({
   }
 
   function openSettings(section: RuntimeSettingsSection = 'video') {
-    requestNavigation(() => { setSettingsSection(section); setActiveView('settings'); });
+    requestNavigation(() => { setSettingsSection(section); setActiveView('settings'); }, true);
   }
 
   useEffect(() => {
@@ -775,7 +785,7 @@ export function HomeScreen({
     let disposed = false;
     const listener = import('@tauri-apps/api/event').then(({ listen }) =>
       listen('tray-settings', () => {
-        requestNavigation(() => { setSettingsSection('application'); setActiveView('settings'); });
+        requestNavigation(() => { setSettingsSection('application'); setActiveView('settings'); }, true);
       })
     );
     void listener.then(remove => { if (disposed) remove(); });
@@ -798,8 +808,12 @@ export function HomeScreen({
       activeNavigation={activeView}
       onNavigate={handleNavigation}
       contentWidth={activeView === 'settings' ? 'form' : 'wide'}
-      contentLabel={activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}
+      contentLabel={activeView === 'editor' ? t('Редактор клипов') : activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}
     >
+      {editorSession && <ClipEditor key={editorSession.key} clipName={editorSession.clipName} embedded active={activeView === 'editor'}
+        onNeedsAttention={() => setActiveView('editor')}
+        onClose={() => {setEditorSession(null);destinationRef.current = 'clips';setActiveView('clips');}} />}
+      <div style={{display:activeView === 'editor' ? 'none' : 'contents'}}>
       <header className={styles.pageHeader}>
         <div><p className={styles.breadcrumb}>{t("Рабочая область")}{' '}<span>/</span> {activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}</p>
         <h1>{activeView === 'recording' ? t('Обзор записи') : activeView === 'clips' ? t('Ваши клипы') : t(HOME_NAVIGATION.find(item => item.id === settingsSection)?.label ?? '')}</h1>
@@ -1000,9 +1014,9 @@ export function HomeScreen({
               )}
             </>
           )}
-          {activeConfig && <ClipsScreen bridge={bridge} directory={activeConfig.output_directory} refreshToken={`${snapshot?.metrics.completedSaves}:${snapshot?.continuousRecordingActive}`} compact onShowAll={() => handleNavigation('clips')} />}
+          {activeConfig && <ClipsScreen onOpenEditor={openClipEditor} bridge={bridge} directory={activeConfig.output_directory} refreshToken={`${snapshot?.metrics.completedSaves}:${snapshot?.continuousRecordingActive}`} compact onShowAll={() => handleNavigation('clips')} />}
         </div>
-      ) : activeView === 'editor' ? <ClipEditor onClose={() => {destinationRef.current = 'clips';setActiveView('clips');}} /> : activeView === 'clips' ? <ClipsScreen bridge={bridge} directory={activeConfig?.output_directory} /> : (
+      ) : activeView === 'editor' ? null : activeView === 'clips' ? <ClipsScreen onOpenEditor={openClipEditor} bridge={bridge} directory={activeConfig?.output_directory} /> : (
         <div className={styles.settingsView}>
           {!activeConfig && (
             <header className={styles.settingsHeader}>
@@ -1122,6 +1136,7 @@ export function HomeScreen({
           </ErrorNotice>
         )}
       </ConfirmDialog>
+      </div>
     </WindowShell>
   );
 }

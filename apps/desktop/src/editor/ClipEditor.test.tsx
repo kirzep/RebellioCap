@@ -8,6 +8,44 @@ import { autosavePrefix, legacyAutosaveKey, writeAutosave } from './autosave';
 import { emptyProject } from './model';
 import { TimelineLevel } from './TimelineLevel';
 import {subscribeImportProgress} from './importProgress';
+import { newItem } from './model';
+
+it('does not offer empty previous projects for recovery', () => {
+ localStorage.setItem(autosavePrefix+'empty',JSON.stringify({version:2,id:'empty',savedAt:1,project:emptyProject()}));
+ render(<ClipEditor onClose={vi.fn()}/>);
+ expect(screen.queryByText('Продолжить предыдущий монтаж?')).not.toBeInTheDocument();
+});
+it('remembers declining recovery across editor openings', () => {
+ writeAutosave(localStorage,{id:'declined',savedAt:1,project:{...emptyProject(),items:[newItem('text',0,0,5)]}});
+ const view=render(<ClipEditor onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Новый проект'}));
+ view.unmount();
+ render(<ClipEditor onClose={vi.fn()}/>);
+ expect(screen.queryByText('Продолжить предыдущий монтаж?')).not.toBeInTheDocument();
+ expect(localStorage.getItem(autosavePrefix+'declined')).not.toBeNull();
+});
+it('keeps an embedded montage across navigation without a close prompt', async () => {
+ const view=render(<ClipEditor {...{embedded:true,active:true}} onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Добавить текст'}));
+ const destination=vi.fn();act(()=>requestNavigation(destination,true));
+ expect(destination).toHaveBeenCalledOnce();
+ expect(screen.queryByText('Сохранить монтаж?')).not.toBeInTheDocument();
+ view.rerender(<ClipEditor {...{embedded:true,active:false}} onClose={vi.fn()}/>);
+ view.rerender(<ClipEditor {...{embedded:true,active:true}} onClose={vi.fn()}/>);
+ expect(screen.getByLabelText('Текст')).toHaveValue('Ваш текст');
+ expect(screen.getByRole('region',{name:'Редактор клипов'})).toBeInTheDocument();
+});
+it('still protects a hidden embedded montage before application quit', () => {
+ const attention=vi.fn(),quit=vi.fn();
+ const view=render(<ClipEditor embedded onNeedsAttention={attention} onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Добавить текст'}));
+ view.rerender(<ClipEditor embedded active={false} onNeedsAttention={attention} onClose={vi.fn()}/>);
+ act(()=>requestNavigation(quit));
+ expect(attention).toHaveBeenCalledOnce();expect(quit).not.toHaveBeenCalled();
+ view.rerender(<ClipEditor embedded active onNeedsAttention={attention} onClose={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Закрыть без сохранения'}));
+ expect(quit).toHaveBeenCalledOnce();
+});
 vi.mock('./importProgress',async importOriginal=>({...await importOriginal<typeof import('./importProgress')>(),subscribeImportProgress:vi.fn(async()=>()=>{})}));
 
 it('shows native import stages and ignores cancelled or unrelated progress',async()=>{
@@ -193,7 +231,7 @@ it('keeps the previous project recovery when another project opens and is edited
   await openEditor();
   const original=vi.mocked(invoke).getMockImplementation()!;
   
-  vi.mocked(invoke).mockImplementation((command,args)=>command==='editor_open'?Promise.resolve({...emptyProject(),name:'Second'}) as never:original(command,args));
+  vi.mocked(invoke).mockImplementation((command,args)=>command==='editor_open'?Promise.resolve({...emptyProject(),name:'Second',items:[newItem('text',0,0,5)]}) as never:original(command,args));
   fireEvent.change(screen.getByLabelText('Название проекта'),{target:{value:'First'}});
   await openAnotherProject();
   fireEvent.change(screen.getByLabelText('Название проекта'),{target:{value:'Second edited'}});
@@ -212,8 +250,8 @@ it('warns about corrupt recovery without opening a broken restore dialog', async
 });
 
 it('restores the selected project and retains the other recovery', async()=>{
-  writeAutosave(localStorage,{id:'older',savedAt:1,project:{...emptyProject(),name:'Older'}});
-  writeAutosave(localStorage,{id:'newer',savedAt:2,project:{...emptyProject(),name:'Newer'}});
+  writeAutosave(localStorage,{id:'older',savedAt:1,project:{...emptyProject(),name:'Older',items:[newItem('text',0,0,5)]}});
+  writeAutosave(localStorage,{id:'newer',savedAt:2,project:{...emptyProject(),name:'Newer',items:[newItem('text',0,0,5)]}});
   vi.mocked(invoke).mockImplementation(async(command,args)=>command==='editor_restore'?(args as {project:unknown}).project:null);
   render(<ClipEditor onClose={vi.fn()}/>);
   fireEvent.change(document.querySelector('select[aria-label="Автокопия для восстановления"]')!,{target:{value:'older'}});

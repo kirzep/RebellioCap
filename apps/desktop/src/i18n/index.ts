@@ -7,11 +7,11 @@ import settings from './settings.en.json';
 
 export type Language = 'ru' | 'en';
 export type LanguagePreference = 'system' | Language;
-export interface LanguageSettings { preference: LanguagePreference; language: Language }
-export interface LanguageSnapshot extends LanguageSettings { ready: boolean }
+export interface LanguageSettings { preference: LanguagePreference; language: Language; systemLanguage?: Language }
+export interface LanguageSnapshot extends LanguageSettings { ready: boolean; systemLanguage: Language }
 export const englishCatalog: Readonly<Record<string, string>> = { ...native, ...editor, ...core, ...settings };
 const storageKey = 'rebelliocap.language';
-let snapshot: LanguageSnapshot = { preference: 'system', language: 'ru', ready: false };
+let snapshot: LanguageSnapshot = { preference: 'system', language: 'ru', systemLanguage: languageForLocale(navigator.language), ready: false };
 const subscribers = new Set<() => void>();
 let initialization: Promise<void> | undefined;
 let removeNativeListener: UnlistenFn | undefined;
@@ -27,17 +27,20 @@ function validSettings(value: unknown): value is LanguageSettings {
   if (!value || typeof value !== 'object') return false;
   const record = value as Partial<LanguageSettings>;
   return isLanguagePreference(record.preference) && (record.language === 'ru' || record.language === 'en') &&
-    (record.preference === 'system' || record.preference === record.language);
+    (record.preference === 'system' || record.preference === record.language) &&
+    (record.systemLanguage === undefined || record.systemLanguage === 'ru' || record.systemLanguage === 'en');
 }
 export function applyLanguageSettings(value: LanguageSettings): void {
   if (!validSettings(value)) throw new Error('Invalid language settings.');
   document.documentElement.lang = value.language;
-  if (snapshot.ready && snapshot.language === value.language && snapshot.preference === value.preference) return;
-  snapshot = { ...value, ready: true };
+  const systemLanguage = value.systemLanguage ?? (value.preference === 'system' ? value.language : languageForLocale(navigator.language));
+  if (snapshot.ready && snapshot.language === value.language && snapshot.preference === value.preference && snapshot.systemLanguage === systemLanguage) return;
+  snapshot = { ...value, systemLanguage, ready: true };
   subscribers.forEach(notify => notify());
 }
 function browserSettings(preference: LanguagePreference): LanguageSettings {
-  return { preference, language: preference === 'system' ? languageForLocale(navigator.language) : preference };
+  const systemLanguage = languageForLocale(navigator.language);
+  return { preference, language: preference === 'system' ? systemLanguage : preference, systemLanguage };
 }
 function readBrowserPreference(): LanguagePreference {
   try {

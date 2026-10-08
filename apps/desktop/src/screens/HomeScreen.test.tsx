@@ -241,25 +241,24 @@ describe('HomeScreen', () => {
     vi.stubGlobal('ResizeObserver',class {observe(){} disconnect(){}});
     render(<HomeScreen host={host} initialState={createStoredState()} initialSnapshot={createSnapshot()} />);
     fireEvent.click(await screen.findByRole('button', {name:'Редактор клипов'}));
-    expect(await screen.findByRole('dialog', {name:'Редактор клипов'})).toBeInTheDocument();
+    expect(await screen.findByRole('region', {name:'Редактор клипов'})).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name:'Назад'}));
-    expect(screen.queryByRole('dialog', {name:'Редактор клипов'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', {name:'Редактор клипов'})).not.toBeInTheDocument();
   });
 
-  it('keeps dirty editor mounted when settings navigation is cancelled', async () => {
+  it('keeps the montage mounted while navigating through settings', async () => {
     const host = createTestHost(createSnapshot());
     vi.stubGlobal('ResizeObserver',class {observe(){} disconnect(){}});
     render(<HomeScreen host={host} initialState={createStoredState()} initialSnapshot={createSnapshot()} />);
     fireEvent.click(await screen.findByRole('button', {name:'Редактор клипов'}));
-    await screen.findByRole('dialog', {name:'Редактор клипов'});
+    await screen.findByRole('region', {name:'Редактор клипов'});
     fireEvent.change(screen.getByLabelText('Название проекта'), {target:{value:'Unsaved edit'}});
     fireEvent.click(screen.getByRole('button', {name:'Настройки'}));
-    expect(screen.getByText('Сохранить монтаж?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button',{name:'Продолжить монтаж'}));
+    expect(screen.queryByText('Сохранить монтаж?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region',{name:'Редактор клипов'})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name:'Редактор клипов'}));
+    await screen.findByRole('region',{name:'Редактор клипов'});
     expect(screen.getByLabelText('Название проекта')).toHaveValue('Unsaved edit');
-    fireEvent.click(screen.getByRole('button', {name:'Настройки'}));
-    fireEvent.click(screen.getByRole('button',{name:'Закрыть без сохранения'}));
-    expect(screen.queryByRole('dialog',{name:'Редактор клипов'})).not.toBeInTheDocument();
   });
 
   it('saves replay when save button is clicked', async () => {

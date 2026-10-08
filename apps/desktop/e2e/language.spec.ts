@@ -27,6 +27,9 @@ test('non-Russian system language defaults to English and overrides survive relo
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
   await expect(page.getByRole('combobox', { name: 'Язык интерфейса' })).toHaveText('Русский');
+  await page.getByRole('combobox', { name: 'Язык интерфейса' }).click();
+  await expect(page.getByRole('option',{name:'Как в Windows',exact:true}).locator('path[fill]').first()).toHaveAttribute('fill','#234578');
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Свернуть боковое меню', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Язык интерфейса' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Язык интерфейса' }).focus();
@@ -48,4 +51,21 @@ test('non-Russian system language defaults to English and overrides survive relo
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('radio', { name: 'Application', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Interface language' })).toHaveCount(1);
+  await page.getByRole('button',{name:'Expand sidebar',exact:true}).click();
+  await page.getByRole('button',{name:'Clip editor',exact:true}).click();
+  const editor=page.getByRole('region',{name:'Clip editor',exact:true});
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole('button',{name:'Expand sidebar',exact:true})).toHaveAttribute('aria-expanded','false');
+  await page.getByRole('button',{name:'Add text',exact:true}).click();
+  await page.getByLabel('Text',{exact:true}).fill('Navigation keeps this montage');
+  const bounds=await editor.boundingBox();
+  const sidebar=await page.getByRole('button',{name:'Settings',exact:true}).boundingBox();
+  expect(bounds!.x).toBeGreaterThan(sidebar!.x+sidebar!.width);
+  await page.screenshot({path:test.info().outputPath('embedded-editor.png')});
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await expect(editor).toBeHidden();
+  await expect(page.getByRole('button',{name:'Collapse sidebar',exact:true})).toHaveAttribute('aria-expanded','true');
+  await page.getByRole('button',{name:'Clip editor',exact:true}).click();
+  await expect(page.getByLabel('Text',{exact:true})).toHaveValue('Navigation keeps this montage');
+
 });

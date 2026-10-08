@@ -44,11 +44,15 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
   contentLabel, className, contentClassName }: WindowShellProps) {
   useTranslation();
   const contentRef = useRef<HTMLElement>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const [preferredSidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('rebelliocap.sidebar-collapsed') === 'true'; }
     catch { return false; }
   });
+  const [editorSidebarExpanded, setEditorSidebarExpanded] = useState(false);
+  const sidebarCollapsed = activeNavigation === 'editor' ? !editorSidebarExpanded : preferredSidebarCollapsed;
+  useLayoutEffect(() => { setEditorSidebarExpanded(false); }, [activeNavigation]);
   function toggleSidebar() {
+    if (activeNavigation === 'editor') { setEditorSidebarExpanded(sidebarCollapsed); return; }
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
     try { localStorage.setItem('rebelliocap.sidebar-collapsed', String(next)); }
@@ -88,7 +92,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
     </>}
   </WindowTitlebar>;
   const content = <>
-    <main ref={contentRef} className={cn(styles.content, contentClassName)} aria-label={contentLabel}>
+    <main ref={contentRef} className={cn(styles.content, activeNavigation === 'editor' && styles.editorContent, contentClassName)} aria-label={contentLabel}>
       {contentWidth ? <div ref={innerRef} className={cn(styles.contentInner, styles[`contentWidth${contentWidth}`])}>{children}</div> : children}
     </main>
     {footer && <footer className={styles.footer}>{footer}</footer>}

@@ -17,6 +17,13 @@ beforeEach(() => { localStorage.clear(); vi.resetAllMocks(); });
 afterEach(() => { cleanup(); disposeLanguageInitialization(); Reflect.deleteProperty(window, '__TAURI_INTERNALS__'); vi.restoreAllMocks(); });
 
 describe('language selection', () => {
+  it('shows the Windows flag independently of the Russian override', () => {
+    applyLanguageSettings({ preference: 'ru', language: 'ru', systemLanguage: 'en' } as Settings);
+    render(<LanguageSettings />);
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Язык интерфейса' }), { key: 'ArrowDown' });
+    expect(screen.getByRole('option', { name: 'Как в Windows' }).querySelector('path[fill]')).toHaveAttribute('fill', '#234578');
+    expect(screen.getByRole('option', { name: 'Русский' }).querySelector('path[fill]')).toHaveAttribute('fill', '#fff');
+  });
   it('keeps shared translations consistent and distinguishes editor actions from dialog actions', () => {
     const seen = new Map<string, string>();
     for (const catalog of [coreCatalog, editorCatalog, nativeCatalog, settingsCatalog]) {

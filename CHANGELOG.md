@@ -2,6 +2,12 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.16
+
+- Show the actual Windows language flag even when the application uses a different language.
+- Open the clip editor inside the main workspace with an automatically compact sidebar. Keep the montage and undo history when switching sections.
+- Remember declined recovery prompts and stop offering empty projects. Preserve declined snapshots locally; new edits make them eligible for recovery again.
+
 ## 0.1.15
 
 - Style the language dropdown consistently with the application and add Russian / English flags.

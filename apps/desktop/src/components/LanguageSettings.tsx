@@ -4,7 +4,7 @@ import { setLanguagePreference, useLanguage, useTranslation, type LanguagePrefer
 import styles from './WindowShell.module.css';
 
 export function LanguageSettings() {
-  const { preference, language, ready } = useLanguage();
+  const { preference, systemLanguage, ready } = useLanguage();
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -20,7 +20,7 @@ export function LanguageSettings() {
     <NativeSelect id="application-language" className={styles.languageSelect} contentClassName={styles.languageMenu}
       renderOption={(value, label) => <span className={styles.languageOption}>
         <svg className={styles.languageFlag} viewBox="0 0 24 16" aria-hidden="true">
-          {(value === 'system' ? language : value) === 'ru' ? <>
+          {(value === 'system' ? systemLanguage : value) === 'ru' ? <>
             <path fill="#fff" d="M0 0h24v16H0z" /><path fill="#2254ad" d="M0 5.33h24v5.34H0z" /><path fill="#d84149" d="M0 10.67h24V16H0z" />
           </> : <>
             <path fill="#234578" d="M0 0h24v16H0z" /><path stroke="#fff" strokeWidth="4" d="m0 0 24 16m0-16L0 16" />

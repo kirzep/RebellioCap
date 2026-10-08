@@ -94,8 +94,8 @@ function FolderIcon({ bridge, folder, revision }: { bridge: HostBridge; folder: 
     : <Folder size={24} aria-label={t("Папка игры")} />}</span>;
 }
 
-export function ClipsScreen({ bridge, directory, compact = false, onShowAll, refreshToken }: {
-  bridge: HostBridge; directory?: string; compact?: boolean; onShowAll?: () => void; refreshToken?: string;
+export function ClipsScreen({ bridge, directory, compact = false, onShowAll, refreshToken, onOpenEditor }: {
+  bridge: HostBridge; directory?: string; compact?: boolean; onShowAll?: () => void; refreshToken?: string; onOpenEditor?: (clipName?: string) => void;
 }) {
   useTranslation();
   const libraryRef = useRef<HTMLElement>(null);
@@ -239,7 +239,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
       </div>
       {view === 'folders' && selectedFolder && <button className={styles.back} onClick={() => setSelectedFolder(null)}><ArrowLeft size={16} />{t("Все папки")}<span>{selectedFolder}</span></button>}
       <label className={styles.search}><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Найти клип или папку")} aria-label={t("Поиск клипов")} /></label></div>}
-    {!compact && <Button variant="tertiary" size="compact" leadingIcon={<Pencil />} onClick={() => setEditor({})}>{t("Редактор клипов · Новый проект / .rebcap")}</Button>}
+    {!compact && <Button variant="tertiary" size="compact" leadingIcon={<Pencil />} onClick={() => onOpenEditor ? onOpenEditor() : setEditor({})}>{t("Редактор клипов · Новый проект / .rebcap")}</Button>}
     {error && <ErrorNotice title={errorTitle} action={<Button size="compact" onClick={() => void load()}>{t("Обновить список")}</Button>}>{t(error)}</ErrorNotice>}
     {busy ? <InlineStatus tone="busy">{t("Загружаем клипы…")}</InlineStatus> : !error && empty ?
       <div className={styles.empty}><AppIcon name="clips" size={28} /><h3>{query ? t('Клипы не найдены') : t('Здесь появятся ваши клипы')}</h3><p>{query ? t('Попробуйте другое название.') : t('Сохраните повтор или завершите запись. Файлы из папки записи появятся здесь.')}</p></div>
@@ -257,7 +257,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
         </button><div className={styles.clipTitle}><h3 title={clip.name}>{clip.name}</h3>
           <DropdownMenu.Root><DropdownMenu.Trigger asChild><button className={styles.more} aria-label={t("Действия с {0}", clip.name)}><MoreHorizontal size={18} /></button></DropdownMenu.Trigger>
             <DropdownMenu.Portal><DropdownMenu.Content className={styles.menu} align="end" sideOffset={5} collisionPadding={12}>
-              <DropdownMenu.Item className={styles.menuItem} onSelect={() => setEditor({name: clipId(clip)})}><Pencil size={15} />{t("Редактировать клип")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={styles.menuItem} onSelect={() => onOpenEditor ? onOpenEditor(clipId(clip)) : setEditor({name: clipId(clip)})}><Pencil size={15} />{t("Редактировать клип")}</DropdownMenu.Item>
               <DropdownMenu.Item className={styles.menuItem} onSelect={() => edit(clip, 'rename')}><Pencil size={15} />{t("Переименовать")}</DropdownMenu.Item>
               <DropdownMenu.Item className={`${styles.menuItem} ${styles.deleteItem}`} onSelect={() => edit(clip, 'delete')}><Trash2 size={15} />{t("Удалить")}</DropdownMenu.Item>
             </DropdownMenu.Content></DropdownMenu.Portal>

@@ -3,6 +3,19 @@ import type { Project } from './model';
 export const autosavePrefix = 'rebcap.editor.autosave.v2.';
 export const legacyAutosaveKey = 'rebcap.editor.autosave.v1';
 export type Recovery = { id: string; savedAt: number; project: Project };
+export function hasProjectContent(project: Project): boolean { return project.assets.length > 0 || project.items.length > 0; }
+export function dismissAutosaves(storage: Storage, entries: Recovery[]) {
+  for (const entry of entries) {
+    const key = autosavePrefix + entry.id;
+    const raw = storage.getItem(key);
+    if (raw === null && (entry.id !== 'legacy-v1' || storage.getItem(legacyAutosaveKey) === null)) continue;
+    const value = raw === null ? {version:2,...entry} : JSON.parse(raw);
+    if (value.savedAt !== entry.savedAt) continue;
+    // Dismiss this snapshot only. Subsequent edits write a new, eligible snapshot.
+    storage.setItem(key, JSON.stringify({ ...value, dismissedAt: entry.savedAt }));
+    if (entry.id === 'legacy-v1') storage.removeItem(legacyAutosaveKey);
+  }
+}
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -30,6 +43,7 @@ export function validRecoveryId(id: unknown): id is string {
 }
 export function readAutosaves(storage: Storage): { entries: Recovery[]; damaged: number } {
   const entries: Recovery[] = [];
+  const validIds = new Set<string>();
   let damaged = 0;
   const keys: string[] = [];
   for (let index = 0; index < storage.length; index++) {
@@ -43,15 +57,16 @@ export function readAutosaves(storage: Storage): { entries: Recovery[]; damaged:
       const entry: unknown = JSON.parse(raw);
       if (!object(entry) || entry.version !== 2 || !validRecoveryId(entry.id) ||
           key !== autosavePrefix + entry.id || !finite(entry.savedAt) || entry.savedAt < 0 || !validProject(entry.project)) throw Error('Invalid autosave');
-      entries.push({ id: entry.id, savedAt: entry.savedAt, project: entry.project });
+      validIds.add(entry.id);
+      if (hasProjectContent(entry.project) && entry.dismissedAt !== entry.savedAt) entries.push({ id: entry.id, savedAt: entry.savedAt, project: entry.project });
     } catch { damaged++; }
   }
   const raw = storage.getItem(legacyAutosaveKey);
-  if (raw !== null && !entries.some(e => e.id === 'legacy-v1')) {
+  if (raw !== null && !validIds.has('legacy-v1')) {
     try {
       const project: unknown = JSON.parse(raw);
       if (!validProject(project)) throw Error('Invalid legacy autosave');
-      entries.push({ id: 'legacy-v1', savedAt: 0, project });
+      if (hasProjectContent(project)) entries.push({ id: 'legacy-v1', savedAt: 0, project });
     } catch { damaged++; }
   }
   entries.sort((a, b) => b.savedAt - a.savedAt || a.id.localeCompare(b.id));
@@ -59,5 +74,10 @@ export function readAutosaves(storage: Storage): { entries: Recovery[]; damaged:
 }
 export function writeAutosave(storage: Storage, entry: Recovery) {
   if (!validRecoveryId(entry.id) || !finite(entry.savedAt) || entry.savedAt < 0 || !validProject(entry.project)) throw Error('Некорректная автокопия проекта');
+  if (!hasProjectContent(entry.project)) {
+    storage.removeItem(autosavePrefix + entry.id);
+    if (entry.id === 'legacy-v1') storage.removeItem(legacyAutosaveKey);
+    return;
+  }
   storage.setItem(autosavePrefix + entry.id, JSON.stringify({ version: 2, ...entry }));
 }

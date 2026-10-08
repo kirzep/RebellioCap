@@ -10,7 +10,7 @@ pub fn text(ru: &'static str, en: &'static str) -> &'static str {
 #[serde(rename_all = "lowercase")]
 pub enum Preference { System, Ru, En }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct LanguageSettings { pub preference: Preference, pub language: &'static str }
+pub struct LanguageSettings { pub preference: Preference, pub language: &'static str, #[serde(rename = "systemLanguage")] pub system_language: &'static str }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Saved { preference: Preference }
@@ -22,7 +22,8 @@ fn system_language() -> &'static str {
     { "en" }
 }
 fn resolved(preference: Preference) -> LanguageSettings {
-    LanguageSettings { preference, language: match preference { Preference::System => system_language(), Preference::Ru => "ru", Preference::En => "en" } }
+    let system_language = system_language();
+    LanguageSettings { preference, system_language, language: match preference { Preference::System => system_language, Preference::Ru => "ru", Preference::En => "en" } }
 }
 pub struct LanguageState { transition: Mutex<()>, current: Mutex<LanguageSettings>, path: PathBuf }
 impl LanguageState {
@@ -93,7 +94,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = LanguageState::new(dir.path().into());
         let payload = state.save(Preference::Ru).unwrap();
-        assert_eq!(serde_json::to_value(&payload).unwrap(), serde_json::json!({"preference":"ru", "language":"ru"}));
+        assert_eq!(serde_json::to_value(&payload).unwrap(), serde_json::json!({"preference":"ru", "language":"ru", "systemLanguage": system_language()}));
         assert_eq!(*state.current.lock().unwrap(), payload);
     }
     #[test]
