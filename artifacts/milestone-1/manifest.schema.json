@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rebelliocap.local/schemas/milestone-1-manifest.schema.json",
+  "title": "RebellioCap Milestone 1 Evidence Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "commit", "host", "tools", "commands", "artifacts", "ctest", "streams", "capture30m", "hotkey", "saveContinuity", "performance"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "dirty"],
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "Clean source commit used for every runtime evidence run; an evidence-only descendant commit is allowed." },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["osBuild", "gpu", "driver"],
+      "properties": {
+        "osBuild": { "type": "string", "minLength": 1 },
+        "gpu": { "type": "string", "minLength": 1 },
+        "driver": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cmake", "ninja", "msvc", "ffprobe", "presentMon"],
+      "properties": {
+        "cmake": { "type": "string", "minLength": 1 },
+        "ninja": { "type": "string", "minLength": 1 },
+        "msvc": { "type": "string", "minLength": 1 },
+        "ffprobe": { "type": "string", "minLength": 1 },
+        "presentMon": { "type": "string", "minLength": 1 }
+      }
+    },
+    "commands": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "artifacts": {
+      "type": "array",
+      "minItems": 18,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "ctest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "hardware"],
+      "properties": {
+        "unit": { "$ref": "#/$defs/testRun" },
+        "hardware": { "$ref": "#/$defs/testRun" }
+      }
+    },
+    "streams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mp4", "mkv"],
+      "properties": {
+        "mp4": { "$ref": "#/$defs/streamManifest" },
+        "mkv": { "$ref": "#/$defs/streamManifest" }
+      }
+    },
+    "capture30m": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "durationMinutes", "avDriftMs", "droppedFramesPercent"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "durationMinutes": { "type": "number", "minimum": 30 },
+        "avDriftMs": { "type": "number", "minimum": 0 },
+        "droppedFramesPercent": { "type": "number", "minimum": 0 }
+      }
+    },
+    "hotkey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "recognitionMs", "inputPassThrough"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "recognitionMs": { "type": "number", "minimum": 0 },
+        "inputPassThrough": { "type": "boolean" }
+      }
+    },
+    "saveContinuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "finalizeSeconds", "packetsIncreasedBeforeDuringAfter"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "finalizeSeconds": { "type": "number", "minimum": 0 },
+        "packetsIncreasedBeforeDuringAfter": { "type": "boolean" }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "gameExecutable", "baselineRuns", "captureRuns", "cpuAveragePercent", "workingMemoryExcludingReplayMiB", "averageFpsRegressionPercent", "onePercentLowRegressionPercent"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "gameExecutable": { "type": "string", "minLength": 1 },
+        "baselineRuns": { "type": "integer", "minimum": 3 },
+        "captureRuns": { "type": "integer", "minimum": 3 },
+        "cpuAveragePercent": { "type": "number", "minimum": 0 },
+        "workingMemoryExcludingReplayMiB": { "type": "number", "minimum": 0 },
+        "averageFpsRegressionPercent": { "type": "number" },
+        "onePercentLowRegressionPercent": { "type": "number" }
+      }
+    }
+  },
+  "$defs": {
+    "status": { "enum": ["passed", "failed", "not-run"] },
+    "testRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "total", "passed", "failed", "skipped"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "total": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "streamManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "durationSeconds", "videoCodec", "videoCount", "audioCodec", "audioCount", "audioNames", "monotonicTimestamps"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "videoCodec": { "const": "h264" },
+        "videoCount": { "const": 1 },
+        "audioCodec": { "const": "aac" },
+        "audioCount": { "const": 3 },
+        "audioNames": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "enum": ["Mixed", "System", "Microphone"] },
+          "uniqueItems": true
+        },
+        "monotonicTimestamps": { "type": "boolean" }
+      }
+    }
+  }
+}

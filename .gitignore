@@ -1,0 +1,27 @@
+.worktrees/
+.tools/
+build/
+clips/
+logs/
+runtime-logs/
+*.mp4
+!apps/desktop/e2e/fixtures/editor-sample.mp4
+*.mkv
+*.log
+/artifacts/task-10-*/
+node_modules/
+apps/desktop/dist/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/resources/engine/
+*.tsbuildinfo
+apps/desktop/src-tauri/icons/*
+!apps/desktop/src-tauri/icons/source.svg
+!apps/desktop/src-tauri/icons/icon.ico
+!apps/desktop/src-tauri/icons/icon.png
+!apps/desktop/src-tauri/icons/tray.png
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+/vcpkg_installed/

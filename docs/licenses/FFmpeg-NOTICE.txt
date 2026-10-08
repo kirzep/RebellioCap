@@ -1,0 +1,13 @@
+FFmpeg 9.0.1 is dynamically linked under LGPL 2.1 or later.
+The license is included in FFmpeg-LGPL-2.1.txt. Corresponding source and
+vcpkg build patches/recipe are in FFmpeg-9.0.1-corresponding-source.zip.
+Build with the included vcpkg manifest and port on Windows x64 (MSVC).
+The shared FFmpeg DLLs in the engine directory may be replaced by compatible
+modified builds. Reverse engineering for debugging modifications to these
+LGPL libraries is permitted. No GPL or nonfree features are enabled.
+Upstream: https://ffmpeg.org/ ; source tag: n9.0.1.
+
+The editor also ships ffmpeg.exe and ffprobe.exe, with libavfilter,
+libswscale and libswresample. Encoding uses NVIDIA NVENC or Windows Media
+Foundation for H.264 and FFmpeg's LGPL AAC encoder. PNG support links zlib;
+its notice is included as zlib-LICENSE.txt. No libx264 or GPL filters are used.

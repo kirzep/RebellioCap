@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="90 200 1080 880" fill="none">
+  <title>RebellioCap</title>
+  <path fill="#f4f4f5" d="M119 862C171 791 207 711 252 614C317 469 403 366 512 299C604 242 703 209 793 238C912 276 973 385 953 522C944 584 919 649 914 717C908 797 953 838 941 902C926 969 860 1020 787 1038C749 1047 718 1023 714 975C668 1027 596 1059 526 1054C440 1048 414 991 431 913C366 958 285 984 214 975C141 966 94 922 119 862Z"/>
+  <ellipse cx="721" cy="492" rx="43" ry="59" transform="rotate(10 721 492)" fill="#1c1c1e"/>
+  <ellipse cx="861" cy="509" rx="42" ry="59" transform="rotate(12 861 509)" fill="#1c1c1e"/>
+  <path fill="#f4f4f5" stroke="#1c1c1e" stroke-width="18" stroke-linejoin="round" d="M975 656L1088 588C1112 573 1137 588 1137 614V804C1137 831 1112 844 1090 828L975 748Z"/>
+  <rect x="605" y="616" width="359" height="270" rx="55" fill="#f4f4f5" stroke="#1c1c1e" stroke-width="18"/>
+  <rect x="668" y="677" width="99" height="29" rx="14.5" fill="#1c1c1e"/>
+  <path fill="#f4f4f5" d="M550 720C574 758 614 775 660 783C708 791 741 830 733 879C727 924 688 949 646 941L565 919Z"/>
+  <path fill="#f4f4f5" d="M911 865C903 821 927 784 970 780C1013 776 1040 807 1031 849C1023 889 991 915 951 915L916 943Z"/>
+</svg>

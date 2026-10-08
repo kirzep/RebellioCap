@@ -1,0 +1,43 @@
+.shell, .mainColumn { display:flex; flex-direction:column; min-width:0; min-height:0; height:100dvh; overflow:hidden; color:var(--foreground); background:var(--background); }
+.workspace { --app-sidebar-width: 216px; flex:1; height:auto; min-height:0; overflow:hidden; }
+.mainColumn { flex:1 1 0; width:0; height:auto; margin:8px 12px 12px 0; border:1px solid #ffffff0c; border-radius:16px; }
+.shell { background:#1c1c1e; }
+.sidebar { flex-shrink:0; border-right:0; background:#1c1c1e; overflow:hidden; transition:width 180ms cubic-bezier(.22,1,.36,1); }
+.sidebar [data-slot='sidebar-content'] { background:#1c1c1e; }
+.settingsFooter { flex-shrink:0; margin-top:auto; padding:12px 8px 16px; background:#1c1c1e; border-top:1px solid #ffffff08; }
+.settingsButton { height:42px; }
+.updateButton { height:auto; min-height:52px; margin-bottom:6px; color:#b7dcbf; background:#b7dcbf08; }
+.updateButton:hover { background:#b7dcbf12; color:#d2ecd7; }
+.updateIcon { position:relative; display:flex; flex-shrink:0; }
+.updateDot { position:absolute; top:-3px; right:-4px; width:5px; height:5px; border-radius:50%; background:#a8d9b2; }
+.updateLabel { display:flex; flex-direction:column; gap:2px; font-size:12px; }
+.updateVersion { color:#8f9f92; font-size:11px; }
+.brand { display:flex; align-items:center; gap:12px; padding:14px 20px 24px; color:var(--text-primary); }
+.brandLogo { width:28px; height:28px; object-fit:contain; flex-shrink:0; }
+.brand span { font-family:var(--font-display); font-size:16px; font-weight:650; letter-spacing:-.03em; white-space:nowrap; }
+.navLabel { white-space:nowrap; }
+.navGroup { margin:20px 12px 10px; font-size:11px; font-weight:500; color:#777781; }
+.navButton { min-height:38px; height:38px; gap:12px; padding-inline:12px; border-radius:7px; color:#a8a8b0; font-size:13px; font-weight:400; transition:background 160ms,color 160ms; }
+.navButton[data-active='true'] { color:#f4f4f5; background:#ffffff0a; box-shadow:none; font-weight:500; }
+.navButton svg { width:16px; height:16px; stroke-width:1.6; }
+.content { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.mainColumn > .content { margin:12px 6px 12px 0; }
+.mainColumn > .content > .contentInner { padding-top:16px; padding-right:30px; padding-bottom:28px; }
+.mainColumn { --workspace-art: none; background-image: linear-gradient(180deg,#101011f5,#101011fa),var(--workspace-art); background-size: cover; background-position: center; }
+.contentInner { display:flex; flex-direction:column; width:100%; min-height:100%; min-width:0; margin-inline:auto; padding:28px 36px 40px; }
+.contentWidthform { max-width:760px; }
+.contentWidthsetup { max-width:960px; }
+.contentWidthwide { max-width:1200px; }
+.footer { flex:0 0 auto; padding:16px 36px; border-top:1px solid var(--border); background:var(--background); }
+.sidebarToggle { width:32px; height:30px; min-height:30px; border-radius:4px; color:#9999a3; }
+.sidebarToggle svg { width:15px; height:15px; stroke-width:1.5; }
+.workspace[data-sidebar-collapsed='true'] { --app-sidebar-width:64px; }
+.workspace[data-sidebar-collapsed='true'] .navLabel,
+.workspace[data-sidebar-collapsed='true'] .navGroup,
+.workspace[data-sidebar-collapsed='true'] .brand span { display:none; }
+.workspace[data-sidebar-collapsed='true'] .brand { justify-content:center; padding:14px 0 24px; }
+.workspace[data-sidebar-collapsed='true'] .navButton { justify-content:center; padding-inline:0; }
+.workspace[data-sidebar-collapsed='true'] li:has(.navGroup) { margin-top:18px; }
+@media(max-width:959px) { .workspace { --app-sidebar-width:184px; } .contentInner { padding:24px; } .brand { padding-inline:16px; gap:8px; } .brand span { font-size:14px; } }
+@media(max-width:699px) { .workspace { --app-sidebar-width:64px; } .navLabel,.navGroup,.brand span { display:none; } .brand { justify-content:center; padding:14px 0 24px; } .navButton { justify-content:center; padding:0; } .contentInner { padding:20px 16px; } }
+@media(forced-colors:active) { .navButton[data-active='true'] { outline:2px solid Highlight; } }

@@ -1,0 +1,181 @@
+.setupLayout {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.formColumn {
+  width: min(100%, var(--content-form));
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.stage {
+  width: 100%;
+  min-width: 0;
+}
+
+.stage h2 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+}
+
+.stage h2:focus { outline:none; }
+
+.stageForward {
+  animation: stage-forward 280ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.stageBackward {
+  animation: stage-backward 280ms cubic-bezier(.22,1,.36,1) both;
+}
+
+.stageSteady {
+  animation: stage-fade 280ms ease-out both;
+}
+
+.noticeRegion,
+.runtimeNotice {
+  margin-top: var(--space-6);
+}
+
+.noticeRegion:focus {
+  outline: none;
+}
+
+.noticeRegion:focus-visible {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+}
+
+.validationContent {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.validationList {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.validationLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.footerActions {
+  display: flex;
+  width: min(100%, var(--content-form));
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0 auto;
+}
+
+.footerRight {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+
+.saveStatus {
+  flex: 0 1 auto;
+}
+
+@keyframes stage-forward {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stage-backward {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes stage-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 599px) {
+  .setupLayout {
+    gap: var(--space-6);
+  }
+
+  .footerActions,
+  .footerRight {
+    flex-wrap: wrap;
+  }
+
+  .footerRight {
+    margin-left: auto;
+  }
+
+  .saveStatus {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 419px) {
+  .footerActions,
+  .footerRight {
+    width: 100%;
+  }
+
+  .footerRight {
+    margin-left: 0;
+  }
+
+  .footerActions > button,
+  .footerRight > button {
+    width: 100%;
+  }
+
+  .footerRight > button {
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stageForward,
+  .stageBackward,
+  .stageSteady {
+    animation-duration: 0.01ms;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .noticeRegion:focus-visible {
+    outline-color: Highlight;
+  }
+}

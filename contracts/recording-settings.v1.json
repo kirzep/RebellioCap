@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "ranges": {
+    "width": {
+      "min": 64,
+      "max": 16384
+    },
+    "height": {
+      "min": 64,
+      "max": 16384
+    },
+    "fps": {
+      "min": 1,
+      "max": 240
+    },
+    "bitrate": {
+      "min": 1000000,
+      "max": 200000000
+    },
+    "replay_seconds": {
+      "min": 1,
+      "max": 3600
+    },
+    "replay_memory_limit_mb": {
+      "min": 64,
+      "max": 8192
+    }
+  },
+  "defaults": {
+    "save_replay_hotkey": {
+      "key": 121,
+      "ctrl": false,
+      "alt": true,
+      "shift": false,
+      "win": false
+    },
+    "toggle_recording_hotkey": {
+      "key": 82,
+      "ctrl": true,
+      "alt": false,
+      "shift": true,
+      "win": false
+    }
+  },
+  "messages": {
+    "width": "Ширина должна быть чётным числом от 64 до 16384",
+    "height": "Высота должна быть чётным числом от 64 до 16384",
+    "fps": "Частота должна быть целым числом от 1 до 240 кадров/с",
+    "bitrate": "Битрейт должен быть от 1 до 200 Мбит/с",
+    "replay_seconds": "Длительность Replay должна быть от 1 до 3600 секунд",
+    "replay_memory_limit_mb": "Лимит памяти должен быть 0 (авто) или целым числом от 64 до 8192 МиБ"
+  }
+}

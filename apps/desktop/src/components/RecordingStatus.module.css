@@ -1,0 +1,9 @@
+.status { display:flex; align-items:center; gap:20px; padding-inline:12px; font-size:11px; line-height:1.4; color:#a8a8b0; }
+.item { display:flex; align-items:center; gap:7px; white-space:nowrap; }
+.memory { white-space:normal; color:#e1bf8c; }
+.dot { width:6px; height:6px; flex-shrink:0; border-radius:50%; background:#5d5d66; }
+.dot[data-state='replay'] { background:#91b9a0; }
+.dot[data-state='recording'] { background:#ed8b87; }
+.item:has([data-state='recording']) { color:#edb1ad; }
+@media(max-width:959px) { .status { gap:14px; padding-inline:8px; } }
+@media(forced-colors:active) { .dot { border:1px solid CanvasText; } }

@@ -1,0 +1,9 @@
+.container { display:grid; min-width:0; gap:12px; }
+.header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.headerCopy { display:grid; min-width:0; gap:8px; }
+.title { margin:0; color:var(--text-secondary); font-family:var(--font-body); font-size:13px; font-weight:400; line-height:1.5; }
+.title::before { content:''; display:inline-block; width:6px; height:6px; margin-right:8px; vertical-align:middle; border-radius:50%; background:var(--muted-foreground); }
+.title[data-tone='success']::before { background:var(--success); }
+.title[data-tone='danger']::before { background:var(--danger); }
+.title[data-tone='warning']::before { background:var(--warning); }
+.title[data-tone='busy']::before { background:var(--primary); }

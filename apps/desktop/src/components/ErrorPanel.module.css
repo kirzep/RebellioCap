@@ -1,0 +1,36 @@
+.panel {
+  width: min(100%, 680px);
+  margin: auto;
+  padding: 40px 0;
+}
+
+.title {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 599px) {
+  .panel {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 419px) {
+  .actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .actions > * {
+    width: 100%;
+  }
+}

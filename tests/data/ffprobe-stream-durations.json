@@ -1,0 +1,18 @@
+{
+  "streams": [
+    { "index": 0, "codec_type": "video", "duration": "30.000" },
+    { "index": 1, "codec_type": "audio", "duration": "29.980" },
+    { "index": 2, "codec_type": "audio", "duration": "29.990" },
+    { "index": 3, "codec_type": "audio", "duration": "29.980" }
+  ],
+  "packets": [
+    { "stream_index": 0, "pts_time": "0.000", "dts_time": "0.000", "duration_time": "0.017" },
+    { "stream_index": 0, "pts_time": "29.983", "dts_time": "29.983", "duration_time": "0.017" },
+    { "stream_index": 1, "pts_time": "0.025", "dts_time": "0.025", "duration_time": "0.020" },
+    { "stream_index": 1, "pts_time": "29.985", "dts_time": "29.985", "duration_time": "0.020" },
+    { "stream_index": 2, "pts_time": "0.010", "dts_time": "0.010", "duration_time": "0.020" },
+    { "stream_index": 2, "pts_time": "29.980", "dts_time": "29.980", "duration_time": "0.020" },
+    { "stream_index": 3, "pts_time": "0.020", "dts_time": "0.020", "duration_time": "0.020" },
+    { "stream_index": 3, "pts_time": "29.980", "dts_time": "29.980", "duration_time": "0.020" }
+  ]
+}

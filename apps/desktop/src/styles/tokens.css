@@ -1,0 +1,112 @@
+:root {
+  color-scheme: dark;
+
+  --window-gutter: 3rem;
+
+  --canvas: var(--background);
+  --surface: var(--card);
+  --surface-subtle: var(--secondary);
+  --surface-raised: var(--accent);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --separator: var(--border);
+  --control-border: var(--input);
+  --brand: var(--primary);
+  --accent-hover: color-mix(in oklch, var(--primary), white 10%);
+  --accent-pressed: color-mix(in oklch, var(--primary), black 10%);
+  --on-accent: var(--primary-foreground);
+  --accent-soft: color-mix(in oklch, var(--primary) 14%, var(--card));
+  --success: oklch(0.78 0.12 155);
+  --danger: oklch(0.78 0.13 25);
+  --danger-soft: color-mix(in oklch, var(--destructive) 14%, var(--card));
+  --warning: oklch(0.82 0.12 80);
+  --warning-soft: color-mix(in oklch, var(--warning) 12%, var(--card));
+
+  --font-display: 'Golos Text Variable', 'Manrope Variable', 'Segoe UI Variable Text',
+    'Segoe UI', sans-serif;
+  --font-body: 'Golos Text Variable', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, monospace;
+
+  --text-display-size: 2rem;
+  --text-display-line: 2.5rem;
+  --text-title-size: 1.5rem;
+  --text-title-line: 2rem;
+  --text-section-size: 1.125rem;
+  --text-section-line: 1.625rem;
+  --text-body-size: 0.875rem;
+  --text-body-line: 1.375rem;
+  --text-label-size: 0.875rem;
+  --text-label-line: 1.25rem;
+  --text-hint-size: 0.8125rem;
+  --text-hint-line: 1.25rem;
+
+  --radius-control: calc(var(--radius) * 0.8);
+  --radius-surface: var(--radius);
+  --control-height: 2.5rem;
+  --icon-target: 2.5rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --content-wide: 60rem;
+  --content-setup: 55rem;
+  --content-form: 42.5rem;
+  --header-height: 3.5rem;
+  --footer-min-height: 4.75rem;
+
+  --duration-fast: 120ms;
+  --duration-page: 180ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-popup: var(--shadow-lg);
+}
+
+@media (max-width: 1099px) {
+  :root {
+    --window-gutter: 2rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  :root {
+    --window-gutter: 3rem;
+  }
+}
+
+@media (max-width: 799px) {
+  :root {
+    --window-gutter: 1.25rem;
+    --text-title-size: 1.5rem;
+    --text-title-line: 2rem;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    color-scheme: light dark;
+    --canvas: Canvas;
+    --surface: Canvas;
+    --surface-subtle: Canvas;
+    --surface-raised: Canvas;
+    --text-primary: CanvasText;
+    --text-secondary: CanvasText;
+    --separator: GrayText;
+    --control-border: ButtonText;
+    --brand: Highlight;
+    --accent-hover: Highlight;
+    --accent-pressed: Highlight;
+    --on-accent: HighlightText;
+    --accent-soft: Canvas;
+    --danger: CanvasText;
+    --danger-soft: Canvas;
+    --warning: CanvasText;
+    --warning-soft: Canvas;
+  }
+}

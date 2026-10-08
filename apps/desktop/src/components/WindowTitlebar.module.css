@@ -1,0 +1,8 @@
+.titlebar { display:flex; align-items:center; flex:0 0 auto; min-height:36px; padding:0 8px; gap:8px; background:#1c1c1e; user-select:none; }
+.dragRegion { flex:1; align-self:stretch; min-width:32px; }
+.leading,.controls { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.controls { padding:0; background:transparent; }
+.control,.close { width:36px; height:30px; min-height:30px; border-radius:4px; color:#86868e; }
+.control svg,.close svg { width:14px; height:14px; }
+.close:hover { background:#c44e4e; color:#fff; }
+.error { max-width:384px; font-size:12px; color:var(--danger); }

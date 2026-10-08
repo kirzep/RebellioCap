@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RebellioCapFirstRunEvidenceManifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "timestamp",
+    "gitCommit",
+    "isDirty",
+    "environment",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gitCommit": {
+      "type": "string"
+    },
+    "isDirty": {
+      "type": "boolean"
+    },
+    "environment": {
+      "type": "object",
+      "required": ["os", "arch", "gpu"],
+      "properties": {
+        "os": { "type": "string" },
+        "arch": { "type": "string" },
+        "gpu": { "type": "string" },
+        "driverVersion": { "type": "string" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "category"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": [
+              "screenshot",
+              "log",
+              "test_report",
+              "media_metadata",
+              "security_scan"
+            ]
+          },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

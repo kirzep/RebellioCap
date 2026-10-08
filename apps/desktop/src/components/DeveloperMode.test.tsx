@@ -1,0 +1,21 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { DeveloperBrand, DeveloperLogsPanel } from './DeveloperMode';
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+afterEach(() => { cleanup(); vi.resetAllMocks(); Reflect.deleteProperty(window, '__TAURI_INTERNALS__'); });
+it('reveals log export only after the tenth logo click and reports the saved archive', async () => {
+  Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true });
+  let clicks=0;
+  vi.mocked(invoke).mockImplementation(async command => command === 'developer_click' ? ++clicks >= 10 : command === 'export_application_logs' ? 'D:\\Reports\\logs.zip' : false);
+  render(<><DeveloperBrand /><DeveloperLogsPanel /></>);
+  expect(screen.queryByRole('button', { name: 'Скачать логи приложения' })).not.toBeInTheDocument();
+  const logo=screen.getByRole('button', { name: 'RebellioCap' });
+  for (let n=0;n<9;n++) fireEvent.click(logo);
+  await waitFor(() => expect(invoke).toHaveBeenCalledTimes(10));
+  expect(screen.queryByText('Режим разработчика включен')).not.toBeInTheDocument();
+  fireEvent.click(logo);
+  await screen.findByText('Режим разработчика включен');
+  fireEvent.click(screen.getByRole('button', { name: 'Скачать логи приложения' }));
+  await screen.findByText('Логи сохранены: D:\\Reports\\logs.zip');
+});

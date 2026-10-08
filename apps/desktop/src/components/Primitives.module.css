@@ -1,0 +1,19 @@
+.inlineStatus { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 0; font-size: var(--text-hint-size); line-height: var(--text-hint-line); }
+.statusMarker { width: 0.4375rem; height: 0.4375rem; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+.statusNeutral, .statusBusy { color: var(--muted-foreground); }
+.statusSuccess { color: var(--success); }
+.statusWarning { color: var(--warning); }
+.statusDanger { color: var(--danger); }
+.button:disabled { opacity: 1; color: var(--text-secondary); background: var(--surface-subtle); border: 1px solid var(--separator); box-shadow: none; }
+
+.errorNotice { padding: 14px 16px; gap: 6px; border-radius: 8px; font-size: 13px; }
+.errorNotice [data-slot='alert-description'] { font-size: 12px; }
+.errorNotice [data-slot='alert-title'] { font-weight: 500; }
+.errorNotice [data-slot='alert-description'] { color: var(--text-primary); gap: 8px; }
+.noticeDanger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 16%, var(--separator)); background: color-mix(in srgb, var(--danger) 3%, var(--surface)); }
+.noticeWarning { border-color: color-mix(in srgb, var(--warning) 35%, var(--separator)); }
+.errorNotice summary { min-height: 0; padding-block: 4px; color: var(--text-secondary); }
+.errorNotice details[open] summary { margin-bottom: 8px; }
+@media (forced-colors: active) {
+  .errorNotice { color: CanvasText; background: Canvas; border-color: CanvasText; }
+}

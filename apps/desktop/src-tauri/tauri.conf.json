@@ -1,0 +1,93 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RebellioCap",
+  "mainBinaryName": "RebellioCap",
+  "version": "0.1.7",
+  "identifier": "com.rebelliocap.desktop",
+  "build": {
+    "beforeDevCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stage-desktop-engine.ps1 && npm run dev",
+    "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stage-desktop-engine.ps1 && npm run build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "dragDropEnabled": false,
+        "visible": false,
+        "title": "RebellioCap",
+        "width": 1120,
+        "height": 780,
+        "minWidth": 800,
+        "minHeight": 540,
+        "theme": "Dark",
+        "decorations": false,
+        "devtools": false,
+        "backgroundColor": "#201f1d",
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
+      },
+      {
+        "label": "overlay",
+        "visible": false,
+        "url": "index.html?overlay",
+        "title": "RebellioCap notifications",
+        "width": 420,
+        "height": 110,
+        "x": 24,
+        "y": 24,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "focusable": false,
+        "resizable": false,
+        "contentProtected": true,
+        "backgroundColor": "#00000000",
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
+      }
+    ],
+    "security": {
+      "capabilities": [
+        "default",
+        "overlay-events"
+      ],
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "resources": {
+      "resources/engine/": "engine/",
+      "../../../docs/licenses/": "licenses/"
+    },
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "shortDescription": "Запись игр и мгновенный повтор",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "Russian",
+          "English"
+        ],
+        "displayLanguageSelector": true
+      }
+    }
+  }
+}

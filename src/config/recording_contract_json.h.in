@@ -1,0 +1,5 @@
+#pragma once
+#include <string_view>
+namespace rebelliocap {
+inline constexpr std::string_view kRecordingContractJson = R"contract(@RECORDING_CONTRACT_JSON@)contract";
+}

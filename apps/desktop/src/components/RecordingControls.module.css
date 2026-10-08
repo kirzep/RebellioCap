@@ -1,0 +1,21 @@
+.controls { display:grid; min-width:0; gap:16px; }
+.actionGrid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:16px; }
+.replayAction,.continuousAction { position:relative; isolation:isolate; display:flex; flex-direction:column; justify-content:space-between; min-width:0; min-height:228px; padding:24px; gap:28px; border:1px solid var(--border); border-radius:12px; box-shadow:none; overflow:hidden; }
+.replayAction { --replay-art:url("../assets/replay-hero.png"); background-image:linear-gradient(100deg,#10101170 0%,#10101138 48%,#10101112 100%),var(--replay-art); background-color:#27272b; background-size:cover; background-position:center; }
+.continuousAction { background:#18181a; }
+.replayAction .actionDescription { color:#c0c0c8; }
+.replayAction .hotkey { color:#e2e2ea; background:#10101170; border-color:#ffffff24; }
+.replayAction [data-slot='card-header'],.continuousAction [data-slot='card-header'] { display:flex; justify-content:space-between; align-items:flex-start; padding:0; gap:12px; }
+.replayAction [data-slot='card-footer'],.continuousAction [data-slot='card-footer'] { padding:0; gap:12px; }
+.replayAction [data-slot='card-title'],.continuousAction [data-slot='card-title'] { font-family:var(--font-body); font-size:17px; font-weight:550; letter-spacing:-.02em; }
+.actionDescription { margin:10px 0 0; color:#a1a1aa; font-size:12px; line-height:1.65; max-width:220px; }
+.hotkey { flex-shrink:0; padding:4px 6px; color:#a8a8b2; background:#ffffff05; border:1px solid #ffffff14; border-radius:5px; font-family:var(--font-mono); font-size:10px; font-weight:400; line-height:16px; white-space:nowrap; }
+.recordingDot { width:8px; height:8px; background:currentColor; border-radius:50%; }
+.actionError { padding:12px; }
+.disabledExplanation { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.engineActions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:flex-start; }
+.engineButtons { display:flex; align-items:center; gap:8px; }
+.engineFeedback { flex-basis:100%; }
+@media(max-width:999px) { .replayAction,.continuousAction { padding:20px; } .actionGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } .replayAction [data-slot='card-header'],.continuousAction [data-slot='card-header'] { flex-wrap:wrap; } }
+@media(max-width:899px) { .actionGrid { grid-template-columns:minmax(0,1fr); } .replayAction,.continuousAction { min-height:180px; } }
+@media(forced-colors:active) { .replayAction,.continuousAction,.hotkey { background:Canvas; color:CanvasText; border-color:CanvasText; } }
