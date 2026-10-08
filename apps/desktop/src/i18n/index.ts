@@ -94,6 +94,9 @@ const subscribe = (notify: () => void) => { subscribers.add(notify); return () =
 export function getLanguageSnapshot(): LanguageSnapshot { return snapshot; }
 export function useLanguage(): LanguageSnapshot { return useSyncExternalStore(subscribe, getLanguageSnapshot); }
 export function getLocale(): 'ru-RU' | 'en-US' { return snapshot.language === 'ru' ? 'ru-RU' : 'en-US'; }
+export function editorHistoryLabel(source: 'Отменить' | 'Повторить'): string {
+  return snapshot.language === 'ru' ? source : englishCatalog[`${source} действие`];
+}
 function interpolate(source: string, values: readonly (string | number)[]): string {
   return source.replace(/\{(\d+)\}/g, (match, index: string) => values[Number(index)] === undefined ? match : String(values[Number(index)]));
 }

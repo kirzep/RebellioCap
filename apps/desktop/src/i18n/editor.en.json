@@ -7,8 +7,8 @@
   "Скопировать исходники вместе с проектом": "Copy source files with the project",
   "Экспорт": "Export",
   "Свернуть окно": "Minimize window",
-  "Выйти из полноэкранного режима": "Exit full screen",
-  "Полноэкранный режим": "Full screen",
+  "Выйти из полноэкранного режима": "Exit fullscreen",
+  "Полноэкранный режим": "Fullscreen",
   "Закрыть редактор": "Close editor",
   "Подготавливаем медиа…": "Preparing media…",
   "Отменить импорт": "Cancel import",
@@ -55,8 +55,6 @@
   "Контраст": "Contrast",
   "Насыщенность": "Saturation",
   "S — разрезать · Delete — удалить · Ctrl+Z — отменить · Ctrl+S — сохранить": "S — split · Delete — delete · Ctrl+Z — undo · Ctrl+S — save",
-  "Отменить": "Undo",
-  "Повторить": "Redo",
   "Монтаж": "Timeline",
   "Разрезать": "Split",
   "Удалить": "Delete",
@@ -177,5 +175,7 @@
   "Не удалось воспроизвести «{0}»: {1}. Нажмите «Воспроизвести», чтобы повторить.": "Could not play “{0}”: {1}. Click “Play” to retry.",
   "медиа": "media",
   "Монтаж слишком длинный для {0} МБ. Сократите его.": "The edit is too long for {0} MB. Shorten it.",
-  "Не удалось воспроизвести медиа: {0}. Нажмите «Воспроизвести», чтобы повторить.": "Could not play media: {0}. Click “Play” to retry."
+  "Не удалось воспроизвести медиа: {0}. Нажмите «Воспроизвести», чтобы повторить.": "Could not play media: {0}. Click “Play” to retry.",
+  "Отменить действие": "Undo",
+  "Повторить действие": "Redo"
 }

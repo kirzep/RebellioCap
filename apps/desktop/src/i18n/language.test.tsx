@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { LanguageSettings } from '../components/LanguageSettings';
+import { editorHistoryLabel } from './index';
+import coreCatalog from './core.en.json';
+import editorCatalog from './editor.en.json';
+import nativeCatalog from './native.en.json';
+import settingsCatalog from './settings.en.json';
 import { applyLanguageSettings, disposeLanguageInitialization, getLanguageSnapshot, initializeLanguage,
   languageForLocale, setLanguagePreference, t, type LanguageSettings as Settings } from './index';
 
@@ -12,6 +17,25 @@ beforeEach(() => { localStorage.clear(); vi.resetAllMocks(); });
 afterEach(() => { cleanup(); disposeLanguageInitialization(); Reflect.deleteProperty(window, '__TAURI_INTERNALS__'); vi.restoreAllMocks(); });
 
 describe('language selection', () => {
+  it('keeps shared translations consistent and distinguishes editor actions from dialog actions', () => {
+    const seen = new Map<string, string>();
+    for (const catalog of [coreCatalog, editorCatalog, nativeCatalog, settingsCatalog]) {
+      for (const [source, translated] of Object.entries(catalog)) {
+        if (seen.has(source)) expect(translated, source).toBe(seen.get(source));
+        seen.set(source, translated);
+      }
+    }
+    applyLanguageSettings({ preference: 'en', language: 'en' });
+    expect(t('Отменить')).toBe('Cancel');
+    expect(t('Повторить')).toBe('Retry');
+    expect(t('Отменить действие')).toBe('Undo');
+    expect(t('Повторить действие')).toBe('Redo');
+    expect(editorHistoryLabel('Отменить')).toBe('Undo');
+    expect(editorHistoryLabel('Повторить')).toBe('Redo');
+    applyLanguageSettings({ preference: 'ru', language: 'ru' });
+    expect(editorHistoryLabel('Отменить')).toBe('Отменить');
+    expect(editorHistoryLabel('Повторить')).toBe('Повторить');
+  });
   it('uses Russian only for Russian Windows/browser language variants', () => {
     for (const language of ['ru', 'ru-RU', 'ru-BY', 'RU_ru']) expect(languageForLocale(language)).toBe('ru');
     for (const language of ['en-US', 'de-DE', 'uk-UA', 'fr', '', 'russian']) expect(languageForLocale(language)).toBe('en');

@@ -69,7 +69,7 @@ Setup checks devices, the native engine, available memory, and output-folder acc
 
 ## Getting started
 
-Download the Windows EXE installer from [GitHub Releases](https://github.com/kirzep/RebellioCap/releases/latest). The desktop package declares version `0.1.11`. Published packages pass automated software checks; hardware and installer acceptance are documented separately in the [release policy](docs/releases.md).
+Download the Windows EXE installer from [GitHub Releases](https://github.com/kirzep/RebellioCap/releases/latest). The desktop package declares version `0.1.12`. Published packages pass automated software checks; hardware and installer acceptance are documented separately in the [release policy](docs/releases.md).
 
 The recording path requires **Windows x64**, an **NVIDIA GPU with compatible NVENC H.264 support**, and **WebView2**. See [system requirements](docs/system-requirements.md) before building. Development also needs MSVC C++ Build Tools with the Windows SDK and CMake/Ninja, Node.js 24 with npm, and Rust 1.90 or newer with the MSVC target.
 
