@@ -215,6 +215,8 @@ pub struct EngineSnapshot {
 #[serde(deny_unknown_fields)]
 pub struct MonitorChoice {
     pub id: String,
+    #[serde(default, rename = "legacyId", skip_serializing_if = "Option::is_none")]
+    pub legacy_id: Option<String>,
     pub name: String,
     pub width: u32,
     pub height: u32,

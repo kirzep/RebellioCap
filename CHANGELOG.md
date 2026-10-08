@@ -2,6 +2,12 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.14
+
+- Move the interface language selector above Settings in the sidebar, including access while collapsed.
+- Save persistent display identities and resolve current adapter addresses when starting or recovering capture. Migrate older saved addresses when they still identify a connected display.
+- Add audio gap/reset recovery integration coverage; the reported older-version audio epoch failure is already handled by the current engine.
+
 ## Unreleased
 
 ### Added

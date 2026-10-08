@@ -5,7 +5,6 @@ import { DeveloperLogsPanel } from './DeveloperMode';
 import { NotificationSettingsPanel } from './NotificationSettings';
 import { RecordingNameSettings } from '../naming/NamingSettings';
 import { ErrorNotice } from './Primitives';
-import { LanguageSettings } from './LanguageSettings';
 
 export function ApplicationSettings() {
   useTranslation();
@@ -47,7 +46,6 @@ export function ApplicationSettings() {
     <p className="text-sm text-muted-foreground">{t("Нажмите на значок в трее, чтобы вернуть окно. В меню по правой кнопке мыши доступны быстрые действия и «Выйти».")}</p>
     {!native && <p role="status">{t("Автозапуск доступен в установленном приложении Windows.")}</p>}
     <RecordingNameSettings />
-    <LanguageSettings />
     <NotificationSettingsPanel />
     <DeveloperLogsPanel />
     {error && <ErrorNotice title={t("Автозапуск")} technicalDetails={technicalError ?? undefined}>{t(error)}</ErrorNotice>}

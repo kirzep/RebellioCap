@@ -325,6 +325,9 @@ pub struct Bootstrap {
 pub async fn bootstrap_app(state: tauri::State<'_, HostState>) -> Result<Bootstrap> {
     crate::logging::record("info", "host", "command", serde_json::json!({"name":"bootstrap_app"}));
     dispatch(&state, |host| {
+        if let Ok(catalog) = host.executable().and_then(native::catalogs::load) {
+            host.store.migrate_monitor_identity(&catalog.monitors).map_err(|e| e.to_string())?;
+        }
         let saved = host.store.load().map_err(|e| e.to_string())?;
         if let Some(config) = &saved.active {
             if !host

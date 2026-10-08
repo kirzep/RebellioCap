@@ -155,6 +155,19 @@ TEST_CASE("Unexpected audio faults preserve diagnostics and never start recovery
   REQUIRE_FALSE(source.recovering());
   REQUIRE(attempts == 0);
 }
+TEST_CASE("Corrupt audio timestamps fail closed instead of retrying an endpoint") {
+  int attempts = 0;
+  RecoveringAudioSource source(std::make_unique<ErrorSource>(Error{
+      "audio.timestamp_invalid", "WASAPI timestamp exceeds signed QPC range", {}}), [&] {
+    ++attempts;
+    return RecoveringAudioSource::SourceResult::success(std::make_unique<Source>(false));
+  }, StreamKind::SystemAudio, 10'000'000, [] { return QpcTicks{0}; }, [](auto) {});
+  auto result = source.next_block(std::chrono::milliseconds(5));
+  REQUIRE_FALSE(result.is_success());
+  REQUIRE(result.error().code == "audio.timestamp_invalid");
+  REQUIRE_FALSE(source.recovering());
+  REQUIRE(attempts == 0);
+}
 TEST_CASE("Audio epoch bridge bounds catch-up work and propagates encoder failure") {
   PcmEpochBridge bridge(10'000'000);
   int calls = 0;

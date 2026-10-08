@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { ChevronDown, Globe } from 'lucide-react';
 import { setLanguagePreference, useLanguage, useTranslation, type LanguagePreference } from '../i18n';
+import styles from './WindowShell.module.css';
 
 export function LanguageSettings() {
   const { preference, ready } = useLanguage();
@@ -13,17 +15,21 @@ export function LanguageSettings() {
     catch { setError(true); }
     finally { setBusy(false); }
   }
-  return <section className="rounded-2xl border p-5">
-    <label htmlFor="application-language" className="block font-medium">{t('Язык интерфейса')}</label>
-    <select id="application-language" className="mt-3 w-full rounded-lg border bg-background p-3"
+  return <div>
+    <div className={styles.languageControl}>
+    <Globe className={styles.languageIcon} aria-hidden="true" />
+    <select id="application-language" className={styles.languageSelect}
+      aria-label={t('Язык интерфейса')} title={t('Язык интерфейса')}
       value={preference} disabled={busy || !ready} onChange={event => void change(event.target.value as LanguagePreference)}>
       <option value="system">{t('Как в Windows')}</option>
       <option value="ru">Русский</option>
       <option value="en">English</option>
     </select>
-    <p className="mt-2 text-sm text-muted-foreground">{t('Для русского языка Windows используется русский интерфейс, для остальных — английский.')}</p>
-    <p className="mt-2 text-sm text-muted-foreground">{t('Язык меняется сразу и сохраняется для следующего запуска.')}</p>
-    {busy && <p role="status" className="mt-2 text-sm">{t('Сохраняем язык…')}</p>}
-    {error && <p role="alert" className="mt-2 text-sm text-destructive">{t('Не удалось сохранить язык. Попробуйте ещё раз.')}</p>}
-  </section>;
+    <ChevronDown className={styles.languageChevron} aria-hidden="true" />
+    </div>
+    {busy && <p role="status" className="sr-only">{t('Сохраняем язык…')}</p>}
+    {error && <p role="alert" className={styles.languageError} title={t('Не удалось сохранить язык. Попробуйте ещё раз.')}>
+      <span aria-hidden="true">!</span><span className={styles.languageErrorText}>{t('Не удалось сохранить язык. Попробуйте ещё раз.')}</span>
+    </p>}
+  </div>;
 }

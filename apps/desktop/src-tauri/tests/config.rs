@@ -738,3 +738,31 @@ fn replay_memory_explicit_auto_survives_store_readback() {
     assert_eq!(loaded.draft.replay_memory_limit_mb, Some(0));
     assert_eq!(loaded.draft.fingerprint().unwrap(), selected.fingerprint().unwrap());
 }
+
+#[test]
+fn config_monitor_identity_migrates_only_exact_unique_current_legacy_address() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = ConfigStore::at(temp.path().into()).unwrap();
+    let mut value = draft(temp.path());
+    value.monitor_id = Some("123:0".into());
+    tested(&store, &value);
+    let mut available = devices();
+    available.monitor_ids = vec!["123:0".into()];
+    store.commit_completed(true, &available).unwrap();
+    let monitor = |id: &str, legacy: &str| MonitorChoice {
+        id: id.into(), legacy_id: Some(legacy.into()), name: "DISPLAY".into(),
+        width: 1920, height: 1080, primary: true,
+    };
+    let after_reboot = [monitor("monitor-path:00610062", "999:0")];
+    assert_eq!(store.migrate_monitor_identity(&after_reboot).unwrap().active.unwrap().monitor_id, "123:0");
+    let ambiguous = [monitor("monitor-path:00610062", "123:0"), monitor("monitor-path:00630064", "123:0")];
+    assert_eq!(store.migrate_monitor_identity(&ambiguous).unwrap().active.unwrap().monitor_id, "123:0");
+    let same_boot = [monitor("monitor-path:00610062", "123:0")];
+    let migrated = store.migrate_monitor_identity(&same_boot).unwrap();
+    assert_eq!(migrated.active.as_ref().unwrap().monitor_id, "monitor-path:00610062");
+    assert_eq!(migrated.draft.monitor_id.as_deref(), Some("monitor-path:00610062"));
+    assert_eq!(migrated.last_successful_test.unwrap().fingerprint, migrated.draft.fingerprint().unwrap());
+    assert_eq!(store.load().unwrap().active.unwrap().monitor_id, "monitor-path:00610062");
+    available.monitor_ids = vec!["monitor-path:00610062".into()];
+    validate_active(store.load().unwrap().active.as_ref().unwrap(), &available).unwrap();
+}

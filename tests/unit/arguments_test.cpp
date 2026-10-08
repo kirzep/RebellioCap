@@ -272,3 +272,49 @@ TEST_CASE("session numeric bounds match the capture contract") {
     REQUIRE(parsed.error().code == "cli.invalid_option_value");
   }
 }
+
+TEST_CASE("persistent monitor selection survives reboot and refuses other displays", "[arguments][monitor]") {
+  auto requested = parse({L"capture", L"--monitor", L"monitor-path:00610062", L"--output", L"unused"});
+  REQUIRE(requested.is_success());
+  const std::vector<MonitorInfo> rebooted{
+      {.id = {luid(999), 1, L"ab"}, .name = L"DISPLAY2"},
+      {.id = {luid(777), 0, L"cd"}, .name = L"DISPLAY1", .primary = true}};
+  auto selected = select_monitor(*requested.value().monitor, rebooted);
+  REQUIRE(selected.is_success());
+  REQUIRE(selected.value().id.adapter_luid.LowPart == 999);
+  REQUIRE(selected.value().id.output_index == 1);
+  REQUIRE(monitor_id_text(selected.value().id) == "monitor-path:00610062");
+  REQUIRE_FALSE(select_monitor(*requested.value().monitor, std::span(rebooted).subspan(1)).is_success());
+  auto duplicate = rebooted;
+  duplicate.push_back(rebooted.front());
+  REQUIRE_FALSE(select_monitor(*requested.value().monitor, duplicate).is_success());
+}
+
+TEST_CASE("legacy monitor IDs never guess by output suffix after reboot", "[arguments][monitor]") {
+  const std::vector<MonitorInfo> monitors{
+      {.id = {luid(999), 0, L"ab"}, .primary = true},
+      {.id = {luid(777), 0, L"cd"}}};
+  REQUIRE_FALSE(select_monitor({luid(123), 0}, monitors).is_success());
+  REQUIRE(select_monitor({luid(777), 0}, monitors).is_success());
+  REQUIRE_FALSE(parse({L"capture", L"--monitor", L"monitor-path:0000", L"--output", L"unused"}).is_success());
+  REQUIRE_FALSE(parse({L"capture", L"--monitor", L"monitor-path:zzzz", L"--output", L"unused"}).is_success());
+  REQUIRE_FALSE(parse({L"capture", L"--monitor", L"monitor-path:001", L"--output", L"unused"}).is_success());
+}
+
+TEST_CASE("cloned desktop source identity is the stable complete target set", "[arguments][monitor]") {
+  const std::vector<std::wstring> paths{L"TargetB", L"TargetA", L"TargetB"};
+  const std::vector<std::wstring> reordered{L"targeta", L"targetb"};
+  REQUIRE(monitor_source_identity(paths) == L"targeta|targetb");
+  REQUIRE(monitor_source_identity(paths) == monitor_source_identity(reordered));
+  const std::vector<std::wstring> single{L"targeta"};
+  REQUIRE(monitor_source_identity(paths) != monitor_source_identity(single));
+  const std::vector<std::wstring> incomplete{L"targeta", L""};
+  REQUIRE(monitor_source_identity(incomplete).empty());
+  const std::vector<MonitorInfo> catalog{
+      {.id = {luid(1), 0, monitor_source_identity(paths)}},
+      {.id = {luid(1), 1, L"other"}}};
+  const auto selected = select_monitor({{}, 0, L"targeta|targetb"}, catalog);
+  REQUIRE(selected.is_success());
+  REQUIRE(selected.value().id.output_index == 0);
+  REQUIRE_FALSE(select_monitor({{}, 0, L"targeta"}, catalog).is_success());
+}

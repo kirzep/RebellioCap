@@ -156,6 +156,34 @@ impl ConfigStore {
         Ok(state)
     }
 
+    /// Upgrade only a live, exact legacy address. Output indices alone cannot
+    /// identify a physical display after reboot or topology changes.
+    pub fn migrate_monitor_identity(&self, monitors: &[crate::model::MonitorChoice]) -> Result<StoredState> {
+        let _lock = self.lock()?;
+        let mut state = self.load_locked()?;
+        let replacement = |id: &str| -> Option<String> {
+            let (adapter, output) = id.split_once(':')?;
+            adapter.parse::<u64>().ok()?;
+            output.parse::<u32>().ok()?;
+            let matches: Vec<_> = monitors.iter().filter(|monitor|
+                monitor.legacy_id.as_deref() == Some(id) && monitor.id.starts_with("monitor-path:")).collect();
+            if matches.len() != 1 || monitors.iter().filter(|m| m.id == matches[0].id).count() != 1 { return None; }
+            Some(matches[0].id.clone())
+        };
+        let mut changed = false;
+        if let Some(id) = state.draft.monitor_id.as_ref().and_then(|id| replacement(id)) {
+            state.draft.monitor_id = Some(id);
+            changed = true;
+            let fingerprint = state.draft.fingerprint()?;
+            if let Some(test) = &mut state.last_successful_test { test.fingerprint = fingerprint; }
+        }
+        if let Some(active) = &mut state.active {
+            if let Some(id) = replacement(&active.monitor_id) { active.monitor_id = id; changed = true; }
+        }
+        if changed { validate_state(&state)?; self.persist(&state)?; }
+        Ok(state)
+    }
+
     fn load_locked(&self) -> Result<StoredState> {
         self.cleanup()?;
         // Path-policy failures and transient I/O errors are not evidence of bad

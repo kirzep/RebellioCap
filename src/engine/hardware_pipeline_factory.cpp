@@ -220,13 +220,10 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
           pipeline_error("capture.device_removed", "The graphics device was removed.", static_cast<long>(removed)));
         auto monitors = enumerate_monitors();
         if (!monitors.is_success()) return RecoveringCaptureSource::SourceResult::failure(monitors.error());
-        const auto found = std::find_if(monitors.value().begin(), monitors.value().end(),
-          [&](const MonitorInfo& current) { return current.name == monitor.name &&
-            current.id.adapter_luid.HighPart == monitor.id.adapter_luid.HighPart &&
-            current.id.adapter_luid.LowPart == monitor.id.adapter_luid.LowPart; });
-        if (found == monitors.value().end()) return RecoveringCaptureSource::SourceResult::failure(
+        const auto found = select_monitor(monitor.id, monitors.value());
+        if (!found.is_success()) return RecoveringCaptureSource::SourceResult::failure(
           pipeline_error("capture.monitor_unavailable", "Waiting for the selected monitor to return."));
-        auto recreated = DxgiCaptureSource::create(device_, found->id, clock);
+        auto recreated = DxgiCaptureSource::create(device_, found.value().id, clock);
         if (!recreated.is_success()) return RecoveringCaptureSource::SourceResult::failure(recreated.error());
         const auto mode = recreated.value()->description().ModeDesc;
         const auto rotation = recreated.value()->description().Rotation;
@@ -905,7 +902,8 @@ Result<nlohmann::json> HardwarePipelineFactory::catalog() {
   nlohmann::json result{{"protocolVersion",1},{"type","catalog"},{"monitors",nlohmann::json::array()},
     {"systemAudio",nlohmann::json::array()},{"microphones",nlohmann::json::array()}};
   for(const auto& monitor:monitors.value()) result["monitors"].push_back({
-    {"id",monitor_id_text(monitor.id)},{"name",utf8(monitor.name)},{"primary",monitor.primary},
+    {"id",monitor_id_text(monitor.id)},{"legacyId",std::to_string(monitor_id_value(monitor.id))+":"+std::to_string(monitor.id.output_index)},
+    {"name",utf8(monitor.name)},{"primary",monitor.primary},
     {"width",monitor.desktop_rect.right-monitor.desktop_rect.left},{"height",monitor.desktop_rect.bottom-monitor.desktop_rect.top}});
   for(const auto& endpoint:system.value()) result["systemAudio"].push_back({
     {"id",utf8(endpoint.id)},{"name",utf8(endpoint.name)},{"defaultConsole",endpoint.default_console}});

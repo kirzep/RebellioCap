@@ -10,6 +10,7 @@ import { Sidebar, SidebarProvider, SidebarContent, SidebarFooter,
   SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from './ui/sidebar';
 import styles from './WindowShell.module.css';
 import { UpdateNotice } from './UpdateNotice';
+import { LanguageSettings } from './LanguageSettings';
 import type { AvailableUpdate, UpdateProgress } from '../bridge/contracts';
 
 export interface WindowShellNavigationItem {
@@ -132,6 +133,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
         {settingsNavigation && <SidebarFooter className={styles.settingsFooter}>
           <SidebarMenu>
             {availableUpdate && onInstallUpdate && <UpdateNotice update={availableUpdate} onInstall={onInstallUpdate} disabled={settingsNavigation.disabled} />}
+            <SidebarMenuItem><LanguageSettings /></SidebarMenuItem>
             <SidebarMenuItem>
             <SidebarMenuButton type="button" size="lg" className={cn(styles.navButton, styles.settingsButton)}
               isActive={settingsNavigation.id === activeNavigation}

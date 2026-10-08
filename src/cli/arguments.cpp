@@ -46,6 +46,26 @@ Result<std::uint32_t> bounded_decimal(std::wstring_view text, std::uint32_t mini
 }
 
 Result<MonitorId> parse_monitor(std::wstring_view text) {
+  constexpr std::wstring_view prefix = L"monitor-path:";
+  if (text.starts_with(prefix)) {
+    text.remove_prefix(prefix.size());
+    std::wstring path;
+    if (text.empty() || text.size() > 4080 || text.size() % 4 != 0)
+      return Result<MonitorId>::failure(cli_error("cli.invalid_option_value", "Invalid monitor device path."));
+    for (std::size_t offset = 0; offset < text.size(); offset += 4) {
+      unsigned value = 0;
+      for (std::size_t digit = 0; digit < 4; ++digit) {
+        const auto character = text[offset + digit];
+        if (!((character >= L'0' && character <= L'9') || (character >= L'a' && character <= L'f')))
+          return Result<MonitorId>::failure(cli_error("cli.invalid_option_value", "Invalid monitor device path."));
+        value = value * 16 + (character <= L'9' ? character - L'0' : character - L'a' + 10);
+      }
+      if (value < 32 || value == 127)
+        return Result<MonitorId>::failure(cli_error("cli.invalid_option_value", "Invalid monitor device path."));
+      path.push_back(static_cast<wchar_t>(value));
+    }
+    return Result<MonitorId>::success({{}, 0, std::move(path)});
+  }
   const auto separator = text.find(L':');
   if (separator == std::wstring_view::npos || separator == 0 ||
       separator + 1 >= text.size() || text.find(L':', separator + 1) != std::wstring_view::npos) {
@@ -273,12 +293,18 @@ Result<CliArguments> parse_arguments(std::span<const std::wstring_view> argument
 
 Result<MonitorInfo> select_monitor(MonitorId requested,
                                    std::span<const MonitorInfo> monitors) {
+  const MonitorInfo* selected = nullptr;
   for (const auto& monitor : monitors) {
-    if (same_luid(requested.adapter_luid, monitor.id.adapter_luid) &&
-        requested.output_index == monitor.id.output_index) {
-      return Result<MonitorInfo>::success(monitor);
+    const bool matches = !requested.device_path.empty()
+        ? requested.device_path == monitor.id.device_path
+        : same_luid(requested.adapter_luid, monitor.id.adapter_luid) &&
+          requested.output_index == monitor.id.output_index;
+    if (matches) {
+      if (selected) return Result<MonitorInfo>::failure(cli_error("cli.ambiguous_monitor", "The selected monitor identity is ambiguous."));
+      selected = &monitor;
     }
   }
+  if (selected) return Result<MonitorInfo>::success(*selected);
   return Result<MonitorInfo>::failure(
       cli_error("cli.unknown_monitor", "The selected monitor is not in the current DXGI catalog."));
 }
@@ -297,6 +323,15 @@ std::uint64_t monitor_id_value(MonitorId id) noexcept {
 }
 
 std::string monitor_id_text(MonitorId id) {
+  if (!id.device_path.empty()) {
+    std::string result = "monitor-path:";
+    constexpr char hex[] = "0123456789abcdef";
+    for (const auto character : id.device_path) {
+      const auto value = static_cast<unsigned>(character);
+      for (int shift = 12; shift >= 0; shift -= 4) result.push_back(hex[(value >> shift) & 15]);
+    }
+    return result;
+  }
   return std::to_string(monitor_id_value(id)) + ":" + std::to_string(id.output_index);
 }
 

@@ -1,7 +1,89 @@
 #include <catch2/catch_test_macros.hpp>
 #include "audio/pcm_normalizer.h"
 #include "audio/wasapi_timeline.h"
+#include "audio/pcm_epoch_bridge.h"
+#include "audio/pcm_windowizer.h"
+#include "audio/audio_mixer.h"
 using namespace rebelliocap;
+TEST_CASE("Device epoch changes preserve normalized source and mixed audio capture time") {
+  enum class Change { Gap, Reset, Discontinuity };
+  for (const auto change : {Change::Gap, Change::Reset, Change::Discontinuity}) {
+    DYNAMIC_SECTION("device change " << static_cast<int>(change)) {
+      QpcClock clock;
+      const auto frequency = clock.frequency();
+      const auto period = frequency / 100;
+      const auto anchor = frequency;
+      audio_detail::WasapiTimeline timeline(frequency);
+      PcmNormalizer normalizer(clock);
+      PcmEpochBridge bridge(frequency);
+      SynchronizedPcmWindows windows(frequency);
+      AudioMixer mixer;
+      std::vector<PcmBlock> source_track, mixed_track;
+      const auto sink = [&](const PcmBlock& aligned) {
+        source_track.push_back(aligned);
+        windows.push_system(aligned);
+        auto microphone = aligned;
+        microphone.stream = StreamKind::MicrophoneAudio;
+        microphone.interleaved.assign(aligned.interleaved.size(), 0.F);
+        microphone.silent = true;
+        windows.push_microphone(microphone);
+        while (auto pair = windows.pop()) {
+          auto mixed = mixer.mix(pair->system, pair->microphone, 1.F, 1.F);
+          REQUIRE(mixed.is_success());
+          mixed_track.push_back(std::move(mixed).value());
+        }
+        return Result<void>::success();
+      };
+      const auto consume = [&](PcmBlock block) {
+        auto normalized = normalizer.normalize(std::move(block), StreamKind::SystemAudio);
+        REQUIRE(normalized.is_success());
+        for (auto& output : normalized.value()) REQUIRE(bridge.accept(std::move(output), sink).is_success());
+      };
+      PcmBlock first{StreamKind::SystemAudio, anchor, 48'000, 2, std::vector<float>(960, .1F), 3};
+      REQUIRE(timeline.stamp(first, 0, 480).is_success());
+      consume(first);
+      auto changed = first;
+      changed.pts = anchor + (change == Change::Gap ? 3 : 1) * period;
+      changed.interleaved.assign(960, .2F);
+      changed.discontinuity = change == Change::Discontinuity;
+      const std::uint64_t position = change == Change::Gap ? 1440 : change == Change::Reset ? 0 : 480;
+      auto epoch = timeline.stamp(changed, position, 480);
+      REQUIRE_FALSE(epoch.is_success());
+      REQUIRE(epoch.error().code == "audio.epoch_required");
+      // Apply the capture source's new-epoch boundary, then exercise the real
+      // normalization, AAC-input bridge, windowizer, and mixer components.
+      timeline = audio_detail::WasapiTimeline(frequency);
+      changed.discontinuity = true;
+      REQUIRE(timeline.stamp(changed, position, 480).is_success());
+      consume(changed);
+      auto healthy = changed;
+      healthy.pts += period;
+      healthy.discontinuity = false;
+      healthy.interleaved.assign(960, .3F);
+      REQUIRE(timeline.stamp(healthy, position + 480, 480).is_success());
+      consume(healthy);
+      const std::size_t count = change == Change::Gap ? 5 : 3;
+      REQUIRE(source_track.size() == count);
+      REQUIRE(mixed_track.size() == count);
+      for (std::size_t i = 0; i < count; ++i) {
+        REQUIRE(source_track[i].pts == anchor + static_cast<QpcTicks>(i) * period);
+        REQUIRE(mixed_track[i].pts == source_track[i].pts);
+        REQUIRE_FALSE(source_track[i].discontinuity);
+        REQUIRE_FALSE(mixed_track[i].discontinuity);
+        REQUIRE(mixed_track[i].interleaved == source_track[i].interleaved);
+      }
+      if (change == Change::Gap) {
+        REQUIRE(source_track[1].silent);
+        REQUIRE(source_track[2].silent);
+      }
+      REQUIRE(source_track[count - 2].interleaved == std::vector<float>(960, .2F));
+      REQUIRE(source_track.back().interleaved == std::vector<float>(960, .3F));
+      REQUIRE(normalizer.statistics().segments == 2);
+      REQUIRE(normalizer.statistics().accepted_frames == 1440);
+      REQUIRE(windows.dropped_frames() == 0);
+    }
+  }
+}
 static PcmBlock packet(QpcTicks pts) { return {StreamKind::SystemAudio, pts, 48000, 2, std::vector<float>(960)}; }
 TEST_CASE("Large native QPC jumps request source recovery without trusting the bad packet") {
   for (const auto raw : {QpcTicks{979999}, QpcTicks{600'000'000}}) {
