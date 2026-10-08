@@ -2,8 +2,13 @@ name: Desktop checks
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: desktop-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -37,6 +42,8 @@ jobs:
         run: npm run test:e2e -w @rebelliocap/desktop
 
   native-unit:
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
     runs-on: windows-2025
     timeout-minutes: 90
     steps:
@@ -54,15 +61,47 @@ jobs:
           rustc --version
           cargo --version
           git --version
+      # Cache package archives, not the installed tree; vcpkg checks each package ABI.
+      - name: Restore native dependency cache
+        id: native-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/vcpkg
+          key: windows-2025-x64-vcpkg-v1-${{ hashFiles('vcpkg*.json', 'scripts/bootstrap-vcpkg.ps1', 'third_party/vcpkg-ports/**', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            windows-2025-x64-vcpkg-v1-${{ hashFiles('vcpkg*.json', 'scripts/bootstrap-vcpkg.ps1', 'third_party/vcpkg-ports/**', 'cmake/**') }}-
+            windows-2025-x64-vcpkg-v1-
+      - name: Prepare native cache directory
+        run: New-Item -ItemType Directory -Force -Path .cache/vcpkg | Out-Null
       - name: Bootstrap pinned vcpkg
         run: ./scripts/bootstrap-vcpkg.ps1
       - name: Configure
         run: ./scripts/invoke-dev.ps1 -Command @('cmake', '--preset', 'windows-debug')
+      # Save before later tests so a test failure does not discard expensive packages.
+      - name: Save native dependency cache
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/vcpkg
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Build
         run: ./scripts/invoke-dev.ps1 -Command @('cmake', '--build', '--preset', 'windows-debug')
       - name: C++ and script unit checks
         run: ./scripts/invoke-dev.ps1 -Command @('ctest', '--preset', 'windows-debug', '--output-on-failure')
       - name: Stage runtime for Rust compile
         run: ./scripts/stage-desktop-engine.ps1 -BuildDirectory build/windows-debug
+      - name: Restore Rust cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            apps/desktop/src-tauri/target/debug/deps
+            apps/desktop/src-tauri/target/debug/build
+            apps/desktop/src-tauri/target/debug/.fingerprint
+          key: windows-2025-rust-1.98.1-debug-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-${{ github.sha }}
+          restore-keys: |
+            windows-2025-rust-1.98.1-debug-v1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml', 'vcpkg*.json', 'third_party/vcpkg-ports/**') }}-
       - name: Rust host checks
         run: ./scripts/invoke-dev.ps1 -Command @('cargo', 'test', '--locked', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml')
