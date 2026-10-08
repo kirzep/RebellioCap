@@ -1,4 +1,9 @@
 import { t, useTranslation } from '../i18n';
+
+function playbackErrorText(error: string): string {
+  const track = /^Не удалось воспроизвести дорожку «(.*)»\.$/s.exec(error);
+  return track ? t('Не удалось воспроизвести дорожку «{0}».', t(track[1])) : t(error);
+}
 import {NativeSelect,NativeSelectOption} from './ui/native-select';
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Dialog } from 'radix-ui';
@@ -172,7 +177,7 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
   }, [mixerOpen]);
 
   const activeTracks = volumes.filter(volume => volume > 0).length;
-  const channels = media.tracks.map((track, index) => ({ track, index })).sort((a, b) => Number(a.track.label === t('Системный звук + микрофон')) - Number(b.track.label === t('Системный звук + микрофон')));
+  const channels = media.tracks.map((track, index) => ({ track, index })).sort((a, b) => Number(a.track.label === 'Системный звук + микрофон') - Number(b.track.label === 'Системный звук + микрофон'));
 
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal><Dialog.Overlay className={styles.backdrop} /><Dialog.Content ref={panel} className={styles.player} data-controls-visible={controlsVisible} aria-describedby={undefined} onKeyDown={keyboard}
@@ -216,26 +221,27 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMixer(); } }}>
         <div className={styles.mixerHeading}><h3><SlidersHorizontal size={14} />{t("Звук и дорожки")}</h3><button className={styles.close} onClick={closeMixer} aria-label={t("Закрыть настройки звука")}><X size={15} /></button></div>
         <div className={styles.tracks}>{channels.map(({ track, index }) => {
-          const mixed = track.label === t('Системный звук + микрофон');
-          const microphone = track.label === t('Микрофон');
+          const mixed = track.label === 'Системный звук + микрофон';
+          const microphone = track.label === 'Микрофон';
+          const trackLabel = t(track.label);
           const enabled = volumes[index] > 0;
-          const Icon = mixed ? AudioLines : microphone ? Mic : track.label === t('Системный звук') ? Monitor : Volume2;
+          const Icon = mixed ? AudioLines : microphone ? Mic : track.label === 'Системный звук' ? Monitor : Volume2;
           return <div key={track.path} className={`${styles.channel} ${mixed ? styles.mixed : ''}`} data-muted={!enabled}>
             <div className={styles.channelHeading}>
               <span className={styles.channelIcon}><Icon size={19} strokeWidth={1.6} /></span>
-              <div className={styles.channelName}><span>{mixed ? t('Объединённая дорожка') : track.label}</span>{mixed && <small>{t("Микрофон + системный звук")}</small>}</div>
+              <div className={styles.channelName}><span>{mixed ? t('Объединённая дорожка') : trackLabel}</span>{mixed && <small>{t("Микрофон + системный звук")}</small>}</div>
               <button className={styles.muteButton} data-muted={!enabled} onClick={() => setVolume(index, enabled ? 0 : previousVolumes.current[index])}
-                aria-label={`${enabled ? t('Отключить') : t('Включить')} ${track.label}`} aria-pressed={!enabled} title={enabled ? t('Отключить дорожку') : t('Включить дорожку')}>{enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
+                aria-label={`${enabled ? t('Отключить') : t('Включить')} ${trackLabel}`} aria-pressed={!enabled} title={enabled ? t('Отключить дорожку') : t('Включить дорожку')}>{enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
             </div>
-            <div className={styles.channelVolume}><input className={styles.range} type="range" min="0" max="100" value={volumes[index]} aria-label={t("Громкость {0}", track.label)} style={rangeFill(volumes[index])}
-              onChange={event => setVolume(index, Number(event.target.value))} /><output aria-label={t("Уровень {0}", track.label)}>{volumes[index]}<span>%</span></output></div>
+            <div className={styles.channelVolume}><input className={styles.range} type="range" min="0" max="100" value={volumes[index]} aria-label={t("Громкость {0}", trackLabel)} style={rangeFill(volumes[index])}
+              onChange={event => setVolume(index, Number(event.target.value))} /><output aria-label={t("Уровень {0}", trackLabel)}>{volumes[index]}<span>%</span></output></div>
           </div>;
         })}</div>
       </section>}
       </div>
       {media.tracks.map((track, index) => <audio key={track.path} ref={element => { if (element) { audio.current[index] = element; element.volume = volumes[index] / 100; } }} src={track.path} preload="auto"
         onError={() => { video.current?.pause(); setError(`Не удалось воспроизвести дорожку «${track.label}».`); }} />)}
-      {error && <p role="alert" className={styles.error}>{t(error)}</p>}
+      {error && <p role="alert" className={styles.error}>{playbackErrorText(error)}</p>}
     </Dialog.Content></Dialog.Portal>
   </Dialog.Root>;
 }

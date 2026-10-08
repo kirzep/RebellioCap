@@ -661,10 +661,10 @@ export function RuntimeSettings({
         )}
         {applyError && (
           <ErrorNotice
-            title={operationErrorTitle}
+            title={t(operationErrorTitle)}
             technicalDetails={t("Код: {0}\n{1}", applyError.code, applyError.technicalCause)}
             action={
-              isDirty && operationErrorTitle === t('Не удалось применить настройки') ? (
+              isDirty && operationErrorTitle === 'Не удалось применить настройки' ? (
                 <Button variant="tertiary" size="compact" onClick={resetCandidate}>
                   {t("Вернуть действующие значения")}</Button>
               ) : undefined

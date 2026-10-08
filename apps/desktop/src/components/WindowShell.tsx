@@ -111,7 +111,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
                   {navigation?.map((item) => {
                     const customIcon = ['recording', 'clips', 'video', 'audio', 'replay', 'hotkeys'].includes(item.id);
                     return <SidebarMenuItem key={item.id}>
-                      {item.group && <p className={styles.navGroup}>{item.group}</p>}
+                      {item.group && <p className={styles.navGroup}>{t(item.group)}</p>}
                       <SidebarMenuButton type="button" size="lg" className={styles.navButton}
                         isActive={item.id === activeNavigation}
                         aria-current={item.id === activeNavigation ? 'page' : undefined}

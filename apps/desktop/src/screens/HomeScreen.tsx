@@ -802,7 +802,7 @@ export function HomeScreen({
     >
       <header className={styles.pageHeader}>
         <div><p className={styles.breadcrumb}>{t("Рабочая область")}{' '}<span>/</span> {activeView === 'recording' ? t('Обзор') : activeView === 'clips' ? t('Клипы') : t('Настройки')}</p>
-        <h1>{activeView === 'recording' ? t('Обзор записи') : activeView === 'clips' ? t('Ваши клипы') : HOME_NAVIGATION.find(item => item.id === settingsSection)?.label}</h1>
+        <h1>{activeView === 'recording' ? t('Обзор записи') : activeView === 'clips' ? t('Ваши клипы') : t(HOME_NAVIGATION.find(item => item.id === settingsSection)?.label ?? '')}</h1>
         <p className={styles.pageDescription}>{activeView === 'recording' ? t('Записывайте экран и сохраняйте то, что хочется оставить.') : activeView === 'clips' ? t('Всё, что вы сохранили, в одном месте.') : t('Настройте запись под себя.')}</p></div>
       </header>
       {activeView === 'recording' ? (
@@ -919,7 +919,7 @@ export function HomeScreen({
                       {t("Повторить")}</Button>
                   }
                 >
-                  {t("Команды записи недоступны. Настройки нужно восстановить через сохранённый профиль.")}{stateLoadError ? ` ${stateLoadError.summary}` : ''}
+                  {t("Команды записи недоступны. Настройки нужно восстановить через сохранённый профиль.")}{stateLoadError ? ` ${t(stateLoadError.summary)}` : ''}
                 </ErrorNotice>
               )}
 

@@ -1,4 +1,4 @@
-import { t, useTranslation } from '../i18n';
+import { getLocale, t, useTranslation } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, RefreshCw, Search, MoreHorizontal, Pencil, Trash2, Folder, Monitor, ArrowLeft } from 'lucide-react';
 import { AppIcon } from '../components/AppIcon';
@@ -248,7 +248,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
           <ClipThumbnail bridge={bridge} clip={items[0]} />
         </button>
         <div className={styles.folderTitle}><FolderIcon bridge={bridge} folder={folder} revision={`${clipId(items[0])}:${clipTime(items[0])}:${refreshToken ?? ''}`} /><h3 title={folder}>{folder}</h3></div>
-        <p>{nativePage?.folders.find(item => item.name === folder)?.count ?? items.length} {' '}{t("клипов ·")}{' '}{new Date(clipTime(items[0])).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</p>
+        <p>{nativePage?.folders.find(item => item.name === folder)?.count ?? items.length} {' '}{t("клипов ·")}{' '}{new Date(clipTime(items[0])).toLocaleDateString(getLocale(), { day: 'numeric', month: 'short' })}</p>
       </article>)}</div>
       : <div className={styles.grid}>{visible.map(clip => <article className={styles.clip} key={clipId(clip)}>
         <button className={styles.thumbnail} disabled={opening !== null} onClick={() => void open(clip)} aria-label={t("Открыть {0}", clip.name)}>
@@ -262,7 +262,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
               <DropdownMenu.Item className={`${styles.menuItem} ${styles.deleteItem}`} onSelect={() => edit(clip, 'delete')}><Trash2 size={15} />{t("Удалить")}</DropdownMenu.Item>
             </DropdownMenu.Content></DropdownMenu.Portal>
           </DropdownMenu.Root>
-        </div>{clip.recovery&&<p>{t("Незавершённая запись · конец может отсутствовать")}</p>}<p>{!compact && view === 'all' && <span>{clipFolder(clip)} · </span>}{new Date(clipTime(clip)).toLocaleDateString('ru-RU', {day:'numeric', month:'short'})} · {(clip.bytes / 1024 / 1024).toLocaleString('ru-RU', {maximumFractionDigits:1})} {' '}{t("МБ")}</p>
+        </div>{clip.recovery&&<p>{t("Незавершённая запись · конец может отсутствовать")}</p>}<p>{!compact && view === 'all' && <span>{clipFolder(clip)} · </span>}{new Date(clipTime(clip)).toLocaleDateString(getLocale(), {day:'numeric', month:'short'})} · {(clip.bytes / 1024 / 1024).toLocaleString(getLocale(), {maximumFractionDigits:1})} {' '}{t("МБ")}</p>
       </article>)}</div>}
     {!compact && !busy && !error && pageCount > 1 && <nav className={styles.pagination} aria-label={t("Страницы библиотеки")}>
       <Button variant="tertiary" size="compact" disabled={page === 0} onClick={() => goToPage(page - 1)}>{t("Предыдущая страница")}</Button>

@@ -2,6 +2,22 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { ClipPlayer } from './ClipPlayer';
+import { applyLanguageSettings } from '../i18n';
+
+it('translates canonical audio labels while retaining mixed-track ordering and user labels in English', () => {
+  applyLanguageSettings({ preference: 'en', language: 'en' });
+  render(<ClipPlayer name="Мой клип.mp4" media={{ id: 'english', video: 'video.mp4', tracks: [
+    { path: 'mixed.m4a', label: 'Системный звук + микрофон', enabled: false },
+    { path: 'mic.m4a', label: 'Микрофон', enabled: true },
+    { path: 'custom.m4a', label: 'Моя дорожка', enabled: true },
+  ] }} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Audio and tracks' }));
+  expect(screen.getByLabelText('Volume Microphone')).toBeVisible();
+  expect(screen.getByText('Моя дорожка')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Мой клип.mp4' })).toBeVisible();
+  const labels = document.querySelectorAll('[class*="channelName"] > span');
+  expect(Array.from(labels, el => el.textContent)).toEqual(['Microphone', 'Моя дорожка', 'Combined track']);
+});
 
 beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});

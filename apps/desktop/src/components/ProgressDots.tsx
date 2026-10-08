@@ -74,7 +74,7 @@ function StepItem({
         disabled={isDisabled}
         onClick={() => onSelect(step.number)}
         aria-current={isCurrent ? 'step' : undefined}
-        aria-label={`${accessibleState} ${step.number}: ${step.label}`}
+        aria-label={`${accessibleState} ${step.number}: ${t(step.label)}`}
       >
         <span className={styles.marker} aria-hidden="true">
           {isComplete ? '✓' : step.number}

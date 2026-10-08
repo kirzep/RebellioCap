@@ -47,7 +47,7 @@ export function SetupShell({ children, footer, step, lastCompletedStep = 0,
               return <li key={item.number} data-testid={`progress-step-${item.number}`}>
                 <button type="button" className={styles.stepButton} data-current={current}
                   data-complete={complete} aria-current={current ? 'step' : undefined}
-                  aria-label={`${current ? t('Текущий шаг') : t('Перейти к шагу')} ${item.number}: ${item.label}`}
+                  aria-label={`${current ? t('Текущий шаг') : t('Перейти к шагу')} ${item.number}: ${t(item.label)}`}
                   disabled={current || !onSelectStep || item.number > lastCompletedStep + 1}
                   onClick={() => onSelectStep?.(item.number)}>
                   <span className={styles.marker} aria-hidden="true">{complete ? <Check size={13} /> : String(item.number).padStart(2, '0')}</span>

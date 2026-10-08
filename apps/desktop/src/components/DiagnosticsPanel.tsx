@@ -1,4 +1,4 @@
-import { t, useTranslation } from '../i18n';
+import { getLocale, t, useTranslation } from '../i18n';
 import type { AppError } from '../bridge/contracts';
 import { normalizeError } from '../bridge/host';
 import type { EngineSnapshot, SystemCheckResult } from '../config/model';
@@ -69,7 +69,7 @@ function formatBytes(bytes: number): string {
     unitIndex += 1;
   }
   const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
-  return `${value.toLocaleString('ru-RU', {
+  return `${value.toLocaleString(getLocale(), {
     maximumFractionDigits: precision,
   })} ${units[unitIndex]}`;
 }
@@ -271,8 +271,8 @@ export function DiagnosticsPanel({
                       aria-hidden="true"
                     />
                     <span>
-                      <strong>{stageName(stage.id)}</strong>
-                      <small>{stageDescription(stage)}</small>
+                      <strong>{t(stageName(stage.id))}</strong>
+                      <small>{t(stageDescription(stage))}</small>
                     </span>
                   </li>
                 ))}
