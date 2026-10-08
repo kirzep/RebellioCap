@@ -44,7 +44,7 @@ These are **validation bounds**, not verified recording performance. Hardware, d
 | --- | --- |
 | C++ | MSVC x64, C++20, Windows SDK; other native toolchains are rejected by CMake. |
 | Build system | CMake **3.28+** and Ninja, resolved through the Visual Studio environment wrapper. |
-| Rust | **1.89+**, MSVC target; dependencies recorded in `Cargo.lock`. |
+| Rust | **1.90+**, MSVC target; dependencies recorded in `Cargo.lock`. |
 | Node.js / npm | Node **24**, matching CI; `npm ci` restores the committed lockfile. |
 | Native dependencies | Pinned vcpkg baseline/manifest, restored by `bootstrap-vcpkg.ps1`. |
 | Browser tests | Playwright Chromium; installed Edge can be selected with `PLAYWRIGHT_CHANNEL=msedge`. |

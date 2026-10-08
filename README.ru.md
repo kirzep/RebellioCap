@@ -67,9 +67,9 @@ RebellioCap хранит недавнюю запись в кольцевом б�
 
 ## Начало работы
 
-Сейчас репозиторий публикует **исходный код в разработке**. Версия desktop-пакета — `0.1.7`; проверенный бинарный релиз является отдельным этапом. Опубликованные сборки следует искать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases); условия подготовки описаны в [руководстве по релизам](docs/releases.md).
+Сейчас репозиторий публикует **исходный код в разработке**. Версия desktop-пакета — `0.1.8`; проверенный бинарный релиз является отдельным этапом. Опубликованные сборки следует искать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases); условия подготовки описаны в [руководстве по релизам](docs/releases.md).
 
-Для записи нужны **Windows x64**, **NVIDIA с совместимым NVENC H.264** и **WebView2**. Подробности — в [системных требованиях](docs/system-requirements.md). Для сборки также нужны MSVC C++ Build Tools с Windows SDK и CMake/Ninja, Node.js 24 с npm и Rust 1.89+ с MSVC toolchain.
+Для записи нужны **Windows x64**, **NVIDIA с совместимым NVENC H.264** и **WebView2**. Подробности — в [системных требованиях](docs/system-requirements.md). Для сборки также нужны MSVC C++ Build Tools с Windows SDK и CMake/Ninja, Node.js 24 с npm и Rust 1.90+ с MSVC toolchain.
 
 В PowerShell:
 

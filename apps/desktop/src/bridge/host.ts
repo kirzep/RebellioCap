@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type {
   ActiveConfig,
   AudioCatalog,
@@ -11,7 +11,7 @@ import type {
   StoredState,
   SystemCheckResult,
 } from '../config/model';
-import type { AppAction, AppError, AppSubsystem, ClipPlayback, HostBridge } from './contracts';
+import type { AppAction, AppError, AppSubsystem, AvailableUpdate, ClipPlayback, HostBridge, UpdateProgress } from './contracts';
 
 const subsystems: AppSubsystem[] = [
   'config',
@@ -225,6 +225,19 @@ async function invokeHost<T>(
 }
 
 export class TauriHostBridge implements HostBridge {
+  private updateCheck?: Promise<AvailableUpdate | null>;
+  checkForUpdate(): Promise<AvailableUpdate | null> {
+    // React StrictMode may mount twice; share the native check across both effects.
+    return this.updateCheck ??= invokeHost<AvailableUpdate | null>('check_for_update').catch(error => {
+      this.updateCheck = undefined;
+      throw error;
+    });
+  }
+  async installUpdate(version: string, onProgress?: (progress: UpdateProgress) => void): Promise<void> {
+    const channel = new Channel<UpdateProgress>();
+    channel.onmessage = progress => onProgress?.(progress);
+    await invokeHost('install_update', { version, onProgress: channel });
+  }
   async beginClipCatalog(owner: string): Promise<void> { await invokeHost('begin_clip_catalog', { owner }); }
   async listClipPage(request: import('./contracts').ClipCatalogRequest): Promise<import('./contracts').ClipCatalogPage> { return invokeHost('list_clip_page', { request }); }
   async releaseClipCatalog(owner: string): Promise<void> { await invokeHost('release_clip_catalog', { owner }); }

@@ -1,8 +1,8 @@
 [package]
 name = "rebelliocap-desktop"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.90"
 
 [lib]
 name = "rebelliocap_desktop"
@@ -25,6 +25,8 @@ sha2 = "0.10"
 thiserror = "2"
 tempfile = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+tauri-plugin-updater = "2"
+base64 = "0.22.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1"
@@ -32,4 +34,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 windows = { version = "0.61", features = ["Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [dev-dependencies]
+minisign-verify = "0.2.5"
 tempfile = "3"

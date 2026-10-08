@@ -67,9 +67,9 @@ Setup checks devices, the native engine, available memory, and output-folder acc
 
 ## Getting started
 
-This repository currently publishes **development source**. The desktop package declares version `0.1.7`; a verified binary release is a separate milestone. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published downloads and [release policy](docs/releases.md) for their acceptance requirements.
+This repository currently publishes **development source**. The desktop package declares version `0.1.8`; a verified binary release is a separate milestone. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published downloads and [release policy](docs/releases.md) for their acceptance requirements.
 
-The recording path requires **Windows x64**, an **NVIDIA GPU with compatible NVENC H.264 support**, and **WebView2**. See [system requirements](docs/system-requirements.md) before building. Development also needs MSVC C++ Build Tools with the Windows SDK and CMake/Ninja, Node.js 24 with npm, and Rust 1.89 or newer with the MSVC target.
+The recording path requires **Windows x64**, an **NVIDIA GPU with compatible NVENC H.264 support**, and **WebView2**. See [system requirements](docs/system-requirements.md) before building. Development also needs MSVC C++ Build Tools with the Windows SDK and CMake/Ninja, Node.js 24 with npm, and Rust 1.90 or newer with the MSVC target.
 
 From PowerShell:
 

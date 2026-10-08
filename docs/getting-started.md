@@ -10,7 +10,7 @@ Install these development tools:
 
 - Visual Studio / Build Tools with **Desktop development with C++**, x64 MSVC, the Windows SDK, and bundled CMake/Ninja.
 - Node.js **24** with npm, matching [CI](../.github/workflows/desktop-ci.yml).
-- Rust **1.89 or newer**, with the `x86_64-pc-windows-msvc` toolchain.
+- Rust **1.90 or newer**, with the `x86_64-pc-windows-msvc` toolchain.
 - Microsoft Edge **WebView2 Runtime** for the native desktop interface.
 - Git and PowerShell.
 

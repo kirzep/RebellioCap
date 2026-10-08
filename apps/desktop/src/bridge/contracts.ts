@@ -44,9 +44,9 @@ export interface HostBridge {
   beginClipCatalog?(owner: string): Promise<void>;
   listClipPage?(request: ClipCatalogRequest): Promise<ClipCatalogPage>;
   releaseClipCatalog?(owner: string): Promise<void>;
-  /** Optional until a native updater is configured. Installation owns recording shutdown and restart. */
+  /** Installation owns signature verification, recording shutdown and restart. */
   checkForUpdate?(): Promise<AvailableUpdate | null>;
-  installUpdate?(version: string): Promise<void>;
+  installUpdate?(version: string, onProgress?: (progress: UpdateProgress) => void): Promise<void>;
   listClips?(): Promise<SavedClip[]>;
   openClip?(name: string): Promise<void>;
   prepareClipPlayback?(name: string): Promise<ClipPlayback>;
@@ -93,6 +93,11 @@ export interface SavedClip {
   savedMs?: number;
   bytes: number;
   modifiedMs: number;
+}
+export interface UpdateProgress {
+  phase: 'downloading' | 'preparing' | 'installing';
+  downloadedBytes: number;
+  totalBytes?: number | null;
 }
 
 export interface ClipCatalogRequest { owner: string; query: string; folder: string | null; folders: boolean; page: number; limit: number; refresh: boolean }

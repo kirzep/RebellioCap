@@ -102,6 +102,7 @@ pub fn validate_owned_file(path: &Path, issued: &[PathBuf]) -> Result<PathBuf> {
 }
 
 pub struct Host {
+    updating: bool,
     store: ConfigStore,
     executable: Result<PathBuf>,
     engine: Option<EngineSupervisor>,
@@ -148,6 +149,7 @@ impl HostState {
             .is_some_and(|config| config.continuous_recording_enabled);
         Self {
             inner: Arc::new(Mutex::new(Host {
+                updating: false,
                 store,
                 executable: resolve_engine(
                     resources,
@@ -175,6 +177,21 @@ impl HostState {
             let _ = host.stop();
         }
         self.tray_updates.close();
+    }
+    pub(crate) async fn prepare_update(&self) -> Result<()> {
+        let inner = self.inner.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut host = inner.lock().map_err(|_| "host.lock_poisoned")?;
+            host.updating = true;
+            if let Err(error) = host.stop() {
+                host.updating = false;
+                return Err(format!("Не удалось корректно завершить запись перед обновлением: {error}"));
+            }
+            Ok(())
+        }).await.map_err(|e| e.to_string())?
+    }
+    pub(crate) fn cancel_update(&self) {
+        if let Ok(mut host) = self.inner.lock() { host.updating = false; }
     }
 }
 impl Host {
@@ -288,6 +305,7 @@ pub(crate) async fn dispatch<T: Send + 'static>(
     let inner = state.inner.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut host = inner.lock().map_err(|_| "host.lock_poisoned")?;
+        if host.updating { return Err("Идёт установка обновления. Дождитесь перезапуска приложения.".into()); }
         let started = std::time::Instant::now();
         let result = action(&mut host);
         if let Err(error) = &result { crate::logging::record("error", "host", "action_failed", serde_json::json!({"error":error,"elapsedMs":started.elapsed().as_millis()})); }

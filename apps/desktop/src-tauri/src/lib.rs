@@ -14,6 +14,7 @@ mod editor_preview;
 mod editor_remux_cache;
 mod editor_import_progress;
 mod instance_identity;
+mod updater;
 pub mod recording_names;
 
 pub fn run() {
@@ -24,6 +25,7 @@ pub fn run() {
         &context.config().identifier, test_root.as_deref(), cfg!(debug_assertions)
     ).expect("Invalid test instance configuration");
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| tray::show(app)))
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .setup(|app| {
@@ -58,6 +60,7 @@ pub fn run() {
             app.manage(clip_index::CatalogState::default());
             app.manage(editor::EditorState::default());
             app.manage(tray::QuitRequest::default());
+            app.manage(updater::UpdateState::default());
             tray::setup(app)?;
             Ok(())
         })
@@ -68,6 +71,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            updater::check_for_update,
+            updater::install_update,
             tray::take_pending_app_quit,
             tray::quit_application,
             recording_names::get_recording_names,

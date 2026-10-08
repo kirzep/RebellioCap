@@ -4,6 +4,12 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 
 ## Unreleased
 
+### Added
+
+- Signed Windows installer builds in the public repository, with draft releases and update manifests.
+- Background update checks and an update button above Settings, with confirmation, download progress and installation from the application.
+- Signature and package-version checks before recording shutdown; updates preserve configuration and saved clips and require the editor to be closed.
+
 ### Fixed
 
 - Milestone evidence uses the CMake executable recorded by the configured build instead of requiring an optional vcpkg-downloaded tool cache.

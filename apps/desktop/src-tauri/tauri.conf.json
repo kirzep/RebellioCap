@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RebellioCap",
   "mainBinaryName": "RebellioCap",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "identifier": "com.rebelliocap.desktop",
   "build": {
     "beforeDevCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/stage-desktop-engine.ps1 && npm run dev",
@@ -63,6 +63,7 @@
     }
   },
   "bundle": {
+    "createUpdaterArtifacts": true,
     "active": true,
     "resources": {
       "resources/engine/": "engine/",
@@ -88,6 +89,13 @@
         ],
         "displayLanguageSelector": true
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3RkExOEVFNjJBNjlCQkQKUldTOW02Wmk3aGo2bC80WGlra1JUWVczYlZDT01hcUFRVTQwMkdoNFFyUWNpZ0FSV29xcmVGdlEK",
+      "endpoints": ["https://github.com/kirzep/RebellioCap/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   }
 }

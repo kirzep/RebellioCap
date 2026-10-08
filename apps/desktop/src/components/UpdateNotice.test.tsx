@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WindowShell } from './WindowShell';
+import type { UpdateProgress } from '../bridge/contracts';
 
 afterEach(cleanup);
 function preview(onInstall = vi.fn().mockResolvedValue(undefined)) {
@@ -12,6 +13,28 @@ function preview(onInstall = vi.fn().mockResolvedValue(undefined)) {
   return onInstall;
 }
 describe('update offer', () => {
+  it('shows download progress and installation while preventing duplicate consent', async () => {
+    let report: ((progress: UpdateProgress) => void) | undefined;
+    let complete!: () => void;
+    const pending = new Promise<void>(resolve => { complete = resolve; });
+    render(<WindowShell navigation={[{ id: 'recording', label: 'Обзор' }]} onNavigate={vi.fn()}
+      settingsNavigation={{ id: 'settings', label: 'Настройки' }}
+      availableUpdate={{ version: '0.2.0' }} onInstallUpdate={async onProgress => {
+      report = onProgress;
+      await pending;
+    }}><p>Обзор</p></WindowShell>);
+    fireEvent.click(screen.getByRole('button', { name: 'Доступно обновление 0.2.0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить и перезапустить' }));
+    await waitFor(() => expect(report).toBeDefined());
+    const { act } = await import('@testing-library/react');
+    act(() => report!({ phase: 'downloading', downloadedBytes: 50, totalBytes: 100 }));
+    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '50');
+    expect(screen.getByRole('button', { name: 'Позже' })).toBeDisabled();
+    act(() => report!({ phase: 'installing', downloadedBytes: 100, totalBytes: 100 }));
+    expect(screen.getByRole('status')).toHaveTextContent('Устанавливаем');
+    complete();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
   it('requires confirmation and allows postponing without interrupting recording', () => {
     const install = preview();
     fireEvent.click(screen.getByRole('button', { name: 'Доступно обновление 0.2.0' }));

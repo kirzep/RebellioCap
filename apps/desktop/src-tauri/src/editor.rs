@@ -20,15 +20,17 @@ pub struct EditorState {
     status: Arc<Mutex<Value>>,
     cancel: Arc<AtomicBool>,
     running: AtomicBool,
+    updating: AtomicBool,
     import_epoch: Arc<AtomicU64>,
     owners: Mutex<HashMap<String, PreviewOwner>>,
     remux_cache: Arc<Mutex<crate::editor_remux_cache::RemuxCache>>,
 }
 #[derive(Default)]
 struct PreviewOwner { epoch: Arc<AtomicU64>, directories: HashSet<PathBuf> }
-fn begin_owner(state: &EditorState, owner: &str) -> Result<()> {
+pub(crate) fn begin_owner(state: &EditorState, owner: &str) -> Result<()> {
     if owner.is_empty() || owner.len() > 128 { return Err("editor.invalid_owner".into()); }
     let mut owners = state.owners.lock().map_err(|e| e.to_string())?;
+    if state.updating.load(Ordering::Acquire) { return Err("Идёт обновление приложения. Редактор временно недоступен.".into()); }
     if owners.contains_key(owner) { return Ok(()); }
     if owners.len() >= 32 { return Err("editor.too_many_sessions".into()); }
     owners.insert(owner.to_owned(), PreviewOwner::default());
@@ -40,10 +42,23 @@ pub fn editor_begin_session(window: tauri::WebviewWindow, state: tauri::State<'_
     begin_owner(&state, &owner)
 }
 impl EditorState {
+    pub(crate) fn reserve_update(&self) -> Result<EditorUpdateLease<'_>> {
+        let owners = self.owners.lock().map_err(|e| e.to_string())?;
+        if !owners.is_empty() || self.running.load(Ordering::Acquire) {
+            return Err("Перед обновлением сохраните изменения и закройте редактор. Дождитесь завершения экспорта.".into());
+        }
+        self.updating.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "Обновление уже выполняется.")?;
+        Ok(EditorUpdateLease(self))
+    }
     pub fn shutdown(&self) {
         self.cancel.store(true, Ordering::Release);
         self.import_epoch.fetch_add(1, Ordering::AcqRel);
     }
+}
+pub(crate) struct EditorUpdateLease<'a>(&'a EditorState);
+impl Drop for EditorUpdateLease<'_> {
+    fn drop(&mut self) { self.0.updating.store(false, Ordering::Release); }
 }
 #[derive(Clone)]
 struct ImportSession { epoch: Arc<AtomicU64>, expected: u64, deadline: std::time::Instant, owner: Option<String>, shutdown_epoch: Arc<AtomicU64>, shutdown_expected: u64, remux_cache: Arc<Mutex<crate::editor_remux_cache::RemuxCache>>, progress: crate::editor_import_progress::Reporter }
@@ -959,8 +974,12 @@ pub async fn editor_export(
         }
     }
     let s = app.state::<EditorState>();
-    if s.running.swap(true, Ordering::AcqRel) {
-        return Err("Экспорт уже запущен".into());
+    {
+        let _owners = s.owners.lock().map_err(|e| e.to_string())?;
+        if s.updating.load(Ordering::Acquire) { return Err("Идёт обновление приложения. Экспорт временно недоступен.".into()); }
+        if s.running.swap(true, Ordering::AcqRel) {
+            return Err("Экспорт уже запущен".into());
+        }
     }
     s.cancel.store(false, Ordering::Release);
     *s.status.lock().map_err(|e| e.to_string())? = json!({"state":"running","progress":0});

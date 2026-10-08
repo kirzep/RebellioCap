@@ -9,7 +9,7 @@ import { Sidebar, SidebarProvider, SidebarContent, SidebarFooter,
   SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from './ui/sidebar';
 import styles from './WindowShell.module.css';
 import { UpdateNotice } from './UpdateNotice';
-import type { AvailableUpdate } from '../bridge/contracts';
+import type { AvailableUpdate, UpdateProgress } from '../bridge/contracts';
 
 export interface WindowShellNavigationItem {
   id: string;
@@ -24,7 +24,7 @@ export interface WindowShellProps {
   navigation?: readonly WindowShellNavigationItem[];
   settingsNavigation?: WindowShellNavigationItem;
   availableUpdate?: AvailableUpdate | null;
-  onInstallUpdate?: () => Promise<void>;
+  onInstallUpdate?: (onProgress: (progress: UpdateProgress) => void) => Promise<void>;
   activeNavigation?: string;
   onNavigate?: (id: string) => void;
   contentWidth?: 'form' | 'setup' | 'wide';

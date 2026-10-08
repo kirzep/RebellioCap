@@ -5,7 +5,7 @@
   "scripts": {
     "test:crash-coverage": "node --test tests/scripts/crash_media_coverage_test.mjs",
     "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/invoke-rust.ps1 npm run tauri dev -w @rebelliocap/desktop",
-    "desktop:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/invoke-rust.ps1 npm run tauri build -w @rebelliocap/desktop",
+    "desktop:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/invoke-rust.ps1 npm run tauri -w @rebelliocap/desktop -- build",
     "desktop:test": "npm run test -w @rebelliocap/desktop"
   }
 }

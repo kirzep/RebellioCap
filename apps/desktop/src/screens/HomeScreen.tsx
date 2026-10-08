@@ -786,7 +786,13 @@ export function HomeScreen({
       navigation={navigation}
       settingsNavigation={{ id: 'settings', label: 'Настройки', disabled: settingsBusy }}
       availableUpdate={availableUpdate}
-      onInstallUpdate={availableUpdate && bridge.installUpdate ? () => bridge.installUpdate!(availableUpdate.version) : undefined}
+      onInstallUpdate={availableUpdate && bridge.installUpdate ? async onProgress => {
+        setSettingsBusy(true);
+        try {
+          await waitForPendingHostOperations();
+          await bridge.installUpdate!(availableUpdate.version, onProgress);
+        } finally { setSettingsBusy(false); }
+      } : undefined}
       activeNavigation={activeView}
       onNavigate={handleNavigation}
       contentWidth={activeView === 'settings' ? 'form' : 'wide'}
