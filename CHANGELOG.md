@@ -2,6 +2,13 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.15
+
+- Style the language dropdown consistently with the application and add Russian / English flags.
+- Render update release notes as Markdown instead of showing raw formatting markers.
+- Use a neutral download progress bar matching the interface.
+- Install subsequent updates silently for the current user and restart the application automatically. Updating from an older build still uses that build's installer mode.
+
 ## 0.1.14
 
 - Move the interface language selector above Settings in the sidebar, including access while collapsed.
