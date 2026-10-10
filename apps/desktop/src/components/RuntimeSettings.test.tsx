@@ -61,6 +61,20 @@ function createSnapshot(overrides: Partial<EngineSnapshot> = {}): EngineSnapshot
 }
 
 describe('RuntimeSettings', () => {
+  it('applies direct output and restores the saved checkbox state', async () => {
+    const onApply = vi.fn().mockResolvedValue(undefined);
+    const props = { hostBridge, activeConfig: createActiveConfig(), snapshot: createSnapshot({ lifecycle: 'stopped', replayActive: false }), onApply, initialSection: 'replay' as const };
+    const { unmount } = render(<RuntimeSettings {...props} />);
+    const checkbox = screen.getByRole('checkbox', { name: /Сохранять записи без подпапок для игр/ });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ save_without_game_folders: true })));
+    const saved = onApply.mock.calls[0][0];
+    unmount();
+    render(<RuntimeSettings {...props} activeConfig={saved} />);
+    expect(screen.getByRole('checkbox', { name: /Сохранять записи без подпапок для игр/ })).toBeChecked();
+  });
   it('cancels hotkey preparation without showing a failure', async () => {
     render(<RuntimeSettings hostBridge={hostBridge} activeConfig={createActiveConfig()} snapshot={createSnapshot()} onApply={vi.fn()} initialSection="hotkeys" sidebarNavigation />);
     fireEvent.click(screen.getByRole('button', { name:'Изменить сочетание для сохранения Replay' }));

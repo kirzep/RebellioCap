@@ -28,6 +28,7 @@ struct EngineConfig {
   std::chrono::seconds clip_duration{30};
   Container container{Container::Mp4};
   std::filesystem::path output_directory;
+  bool save_without_game_folders{false};
   HotkeyChord save_replay_hotkey{recording_default_hotkey("save_replay_hotkey")};
   HotkeyChord toggle_recording_hotkey{recording_default_hotkey("toggle_recording_hotkey")};
   bool continuous_recording_enabled{false};

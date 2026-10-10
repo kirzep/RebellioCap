@@ -1,4 +1,6 @@
 {
+  "Сохранять записи без подпапок для игр": "Save recordings without game subfolders",
+  "Клипы и обычные записи сохраняются прямо в выбранную папку.": "Clips and recordings are saved directly to the selected folder.",
   "Язык интерфейса": "Interface language",
   "Как в Windows": "Use Windows language",
   "Для русского языка Windows используется русский интерфейс, для остальных — английский.": "Russian is used for Russian Windows; English is used for all other Windows languages.",

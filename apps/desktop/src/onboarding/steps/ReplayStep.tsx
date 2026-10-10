@@ -1,6 +1,7 @@
 import { t, useTranslation } from '../../i18n';
 import { Field, FieldGroup, FieldSet, FieldLegend, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { Checkbox } from '../../components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { NativeSelect, NativeSelectOption } from '../../components/ui/native-select';
 import React, { useEffect, useState } from 'react';
@@ -262,6 +263,18 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
             </ErrorNotice>
           )}
         </Field>
+
+        <label className={styles.checkboxRow}>
+          <Checkbox
+            checked={draft.save_without_game_folders ?? false}
+            onCheckedChange={(checked) => onChange({ save_without_game_folders: checked === true })}
+            data-testid="save-without-game-folders-checkbox"
+          />
+          <span>
+            <strong>{t("Сохранять записи без подпапок для игр")}</strong>
+            <small>{t("Клипы и обычные записи сохраняются прямо в выбранную папку.")}</small>
+          </span>
+        </label>
 
         <FieldSet
           className={styles.fieldset}

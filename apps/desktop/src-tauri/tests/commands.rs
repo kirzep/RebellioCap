@@ -93,7 +93,12 @@ fn native_config_pins_explicit_audio_and_builds_hotkeys_without_renderer_argumen
     assert_eq!(value["saveReplayHotkey"], "F8");
     assert_eq!(value["monitorId"], "monitor-1");
     assert_eq!(value["replayMemoryLimitMb"], 0);
-    assert_eq!(value.as_object().unwrap().len(), 18);
+    assert_eq!(value["saveWithoutGameFolders"], false);
+    assert_eq!(value.as_object().unwrap().len(), 19);
+    let mut direct = c;
+    direct.save_without_game_folders = true;
+    let value = rebelliocap_desktop::native::recording_test::engine_config(&direct, None).unwrap();
+    assert_eq!(value["saveWithoutGameFolders"], true);
 }
 
 #[test]

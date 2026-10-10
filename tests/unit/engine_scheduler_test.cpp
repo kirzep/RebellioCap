@@ -12,6 +12,7 @@
 #include <Windows.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "engine/recorder_engine.h"
 #include "fakes/fake_audio_source.h"
@@ -1119,6 +1120,7 @@ TEST_CASE("late capture wakeups cannot label a new image with an old video times
 }
 
 TEST_CASE("queued replay saves keep the category captured at each request") {
+  const bool direct_output = GENERATE(false, true);
   constexpr QpcTicks frequency = 60'000;
   TemporaryDirectory directory;
   auto clock = std::make_shared<VirtualEngineClock>(frequency);
@@ -1132,6 +1134,7 @@ TEST_CASE("queued replay saves keep the category captured at each request") {
       .cache_category_icon = [&](const std::filesystem::path& category) { artwork_categories.push_back(category); }});
   auto settings = config();
   settings.output_directory = directory.path();
+  settings.save_without_game_folders = direct_output;
   REQUIRE(engine.start(settings).is_success());
   clock->advance_through(5 * frequency);
   REQUIRE(video->wait_for_frames(301, 5s));
@@ -1146,10 +1149,15 @@ TEST_CASE("queued replay saves keep the category captured at each request") {
   REQUIRE(engine.stop().is_success());
   REQUIRE(first_result.is_success());
   REQUIRE(second_result.is_success());
-  REQUIRE(first_result.value().parent_path() == directory.path() / L"Counter-Strike 2");
-  REQUIRE(second_result.value().parent_path() == directory.path() / L"Desktop");
-  REQUIRE(std::filesystem::is_directory(directory.path() / L"Desktop"));
-  REQUIRE(artwork_categories == std::vector<std::filesystem::path>{L"Counter-Strike 2", L"Desktop"});
+  REQUIRE(first_result.value().parent_path() == (direct_output ? directory.path() : directory.path() / L"Counter-Strike 2"));
+  REQUIRE(second_result.value().parent_path() == (direct_output ? directory.path() : directory.path() / L"Desktop"));
+  REQUIRE(std::filesystem::is_directory(directory.path() / L"Desktop") == !direct_output);
+  if (direct_output) {
+    REQUIRE_FALSE(std::filesystem::exists(directory.path() / L"Counter-Strike 2"));
+    REQUIRE(artwork_categories.empty());
+  } else {
+    REQUIRE(artwork_categories == std::vector<std::filesystem::path>{L"Counter-Strike 2", L"Desktop"});
+  }
 }
 
 TEST_CASE("category callbacks cannot escape the clip root or break saving") {
@@ -1177,6 +1185,7 @@ TEST_CASE("category callbacks cannot escape the clip root or break saving") {
 }
 
 TEST_CASE("continuous recording keeps the hotkey category through a slow open and window switch") {
+  const bool direct_output = GENERATE(false, true);
   constexpr QpcTicks frequency = 60'000;
   TemporaryDirectory directory;
   auto clock = std::make_shared<VirtualEngineClock>(frequency);
@@ -1190,6 +1199,7 @@ TEST_CASE("continuous recording keeps the hotkey category through a slow open an
       .capture_category = [&] { return foreground; }});
   auto settings = config();
   settings.output_directory = directory.path();
+  settings.save_without_game_folders = direct_output;
   REQUIRE(engine.start(settings).is_success());
   hotkey->press(HotkeyAction::ToggleRecording, clock->now());
   REQUIRE(continuous_muxer->wait_open_entered());
@@ -1200,10 +1210,12 @@ TEST_CASE("continuous recording keeps the hotkey category through a slow open an
   REQUIRE(video->wait_for_frames(61, 5s));
   REQUIRE(engine.toggle_continuous_recording().is_success());
   REQUIRE(engine.stop().is_success());
-  REQUIRE(continuous_muxer->destination.parent_path() == directory.path() / L"First Game");
+  REQUIRE(continuous_muxer->destination.parent_path() == (direct_output ? directory.path() : directory.path() / L"First Game"));
+  if (direct_output) REQUIRE_FALSE(std::filesystem::exists(directory.path() / L"First Game"));
 }
 
 TEST_CASE("naming preset is frozen at each save boundary and collisions keep originals") {
+  const bool direct_output = GENERATE(false, true);
   constexpr QpcTicks frequency = 60'000;
   TemporaryDirectory directory;
   auto clock = std::make_shared<VirtualEngineClock>(frequency);
@@ -1212,15 +1224,18 @@ TEST_CASE("naming preset is frozen at each save boundary and collisions keep ori
   const auto preset=directory.path()/L"recording-names.json";
   auto write=[&](const char* name){std::ofstream file(preset);file<<"{\"activeId\":\"user\",\"presets\":[{\"id\":\"user\",\"parts\":[{\"kind\":\"text\",\"value\":\""<<name<<"\"}]}]}";};
   write("First");
-  std::filesystem::create_directory(directory.path()/L"First Game");
-  {std::ofstream existing(directory.path()/L"First Game"/L"First.mp4");existing<<"original";}
+  const auto destination = direct_output ? directory.path() : directory.path()/L"First Game";
+  std::filesystem::create_directories(destination);
+  {std::ofstream existing(destination/L"First.mp4");existing<<"original";}
   RecorderEngine engine({.clock=clock,.video=video,.hotkey=std::make_shared<FakeHotkeySource>(),.muxer=muxer,.capture_category=[] {return std::filesystem::path(L"First Game");}});
   auto settings=config();settings.output_directory=directory.path();settings.naming_settings_file=preset;
+  settings.save_without_game_folders=direct_output;
   REQUIRE(engine.start(settings).is_success());clock->advance_through(5*frequency);REQUIRE(video->wait_for_frames(301,5s));
   auto first=engine.save_clip(5*frequency);REQUIRE(muxer->wait_until_entered());write("Second");REQUIRE(engine.reload_recording_names().is_success());auto second=engine.save_clip(5*frequency);muxer->release();
   const auto a=first.get(),b=second.get();REQUIRE(engine.stop().is_success());REQUIRE(a.is_success());REQUIRE(b.is_success());
   REQUIRE(a.value().filename()==L"First (2).mp4");REQUIRE(b.value().filename()==L"Second.mp4");
-  std::ifstream original(directory.path()/L"First Game"/L"First.mp4");std::string contents;original>>contents;REQUIRE(contents=="original");
+  REQUIRE(a.value().parent_path()==destination);REQUIRE(b.value().parent_path()==destination);
+  std::ifstream original(destination/L"First.mp4");std::string contents;original>>contents;REQUIRE(contents=="original");
 }
 
 TEST_CASE("sixteen hotkey saves freeze cached names while the writer is blocked") {

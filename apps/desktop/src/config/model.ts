@@ -46,6 +46,7 @@ export interface OnboardingDraft {
   replay_mode?: ReplayMode | null;
   container?: Container | null;
   output_directory?: string | null;
+  save_without_game_folders?: boolean | null;
   save_replay_hotkey?: Hotkey | null;
   toggle_recording_hotkey?: Hotkey | null;
   preferences?: Preferences | null;
@@ -66,6 +67,7 @@ export interface ActiveConfig {
   replay_mode: ReplayMode;
   container: Container;
   output_directory: string;
+  save_without_game_folders?: boolean;
   save_replay_hotkey: Hotkey;
   toggle_recording_hotkey: Hotkey;
   preferences: Preferences;

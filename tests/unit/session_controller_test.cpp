@@ -348,6 +348,20 @@ TEST_CASE("host configuration accepts optional replay memory without relaxing st
     if(test){base["durationSeconds"]=5;base["outputPath"]="C:/clips/test.mp4";base["outputDirectory"]="C:/clips";}
     const auto old=decode_host_configuration(base.dump(),test);
     REQUIRE(old.is_success());REQUIRE(old.value().engine.replay_memory_limit_mb==0);
+    REQUIRE_FALSE(old.value().engine.save_without_game_folders);
+    for (const bool direct_output : {false, true}) {
+      auto configured = base;
+      configured["saveWithoutGameFolders"] = direct_output;
+      configured["replayMemoryLimitMb"] = 512U;
+      const auto decoded = decode_host_configuration(configured.dump(), test);
+      REQUIRE(decoded.is_success());
+      REQUIRE(decoded.value().engine.save_without_game_folders == direct_output);
+    }
+    for (const auto invalid : {json(1), json("true"), json(nullptr)}) {
+      auto configured = base;
+      configured["saveWithoutGameFolders"] = invalid;
+      REQUIRE_FALSE(decode_host_configuration(configured.dump(), test).is_success());
+    }
     for(const auto limit:{0U,64U,512U,8192U}) {
       auto configured=base;configured["replayMemoryLimitMb"]=limit;
       const auto decoded=decode_host_configuration(configured.dump(),test);

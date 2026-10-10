@@ -38,7 +38,7 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
       if(event==json::parse_event_t::key && !keys.insert(item.get<std::string>()).second) duplicate=true;
       return true;
     });
-    if(duplicate || !value.is_object() || value.size()!=(test?19U:17U)+(value.contains("replayMemoryLimitMb")?1U:0U))
+    if(duplicate || !value.is_object() || value.size()!=(test?19U:17U)+(value.contains("replayMemoryLimitMb")?1U:0U)+(value.contains("saveWithoutGameFolders")?1U:0U))
       throw std::runtime_error("Configuration fields are missing, duplicated, or unrecognized");
     if(!value.at("protocolVersion").is_number_unsigned() || value.at("protocolVersion")!=1)
       throw std::runtime_error("Unsupported configuration protocol version");
@@ -79,6 +79,7 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
     if(container!="mp4" && container!="mkv") throw std::runtime_error("Unsupported container");
     c.container=container=="mp4"?Container::Mp4:Container::Mkv;
     c.output_directory=wide(value.at("outputDirectory").get<std::string>());
+    c.save_without_game_folders=value.value("saveWithoutGameFolders",false);
     if(!c.output_directory.is_absolute()) throw std::runtime_error("Output directory must be absolute");
     auto save=parse_hotkey_chord(wide(value.at("saveReplayHotkey").get<std::string>()));
     auto toggle=parse_hotkey_chord(wide(value.at("toggleRecordingHotkey").get<std::string>()));

@@ -443,7 +443,7 @@ struct RecorderEngine::Impl {
   }
 
   Result<void> prepare_category(const std::filesystem::path& category) const {
-    if (category.empty()) return Result<void>::success();
+    if (config.save_without_game_folders || category.empty()) return Result<void>::success();
     const auto directory = config.output_directory / category;
     std::error_code error;
     std::filesystem::create_directories(directory, error);
@@ -465,13 +465,17 @@ struct RecorderEngine::Impl {
     return names->capture(NameContext{time,category.empty()?L"Desktop":category.wstring(),1,recording,config.width,config.height,config.fps});
   }
 
+  std::filesystem::path destination_directory(const std::filesystem::path& category) const {
+    return config.save_without_game_folders ? config.output_directory : config.output_directory / category;
+  }
+
   std::filesystem::path output_path(std::uint64_t sequence,
                                    const std::filesystem::path& category = {}, const std::wstring& stem = {},std::uint64_t collision=0) const {
-    if(!stem.empty()){const auto suffix=collision?L" ("+std::to_wstring(collision+1)+L")":L"";return config.output_directory/category/(stem+suffix+(config.container==Container::Mp4?L".mp4":L".mkv"));}
+    if(!stem.empty()){const auto suffix=collision?L" ("+std::to_wstring(collision+1)+L")":L"";return destination_directory(category)/(stem+suffix+(config.container==Container::Mp4?L".mp4":L".mkv"));}
     std::wostringstream name;
     name << L"clip-" << std::setw(6) << std::setfill(L'0') << sequence
          << (config.container == Container::Mp4 ? L".mp4" : L".mkv");
-    return config.output_directory / category / name.str();
+    return destination_directory(category) / name.str();
   }
 
   void complete_save(const std::shared_ptr<SaveRequest>& request,
@@ -499,7 +503,7 @@ struct RecorderEngine::Impl {
     std::wostringstream name;
     name << L"recording-" << std::setw(6) << std::setfill(L'0') << sequence
          << (config.container == Container::Mp4 ? L".mp4" : L".mkv");
-    return config.output_directory / category / name.str();
+    return destination_directory(category) / name.str();
   }
 
   Result<void> start_continuous_locked(bool request_keyframe = false,

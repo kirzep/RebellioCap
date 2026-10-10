@@ -16,6 +16,7 @@ fn draft(path: &Path) -> OnboardingDraft {
         replay_mode: Some(ReplayMode::Ram),
         container: Some(Container::Mp4),
         output_directory: Some(path.canonicalize().unwrap()),
+        save_without_game_folders: None,
         save_replay_hotkey: Some(Hotkey {
             key: 0x77,
             ctrl: false,
@@ -44,6 +45,25 @@ fn devices() -> DeviceInventory {
         system_audio_ids: vec!["render-stable-1".into()],
         microphone_ids: vec![],
     }
+}
+
+#[test]
+fn direct_output_setting_round_trips_and_old_configs_keep_game_folders() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = draft(directory.path()).to_active().unwrap();
+    let mut json = serde_json::to_value(&original).unwrap();
+    json["save_without_game_folders"] = serde_json::json!(true);
+    let active: ActiveConfig = serde_json::from_value(json).unwrap();
+    let store = ConfigStore::at(directory.path().join("settings")).unwrap();
+    store.save_draft(active.as_draft(), 3).unwrap();
+    let reloaded = ConfigStore::at(directory.path().join("settings")).unwrap().load().unwrap();
+    assert_eq!(reloaded.draft.to_active().unwrap(), active);
+    let restored = active.as_draft().to_active().unwrap();
+    assert_eq!(serde_json::to_value(restored).unwrap()["save_without_game_folders"], true);
+    let mut legacy = serde_json::to_value(original).unwrap();
+    legacy.as_object_mut().unwrap().remove("save_without_game_folders");
+    let legacy: ActiveConfig = serde_json::from_value(legacy).unwrap();
+    assert_eq!(serde_json::to_value(legacy).unwrap()["save_without_game_folders"], false);
 }
 
 fn tested(store: &ConfigStore, value: &OnboardingDraft) {

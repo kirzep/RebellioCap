@@ -31,6 +31,8 @@ pub struct OnboardingDraft {
     pub replay_mode: Option<ReplayMode>,
     pub container: Option<Container>,
     pub output_directory: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_without_game_folders: Option<bool>,
     pub save_replay_hotkey: Option<Hotkey>,
     pub toggle_recording_hotkey: Option<Hotkey>,
     pub preferences: Option<Preferences>,
@@ -43,6 +45,7 @@ impl OnboardingDraft {
     pub fn fingerprint(&self) -> Result<String> {
         let mut normalized = self.clone();
         if normalized.replay_memory_limit_mb == Some(0) { normalized.replay_memory_limit_mb = None; }
+        if normalized.save_without_game_folders == Some(false) { normalized.save_without_game_folders = None; }
         Ok(format!(
             "{:x}",
             Sha256::digest(serde_json::to_vec(&(CONFIG_SCHEMA_VERSION, &normalized))?)
@@ -67,6 +70,7 @@ impl OnboardingDraft {
             replay_mode: required(&self.replay_mode, "replay_mode")?,
             container: required(&self.container, "container")?,
             output_directory: required(&self.output_directory, "output_directory")?,
+            save_without_game_folders: self.save_without_game_folders.unwrap_or(false),
             save_replay_hotkey: required(&self.save_replay_hotkey, "save_replay_hotkey")?,
             toggle_recording_hotkey: required(
                 &self.toggle_recording_hotkey,
@@ -98,6 +102,8 @@ pub struct ActiveConfig {
     pub replay_mode: ReplayMode,
     pub container: Container,
     pub output_directory: PathBuf,
+    #[serde(default)]
+    pub save_without_game_folders: bool,
     pub save_replay_hotkey: Hotkey,
     pub toggle_recording_hotkey: Hotkey,
     pub preferences: Preferences,
@@ -119,6 +125,7 @@ impl ActiveConfig {
             replay_mode: Some(self.replay_mode.clone()),
             container: Some(self.container.clone()),
             output_directory: Some(self.output_directory.clone()),
+            save_without_game_folders: self.save_without_game_folders.then_some(true),
             save_replay_hotkey: Some(self.save_replay_hotkey.clone()),
             toggle_recording_hotkey: Some(self.toggle_recording_hotkey.clone()),
             preferences: Some(self.preferences.clone()),

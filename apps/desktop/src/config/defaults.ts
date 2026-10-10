@@ -11,6 +11,7 @@ export function createDraftDefaults(): OnboardingDraft {
     replay_memory_limit_mb: 0,
     replay_mode: 'ram',
     container: 'mp4',
+    save_without_game_folders: false,
     save_replay_hotkey: { ...DEFAULT_SAVE_REPLAY_HOTKEY },
     toggle_recording_hotkey: { ...DEFAULT_TOGGLE_RECORDING_HOTKEY },
     preferences: {

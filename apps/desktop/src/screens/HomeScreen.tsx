@@ -133,6 +133,7 @@ function activeConfigFingerprint(config: ActiveConfig): string {
     config.replay_mode,
     config.container,
     config.output_directory,
+    config.save_without_game_folders ?? false,
     hotkeyValue(config.save_replay_hotkey),
     hotkeyValue(config.toggle_recording_hotkey),
     config.preferences.start_with_windows,

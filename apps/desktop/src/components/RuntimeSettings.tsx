@@ -89,6 +89,7 @@ function activeAsDraft(active: ActiveConfig): OnboardingDraft {
     replay_mode: active.replay_mode,
     container: active.container,
     output_directory: active.output_directory,
+    save_without_game_folders: active.save_without_game_folders ?? false,
     save_replay_hotkey: { ...active.save_replay_hotkey },
     toggle_recording_hotkey: { ...active.toggle_recording_hotkey },
     preferences: { ...active.preferences },
@@ -116,6 +117,7 @@ function draftAsActive(draft: OnboardingDraft): ActiveConfig {
     replay_mode: required(draft.replay_mode, 'replay_mode'),
     container: required(draft.container, 'container'),
     output_directory: required(draft.output_directory, 'output_directory'),
+    save_without_game_folders: draft.save_without_game_folders ?? false,
     save_replay_hotkey: required(draft.save_replay_hotkey, 'save_replay_hotkey'),
     toggle_recording_hotkey: required(
       draft.toggle_recording_hotkey,

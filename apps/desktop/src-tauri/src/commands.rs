@@ -914,6 +914,7 @@ mod clips_tests {
             replay_mode: ReplayMode::Ram,
             container: Container::Mp4,
             output_directory: directory.clone(),
+            save_without_game_folders: false,
             save_replay_hotkey: Hotkey { key: 0x77, ctrl: false, alt: false, shift: false, win: false },
             toggle_recording_hotkey: Hotkey { key: 0x78, ctrl: false, alt: false, shift: false, win: false },
             preferences: Preferences { overlay_enabled: None, start_with_windows: false },

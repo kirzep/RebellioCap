@@ -51,7 +51,7 @@ pub fn engine_config(config: &ActiveConfig, test_output: Option<&Path>) -> Resul
     }
     let system = audio(&config.system_audio);
     let microphone = audio(&config.microphone);
-    let mut value = json!({"protocolVersion":1,"monitorId":config.monitor_id,"width":config.width,"height":config.height,"fps":config.fps,"bitrate":config.bitrate,"replaySeconds":config.replay_seconds,"replayMemoryLimitMb":config.replay_memory_limit_mb,"clipSeconds":config.replay_seconds,"container":config.container,"outputDirectory":config.output_directory,"systemAudioEnabled":system.0,"systemAudioId":system.1,"microphoneEnabled":microphone.0,"microphoneId":microphone.1,"saveReplayHotkey":hotkey(&config.save_replay_hotkey)?,"toggleRecordingHotkey":hotkey(&config.toggle_recording_hotkey)?,"continuousRecordingEnabled":config.continuous_recording_enabled});
+    let mut value = json!({"protocolVersion":1,"monitorId":config.monitor_id,"width":config.width,"height":config.height,"fps":config.fps,"bitrate":config.bitrate,"replaySeconds":config.replay_seconds,"replayMemoryLimitMb":config.replay_memory_limit_mb,"clipSeconds":config.replay_seconds,"container":config.container,"outputDirectory":config.output_directory,"saveWithoutGameFolders":config.save_without_game_folders,"systemAudioEnabled":system.0,"systemAudioId":system.1,"microphoneEnabled":microphone.0,"microphoneId":microphone.1,"saveReplayHotkey":hotkey(&config.save_replay_hotkey)?,"toggleRecordingHotkey":hotkey(&config.toggle_recording_hotkey)?,"continuousRecordingEnabled":config.continuous_recording_enabled});
     if let Some(path) = test_output {
         value["durationSeconds"] = 5.into();
         value["outputPath"] = json!(path);

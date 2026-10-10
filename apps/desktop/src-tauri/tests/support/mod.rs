@@ -43,6 +43,7 @@ pub fn draft(path: &Path) -> OnboardingDraft {
         replay_mode: Some(ReplayMode::Ram),
         container: Some(Container::Mp4),
         output_directory: Some(path.canonicalize().unwrap()),
+        save_without_game_folders: None,
         save_replay_hotkey: Some(Hotkey {
             key: 0x77,
             ctrl: false,
