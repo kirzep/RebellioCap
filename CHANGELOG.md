@@ -2,6 +2,10 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.17
+
+- Add “Save recordings without game subfolders” in recording settings. Replay clips and continuous recordings can be saved directly to the selected folder; the choice persists across restarts and defaults off.
+
 ## 0.1.16
 
 - Show the actual Windows language flag even when the application uses a different language.
@@ -25,7 +29,6 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 
 ### Added
 
-- Add “Save recordings without game subfolders” in recording settings. Replay clips and continuous recordings can be saved directly to the selected folder; the choice persists across restarts and defaults off.
 - Signed Windows installer builds in the public repository, with published releases and update manifests, plus identical assets mirrored to the private repository.
 - Background update checks and an update button above Settings, with confirmation, download progress and installation from the application.
 - Signature and package-version checks before recording shutdown; updates preserve configuration and saved clips and require the editor to be closed.

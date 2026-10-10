@@ -69,7 +69,7 @@ RebellioCap хранит недавнюю запись в кольцевом б�
 
 ## Начало работы
 
-EXE-установщик для Windows можно скачать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases/latest). Версия desktop-пакета — `0.1.9`. Публикуемые сборки проходят автоматические проверки; проверка оборудования и установки описана отдельно в [руководстве по релизам](docs/releases.md).
+EXE-установщик для Windows можно скачать в [GitHub Releases](https://github.com/kirzep/RebellioCap/releases/latest). Версия desktop-пакета — `0.1.17`. Публикуемые сборки проходят автоматические проверки; проверка оборудования и установки описана отдельно в [руководстве по релизам](docs/releases.md).
 
 Для записи нужны **Windows x64**, **NVIDIA с совместимым NVENC H.264** и **WebView2**. Подробности — в [системных требованиях](docs/system-requirements.md). Для сборки также нужны MSVC C++ Build Tools с Windows SDK и CMake/Ninja, Node.js 24 с npm и Rust 1.90+ с MSVC toolchain.
 

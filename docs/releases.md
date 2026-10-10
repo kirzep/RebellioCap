@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Testing](testing.md) · [Licensing](../LICENSE.md)
 
-Desktop manifests declare **0.1.16**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
+Desktop manifests declare **0.1.17**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
 
 ## Build a local package
 
