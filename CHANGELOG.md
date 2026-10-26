@@ -4,19 +4,26 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 
 ## Unreleased
 
-- Keep separately packaged app variants in their own configuration profile while preserving the stable installation's existing path.
-- Keep protocol processing active at interactive benchmark scene gates; wait for game focus before timing and reject focus loss during measurement.
+### Added
 
-- Add bounded soft audio resampling against capture QPC before source AAC and mixing to compensate device-clock drift. Deterministic and short hardware marker checks pass; long-session acceptance is recorded separately.
+- A full-screen overlay editor lets you move the recording status, replay status, and messages anywhere on the preview. Use `Esc` to discard changes or `Ctrl+Enter` to save; the editor confirms the result on screen.
+- Compact recording and replay indicators show their current state while you play. Messages report when capture starts, stops, saves a replay, or encounters an error.
+- Overlay and notification options now have a dedicated settings page. Choose custom notification sounds and place each overlay item to suit your screen.
+- Add optional capture diagnostics and performance tools for investigating frame timing, audio alignment, replay memory, and recording queues.
 
-- Add an opt-in canonical NV12 capture cache with bounded input views, pre-conversion admission, retained output leases across input reconfiguration, and initial compatibility fallback. BGRA remains the default: short Cyberpunk comparisons did not pass the game frametime tail gate.
-- Reject redirected stdin for interactive game measurements so scene gates cannot be silently skipped.
+### Improved
 
-- Keep Replay running when the NVENC queue is full: skip new video frames without waiting for a completion timeout, resume submission when capacity returns, and preserve keyframe requests across skipped frames. Diagnostics include queue-pressure drops and the age of the oldest pending frame.
-- Collect NVENC completions before leasing converter surfaces; add bounded internal pool/profile experiments while preserving the 6-slot/8-surface P5 baseline.
-- Batch continuous recording admission and disk work, expose queue byte/age diagnostics and opt-in limits, retain payload budget ownership through FFmpeg interleaving, and reuse packet wrappers.
-- Cache Replay duration extrema and add optional pipeline latency histograms/TraceLogging. Add offline-plannable short performance experiments with isolated evidence.
-- Fail stalled encoder sessions explicitly and bound host snapshot/command-pipe waits; healthy idle heartbeats remain supported. DuplicateOutput1 remains an opt-in SDR experiment with fallback.
+- Keep the overlay hidden when recording and replay are both off, so it does not cover the desktop while idle.
+- Keep replay responsive when the encoder is busy, and preserve keyframe requests while frames are skipped under load.
+- Gradually correct audio clock drift to improve long-recording sync. Long-session hardware acceptance is still pending.
+- Make recording work more resilient under load and report stalled encoder sessions clearly. Optional capture experiments remain off by default.
+
+### Fixed
+
+- Save overlay placement as screen-relative positions so the editor preview and desktop overlay use the same layout.
+- Replace corner buttons that could cover overlay items with keyboard shortcuts, and show clear saved or discarded feedback after closing the editor.
+- Keep separate packaged app variants from reusing the stable installation's settings folder.
+- Keep benchmark controls responsive while waiting for a game scene, and reject runs if the game loses focus during timing.
 
 ## 0.1.17
 

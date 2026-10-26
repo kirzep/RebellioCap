@@ -219,11 +219,10 @@ shared-budget release, four producers racing stop with exact accepted-prefix
 drain, and successive isolated batches making progress before stop supplies
 any extra notification. These tests do not replace storage latency profiling.
 
-The whole-pipeline3600-second soak on24October passed full decode/DTS for all
-three files but failed the50ms A/V endpoint gate (continuous327.038ms,
-final Replay319.550ms). Preserve that failure separately from script exit
-success; see `development/optimization-results.md`. A subsequent synthetic
-marker test is intended to distinguish clock drift from tail trimming.
+An extended whole-pipeline soak passed full decode and DTS checks but did not
+meet the 50 ms A/V marker limit (continuous recording 327 ms, final replay
+320 ms). Treat this as a failed long-session sync gate; synthetic marker tests
+do not replace hardware acceptance.
 
 `pcm_clock_aligner` tests both signs of100/1000ppm drift, zero-drift frame
 preservation, sine continuity with packet jitter, silence/recovery, irregular
@@ -236,13 +235,10 @@ deterministic checks do not replace hardware marker and long-session acceptance.
 its header contains build/run commands. It records only QPC/device-position
 statistics, never PCM, and cannot establish microphone or other-device results.
 
-The 26 October local Audio Test package is recorded under
-`build/audio-test-2026-10-26`. Check `package-check.json`, build logs and
-packaged-native-smoke evidence before redistribution. Its separate Tauri
-identifier selects an app-local profile; the stable identifier keeps the
-legacy profile path. Unit and config integration tests cover the selection.
-GUI startup/profile creation remains a manual gate if the UI launcher opens
-the registered stable executable instead of the exact portable path.
+Separately packaged app variants select their own local configuration profile;
+the stable application keeps its established settings path. Unit and config
+integration tests cover profile selection. Startup behavior still needs a
+manual check in the packaged Windows application.
 
 Interactive performance scene gates continue pumping engine protocol while
 waiting for Enter. A bounded focus handoff precedes timing; focus loss during
