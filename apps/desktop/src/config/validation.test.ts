@@ -124,7 +124,7 @@ describe('config validation', () => {
           replay_seconds: 30,
           replay_mode: 'ram',
           container: 'mp4',
-          output_directory: '\\\\?\\C:\\Users\\kirzep\\Documents',
+          output_directory: '\\\\?\\C:\\Users\\User\\Documents',
         })
       ).toHaveLength(0);
 

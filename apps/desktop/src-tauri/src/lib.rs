@@ -69,17 +69,24 @@ pub fn run() {
             tray::setup(app)?;
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } if window.label() == "overlay-editor" => {}
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 if window.label() == "main" {
                     if let Err(error) = notifications::close_overlay_editor(window.app_handle()) {
-                        logging::record("error", "overlay", "restore_failed", serde_json::json!({"error":error}));
+                        logging::record("error", "overlay", "close_failed", serde_json::json!({"error":error}));
                         return;
                     }
                 }
                 let _ = window.hide();
             }
+            tauri::WindowEvent::Destroyed if window.label() == "overlay-editor" => {
+                if let Err(error) = notifications::overlay_editor_destroyed(window.app_handle()) {
+                    logging::record("error", "overlay", "close_finalize_failed", serde_json::json!({"error":error}));
+                }
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             language::get_language_settings,
@@ -108,7 +115,10 @@ pub fn run() {
             notifications::read_notification_sound,
             notifications::set_overlay_visible,
             notifications::get_overlay_display,
-            notifications::set_overlay_editor_fullscreen,
+            notifications::open_overlay_editor,
+            notifications::close_overlay_editor_from_main,
+            notifications::finish_overlay_editor,
+            notifications::restore_overlay_editor_host,
             logging::developer_click,
             logging::get_developer_mode,
             logging::export_application_logs,

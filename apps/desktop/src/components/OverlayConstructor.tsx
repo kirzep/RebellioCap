@@ -4,8 +4,8 @@ import { t } from '../i18n';
 import { OverlayEditor, type OverlayDisplay } from './OverlayEditor';
 import { defaultOverlayLayout, type OverlayLayout } from './overlayLayout';
 import './OverlayEditor.css';
-export function OverlayConstructor({ layout, display, onCommit, onClose }: {
- layout: OverlayLayout; display: OverlayDisplay; onCommit: (layout: OverlayLayout) => Promise<void>; onClose: () => Promise<void>;
+export function OverlayConstructor({ layout, display, onCommit, onClose, feedbackAfterClose = false }: {
+ layout: OverlayLayout; display: OverlayDisplay; onCommit: (layout: OverlayLayout) => Promise<void>; onClose: (status: 'saved' | 'cancelled') => Promise<void>; feedbackAfterClose?: boolean;
 }) {
  const [draft, setDraft] = useState(() => structuredClone(layout));
  const [busy, setBusy] = useState(false);
@@ -31,10 +31,12 @@ export function OverlayConstructor({ layout, display, onCommit, onClose }: {
   try {
    if (save) await onCommit(draft);
    if (!mounted.current) return;
+   const status = save ? 'saved' : 'cancelled';
+   if (feedbackAfterClose) { await onClose(status); return; }
    setFeedback(save ? 'saved' : 'cancelled');
    await new Promise<void>(resolve => { release.current = resolve; timer.current = setTimeout(resolve, 500); });
    release.current = undefined; timer.current = undefined;
-   if (mounted.current) await onClose();
+   if (mounted.current) await onClose(status);
   } catch { if (mounted.current) { setFeedback(undefined); setError(true); } }
   finally { pending.current = false; if (mounted.current) setBusy(false); }
  }

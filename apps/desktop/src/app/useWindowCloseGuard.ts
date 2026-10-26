@@ -22,7 +22,7 @@ export function useWindowCloseGuard(_options: WindowCloseGuardOptions): WindowCl
   const hideWindow = useCallback(async () => {
     if (!('__TAURI_INTERNALS__' in window)) return;
     try {
-      await invoke('set_overlay_editor_fullscreen', { open: false });
+      await invoke('close_overlay_editor_from_main');
       await getCurrentWindow().hide();
       setCloseError(null);
     } catch (cause) { setCloseError(normalizeError(cause)); }

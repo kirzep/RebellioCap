@@ -19,7 +19,7 @@ describe('tray close', () => {
     await act(async () => native.onCloseRequested.mock.calls[0][0]({ preventDefault }));
     expect(preventDefault).toHaveBeenCalled();
     expect(native.hide).toHaveBeenCalledOnce();
-    expect(invoke).toHaveBeenCalledWith('set_overlay_editor_fullscreen', { open: false });
+    expect(invoke).toHaveBeenCalledWith('close_overlay_editor_from_main');
     expect(vi.mocked(invoke).mock.invocationCallOrder[0]).toBeLessThan(native.hide.mock.invocationCallOrder[0]);
     expect(stop).not.toHaveBeenCalled();
     expect(hook.result.current.closeRequested).toBe(false);

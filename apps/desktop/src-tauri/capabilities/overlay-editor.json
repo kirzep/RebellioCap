@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-editor",
+  "description": "Dedicated overlay editor window uses the host application's scoped commands.",
+  "local": true,
+  "windows": ["overlay-editor"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

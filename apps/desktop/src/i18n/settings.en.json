@@ -36,5 +36,7 @@
   "— выйти без сохранения": "— exit without saving",
   "— сохранить и выйти": "— save and exit",
   "— сбросить расположение": "— reset layout",
-  "— выбрать элемент": "— select an element"
+  "— выбрать элемент": "— select an element",
+  "Загружаем конструктор оверлея…": "Loading the overlay builder…",
+  "Не удалось загрузить настройки оверлея. Нажмите Esc, чтобы выйти.": "Could not load overlay settings. Press Esc to exit."
 }

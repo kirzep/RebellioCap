@@ -1,6 +1,6 @@
 use crate::model::{EngineLifecycle, EngineSnapshot};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Mutex};
+use std::{path::PathBuf, sync::{Mutex, atomic::{AtomicBool, Ordering}}};
 
 pub fn transitions(old: &EngineSnapshot, next: &EngineSnapshot) -> Vec<&'static str> {
     if next.lifecycle == EngineLifecycle::Failed && old.lifecycle != EngineLifecycle::Failed {
@@ -105,12 +105,11 @@ impl Default for NotificationSettings {
         }
     }
 }
-struct EditorWindowState {
-    placement: windows_sys::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT,
-    fullscreen: bool,
-}
 pub struct NotificationState {
-    editor: Mutex<Option<EditorWindowState>>,
+    editor: Mutex<bool>,
+    pending_editor_feedback: Mutex<Option<String>>,
+    editor_feedback: Mutex<Option<String>>,
+    restore_main_after_feedback: AtomicBool,
     settings: Mutex<NotificationSettings>,
     path: PathBuf,
 }
@@ -140,7 +139,10 @@ impl NotificationState {
         });
         let state = Self {
             settings: Mutex::new(settings),
-            editor: Mutex::new(None),
+            editor: Mutex::new(false),
+            pending_editor_feedback: Mutex::new(None),
+            editor_feedback: Mutex::new(None),
+            restore_main_after_feedback: AtomicBool::new(false),
             path,
         };
         if missing {
@@ -194,6 +196,8 @@ pub(crate) fn notify_ready(app: &tauri::AppHandle) {
 pub struct NotificationBatch {
     events: Vec<&'static str>,
     settings: NotificationSettings,
+    #[serde(rename = "editorFeedback")]
+    editor_feedback: Option<String>,
     #[serde(rename = "replayActive")]
     replay_active: bool,
     #[serde(rename = "recordingActive")]
@@ -205,7 +209,7 @@ fn notification_batch(mut events: Vec<&'static str>, settings: NotificationSetti
     if !settings.overlay_enabled && !settings.sound_enabled {
         events.clear();
     }
-    NotificationBatch { events, settings, replay_active: false, recording_active: false, editor_active: false }
+    NotificationBatch { events, settings, editor_feedback: None, replay_active: false, recording_active: false, editor_active: false }
 }
 #[tauri::command]
 pub async fn poll_notifications(
@@ -217,11 +221,13 @@ pub async fn poll_notifications(
         return Err("notifications.overlay_only".into());
     }
     let events = host.drain_notifications().await?;
-    let editor_active = state.editor.lock().map_err(|e| e.to_string())?.is_some();
+    let editor_active = *state.editor.lock().map_err(|e| e.to_string())?;
+    let editor_feedback = state.editor_feedback.lock().map_err(|e| e.to_string())?.clone();
     let settings = get_notification_settings(state)?;
     let (snapshot, _) = host.tray_status()?;
     let mut batch = notification_batch(events, settings);
     let healthy = !matches!(snapshot.lifecycle, EngineLifecycle::Failed | EngineLifecycle::Blocked | EngineLifecycle::Stopped);
+    batch.editor_feedback = editor_feedback;
     batch.editor_active = editor_active;
     batch.replay_active = healthy && snapshot.replay_active;
     batch.recording_active = healthy && snapshot.continuous_recording_active;
@@ -272,58 +278,141 @@ pub fn get_overlay_display(app: tauri::AppHandle) -> Result<OverlayDisplay, Stri
 #[tauri::command]
 pub fn set_overlay_visible(window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, visible: bool) -> Result<(), String> {
     if window.label() != "overlay" { return Err("notifications.overlay_only".into()); }
-    let editing = state.editor.lock().map_err(|e| e.to_string())?.is_some();
+    let editing = *state.editor.lock().map_err(|e| e.to_string())?;
     crate::native::overlay_safety::set_visible(&window, visible && !editing)
 }
 
-fn restore_editor_window(window: &tauri::WebviewWindow, original: &EditorWindowState) -> Result<(), String> {
-    window.set_fullscreen(original.fullscreen).map_err(|e| e.to_string())?;
-    if !original.fullscreen {
-        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
-        if unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPlacement(hwnd, &original.placement) } == 0 {
-            return Err(std::io::Error::last_os_error().to_string());
-        }
-    }
-    Ok(())
-}
-pub(crate) fn close_overlay_editor(app: &tauri::AppHandle) -> Result<(), String> {
-    use tauri::{Emitter, Manager};
+fn request_overlay_editor_close(app: &tauri::AppHandle, feedback: Option<&str>) -> Result<(), String> {
+    use tauri::Manager;
     let state = app.state::<NotificationState>();
-    let mut editor = state.editor.lock().map_err(|e| e.to_string())?;
-    if let Some(original) = editor.as_ref() {
-        let window = app.get_webview_window("main").ok_or("notifications.main_missing")?;
-        restore_editor_window(&window, original)?;
-        *editor = None;
-        drop(editor);
+    state.restore_main_after_feedback.store(false, Ordering::Release);
+    if let Some(window) = app.get_webview_window("overlay-editor") {
+        *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = feedback.map(str::to_owned);
+        window.close().map_err(|e| e.to_string())?;
+    } else {
+        *state.editor.lock().map_err(|e| e.to_string())? = false;
+        *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = None;
         notify_ready(app);
-        app.emit_to("main", "overlay-editor-closed", ()).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
+
+pub(crate) fn close_overlay_editor(app: &tauri::AppHandle) -> Result<(), String> {
+    request_overlay_editor_close(app, Some("cancelled"))
+}
+
 #[tauri::command]
-pub fn set_overlay_editor_fullscreen(app: tauri::AppHandle, window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, open: bool) -> Result<(), String> {
+pub fn close_overlay_editor_from_main(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != "main" { return Err("notifications.main_only".into()); }
-    if !open { return close_overlay_editor(&app); }
-    let mut editor = state.editor.lock().map_err(|e| e.to_string())?;
-    if editor.is_some() { return Ok(()); }
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowPlacement, WINDOWPLACEMENT, SW_SHOWMAXIMIZED};
-    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
-    let mut placement: WINDOWPLACEMENT = unsafe { std::mem::zeroed() };
-    placement.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
-    if unsafe { GetWindowPlacement(hwnd, &mut placement) } == 0 { return Err(std::io::Error::last_os_error().to_string()); }
-    let original = EditorWindowState { placement, fullscreen: window.is_fullscreen().map_err(|e| e.to_string())? };
-    let monitor = window.primary_monitor().map_err(|e| e.to_string())?;
-    let enter = (|| -> Result<(), String> {
-        if !original.fullscreen {
-            if original.placement.showCmd == SW_SHOWMAXIMIZED as u32 { window.unmaximize().map_err(|e| e.to_string())?; }
-            if let Some(monitor) = monitor { window.set_position(*monitor.position()).map_err(|e| e.to_string())?; }
+    close_overlay_editor(&app)
+}
+
+#[tauri::command]
+// WebView2 creation must run outside the synchronous command dispatcher on Windows.
+pub async fn open_overlay_editor(app: tauri::AppHandle, window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>) -> Result<(), String> {
+    use tauri::Manager;
+    if window.label() != "main" { return Err("notifications.main_only".into()); }
+    {
+        let mut active = state.editor.lock().map_err(|e| e.to_string())?;
+        if *active {
+            if let Some(editor) = app.get_webview_window("overlay-editor") {
+                editor.set_focus().map_err(|e| e.to_string())?;
+                return Ok(());
+            }
+            // Another invocation may still be building the window.
+            return Ok(());
         }
-        window.set_fullscreen(true).map_err(|e| e.to_string())
-    })();
-    if let Err(error) = enter { let _ = restore_editor_window(&window, &original); return Err(error); }
-    *editor = Some(original);
-    drop(editor);
+        *active = true;
+    }
+    *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = None;
+    *state.editor_feedback.lock().map_err(|e| e.to_string())? = None;
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        if let Err(error) = crate::native::overlay_safety::set_visible(&overlay, false) {
+            *state.editor.lock().map_err(|e| e.to_string())? = false;
+            notify_ready(&app);
+            return Err(error);
+        }
+    }
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "overlay-editor",
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("Настройка оверлея")
+    .decorations(false)
+    .resizable(false)
+    .skip_taskbar(true)
+    .always_on_top(true)
+    .fullscreen(true)
+    // Windows shares one WebView2 environment; browser arguments must match main/overlay.
+    .additional_browser_args("--autoplay-policy=no-user-gesture-required")
+    .visible(false);
+    let editor = match builder.build() {
+        Ok(editor) => editor,
+        Err(error) => {
+            *state.editor.lock().map_err(|e| e.to_string())? = false;
+            notify_ready(&app);
+            return Err(error.to_string());
+        }
+    };
+    if let Err(error) = editor.show().and_then(|_| editor.set_focus()) {
+        *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = Some("suppress".into());
+        let _ = editor.close();
+        *state.editor.lock().map_err(|e| e.to_string())? = false;
+        notify_ready(&app);
+        return Err(error.to_string());
+    }
+    if let Err(error) = window.hide() {
+        *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = Some("suppress".into());
+        let _ = editor.close();
+        *state.editor.lock().map_err(|e| e.to_string())? = false;
+        let _ = window.show();
+        let _ = window.set_focus();
+        notify_ready(&app);
+        return Err(error.to_string());
+    }
+    state.restore_main_after_feedback.store(true, Ordering::Release);
     notify_ready(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn finish_overlay_editor(window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, status: String) -> Result<(), String> {
+    if window.label() != "overlay-editor" { return Err("notifications.editor_only".into()); }
+    if !matches!(status.as_str(), "saved" | "cancelled") { return Err("notifications.invalid_editor_status".into()); }
+    *state.pending_editor_feedback.lock().map_err(|e| e.to_string())? = Some(status);
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn restore_overlay_editor_host(app: tauri::AppHandle, window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>) -> Result<(), String> {
+    use tauri::Manager;
+    if window.label() != "overlay" { return Err("notifications.overlay_only".into()); }
+    *state.editor_feedback.lock().map_err(|e| e.to_string())? = None;
+    if state.restore_main_after_feedback.swap(false, Ordering::AcqRel) {
+        let main = app.get_webview_window("main").ok_or("notifications.main_missing")?;
+        main.show().map_err(|e| e.to_string())?;
+        main.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+pub(crate) fn overlay_editor_destroyed(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let state = app.state::<NotificationState>();
+    *state.editor.lock().map_err(|e| e.to_string())? = false;
+    let feedback = state.pending_editor_feedback.lock().map_err(|e| e.to_string())?.take();
+    let feedback = match feedback {
+        Some(value) if matches!(value.as_str(), "saved" | "cancelled") => Some(value),
+        Some(value) if value == "suppress" => None,
+        None => Some("cancelled".into()),
+        _ => None,
+    };
+    *state.editor_feedback.lock().map_err(|e| e.to_string())? = feedback;
+    notify_ready(app);
+    use tauri::Emitter;
+    app.emit_to("main", "overlay-editor-closed", ()).map_err(|e| e.to_string())?;
     Ok(())
 }
 

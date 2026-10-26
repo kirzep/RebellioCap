@@ -7,13 +7,14 @@ import { defaultOverlayLayout, overlayPosition } from './overlayLayout';
 import { normalizeNotificationSettings, defaultNotificationSettings, playNotificationSound, type NotificationSettings } from './notificationSound';
 import './NotificationOverlay.css';
 
-interface Batch { events: string[]; settings: NotificationSettings; replayActive?: boolean; recordingActive?: boolean; editorActive?: boolean }
+interface Batch { events: string[]; settings: NotificationSettings; replayActive?: boolean; recordingActive?: boolean; editorActive?: boolean; editorFeedback?: 'saved' | 'cancelled' | null }
 export function NotificationOverlay() {
   useTranslation();
   const [events, setEvents] = useState<{ kind: string; id: number }[]>([]);
   const [closing, setClosing] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(defaultNotificationSettings.overlayEnabled);
   const [editorActive, setEditorActive] = useState(false);
+  const [editorFeedback, setEditorFeedback] = useState<'saved' | 'cancelled'>();
   const [capture, setCapture] = useState({ replay: false, recording: false });
   const [layout, setLayout] = useState(defaultOverlayLayout);
   const settings = useRef(defaultNotificationSettings);
@@ -45,6 +46,7 @@ export function NotificationOverlay() {
         if (disposed) return;
         settings.current = batch.settings;
         setEditorActive(batch.editorActive ?? false);
+        setEditorFeedback(batch.editorFeedback ?? undefined);
         setLayout(normalizeNotificationSettings(batch.settings).layout!);
         setCapture({ replay: batch.replayActive ?? false, recording: batch.recordingActive ?? false });
         setOverlayEnabled(batch.settings.overlayEnabled);
@@ -74,6 +76,14 @@ export function NotificationOverlay() {
     return () => { disposed = true; clearTimeout(timer); clearTimeout(subscriptionTimer); unlisten?.(); };
   }, []);
   useEffect(() => {
+    if (!editorFeedback) return;
+    const timer = setTimeout(() => {
+      setEditorFeedback(undefined);
+      if ('__TAURI_INTERNALS__' in window) void invoke('restore_overlay_editor_host').catch(() => {});
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [editorFeedback]);
+  useEffect(() => {
     if (!current) return;
     setClosing(false);
     if (settings.current.soundEnabled) void playNotificationSound(settings.current).catch(() => {});
@@ -82,16 +92,19 @@ export function NotificationOverlay() {
     const removeTimer = setTimeout(() => setEvents(previous => previous.slice(1)), duration + 350);
     return () => { clearTimeout(closingTimer); clearTimeout(removeTimer); };
   }, [current?.id]);
-  const visible = !editorActive && overlayEnabled && (capture.replay || capture.recording || !!(action && current));
+  const visible = !editorActive && (Boolean(editorFeedback) || (overlayEnabled && (capture.replay || capture.recording || !!(action && current))));
   useEffect(() => {
     if ('__TAURI_INTERNALS__' in window) void invoke('set_overlay_visible', { visible }).catch(() => {});
   }, [visible]);
-  if (!overlayEnabled) return null;
+  if (!overlayEnabled && !editorFeedback) return null;
   return <>
-    {capture.recording && <div className="capture-indicator-position" style={overlayPosition(layout.recording)} aria-label={t('Идёт запись')}><OverlayIndicator recording/></div>}
-    {capture.replay && <div className="capture-indicator-position" style={overlayPosition(layout.replay)} aria-label={t('Мгновенный повтор включён')}><OverlayIndicator/></div>}
-    {action && current && <div className="capture-notification-position" style={overlayPosition(layout.messages)}>
+    {overlayEnabled && capture.recording && <div className="capture-indicator-position" style={overlayPosition(layout.recording)} aria-label={t('Идёт запись')}><OverlayIndicator recording/></div>}
+    {overlayEnabled && capture.replay && <div className="capture-indicator-position" style={overlayPosition(layout.replay)} aria-label={t('Мгновенный повтор включён')}><OverlayIndicator/></div>}
+    {overlayEnabled && action && current && <div className="capture-notification-position" style={overlayPosition(layout.messages)}>
       <OverlayNotification key={current.id} kind={current.kind} closing={closing}/>
+    </div>}
+    {editorFeedback && <div className="overlay-editor-feedback" data-status={editorFeedback} role="status">
+      {t(editorFeedback === 'saved' ? 'Оверлей сохранён' : 'Изменения отменены')}
     </div>}
   </>;
 }

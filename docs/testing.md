@@ -72,6 +72,13 @@ it does not crash or record the engine.
 
 ## Review paths for difficult behavior
 
+For separate overlay editor windows and transparent desktop save/cancel feedback,
+build the debug desktop host, stage the engine, start `npm run dev -w @rebelliocap/desktop`,
+and run `node scripts/test-native-overlay.mjs` from another terminal. This uses real
+WebView2 windows and an isolated settings profile. It checks save/cancel, unchanged
+main-window geometry and feedback with notifications disabled; it does not validate
+recording performance or the installed application.
+
 These tests are useful entry points when reviewing the engineering decisions:
 
 | Behavior | Representative evidence in source |

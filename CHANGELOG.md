@@ -2,11 +2,11 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
-## Unreleased
+## 0.1.18
 
 ### Added
 
-- A full-screen overlay editor lets you move the recording status, replay status, and messages anywhere on the preview. Use `Esc` to discard changes or `Ctrl+Enter` to save; the editor confirms the result on screen.
+- A separate full-screen overlay editor window lets you move the recording status, replay status, and messages anywhere on the preview. Use `Esc` to discard changes or `Ctrl+Enter` to save; the editor confirms the result on screen.
 - Compact recording and replay indicators show their current state while you play. Messages report when capture starts, stops, saves a replay, or encounters an error.
 - Overlay and notification options now have a dedicated settings page. Choose custom notification sounds and place each overlay item to suit your screen.
 - Add optional capture diagnostics and performance tools for investigating frame timing, audio alignment, replay memory, and recording queues.
@@ -20,6 +20,8 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 
 ### Fixed
 
+- Create the overlay editor outside the Windows synchronous command dispatcher and match the shared WebView2 browser arguments to prevent hangs and window creation errors. Keep the main window size and position intact.
+- Close the editor before showing saved or discarded feedback on a transparent desktop overlay, then restore settings. Keep Escape available if editor settings fail to load.
 - Save overlay placement as screen-relative positions so the editor preview and desktop overlay use the same layout.
 - Replace corner buttons that could cover overlay items with keyboard shortcuts, and show clear saved or discarded feedback after closing the editor.
 - Keep separate packaged app variants from reusing the stable installation's settings folder.

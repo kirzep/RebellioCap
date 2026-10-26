@@ -81,3 +81,35 @@ html.notification-surface, .notification-surface body, .notification-surface #ro
 }
 
 .capture-notification--preview, .capture-notification--preview .capture-notification__text { animation: none; }
+
+.overlay-editor-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 2px solid #d3b36d;
+  box-shadow: inset 0 0 16px #d3b36d2b;
+  color: #f5f4f1;
+  font-family: 'Manrope Variable', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: 0 1px 5px #000, 0 0 12px #000;
+  pointer-events: none;
+  user-select: none;
+  background: transparent;
+  animation: overlay-feedback-appear 140ms ease-out both;
+}
+.overlay-editor-feedback[data-status='saved'] {
+  border-color: #78d39a;
+  box-shadow: inset 0 0 16px #78d39a30;
+  color: #b7f0c9;
+}
+@keyframes overlay-feedback-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .overlay-editor-feedback { animation-duration: 1ms; } }

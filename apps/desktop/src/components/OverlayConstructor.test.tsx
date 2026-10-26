@@ -54,6 +54,15 @@ it('does not close later if the constructor is unmounted during feedback', async
  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
  expect(onClose).not.toHaveBeenCalled();
 });
+it.each([['Escape', false, 'cancelled'], ['Enter', true, 'saved']] as const)('closes before desktop feedback for %s', async (key, ctrlKey, status) => {
+ const onCommit = vi.fn().mockResolvedValue(undefined), onClose = vi.fn().mockResolvedValue(undefined);
+ render(<OverlayConstructor layout={defaultOverlayLayout} display={{ width: 1920, height: 1080 }} onCommit={onCommit} onClose={onClose} feedbackAfterClose/>);
+ await act(async () => { fireEvent.keyDown(screen.getByRole('dialog'), { key, ctrlKey }); });
+ expect(onCommit).toHaveBeenCalledTimes(status === 'saved' ? 1 : 0);
+ expect(onClose).toHaveBeenCalledWith(status);
+ expect(screen.queryByRole('status')).not.toBeInTheDocument();
+ expect(screen.getByRole('dialog')).not.toHaveAttribute('data-feedback');
+});
 function dragRecording() {
  const button = screen.getByRole('button', { name: 'Статус записи' });
  const canvas = screen.getByLabelText('Редактор оверлея');

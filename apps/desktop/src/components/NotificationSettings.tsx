@@ -35,7 +35,11 @@ export function NotificationSettingsPanel() {
     if (!native) return;
     let disposed = false;
     let release: (() => void) | undefined;
-    void getCurrentWebviewWindow().listen('overlay-editor-closed', () => setEditorOpen(false))
+    void getCurrentWebviewWindow().listen('overlay-editor-closed', () => {
+      void invoke<NotificationSettings>('get_notification_settings').then(value => {
+        if (!disposed) { setSettings(normalizeNotificationSettings(value)); setVolumeDraft(value.volume); }
+      }).catch(() => {});
+    })
       .then(unlisten => { if (disposed) unlisten(); else release = unlisten; }).catch(() => {});
     return () => { disposed = true; release?.(); };
   }, [native]);
@@ -54,15 +58,12 @@ export function NotificationSettingsPanel() {
     if (busy) return;
     setBusy(true); setError(null);
     try {
-      if (native) await invoke('set_overlay_editor_fullscreen', { open: true });
-      setEditorOpen(true);
+      if (native) await invoke('open_overlay_editor');
+      else setEditorOpen(true);
     } catch { setError('Не удалось открыть конструктор оверлея.'); }
     finally { setBusy(false); }
   }
-  async function closeEditor() {
-    if (native) await invoke('set_overlay_editor_fullscreen', { open: false });
-    setEditorOpen(false);
-  }
+  async function closeEditor() { setEditorOpen(false); }
   async function commitLayout(layout: typeof defaultOverlayLayout) {
     const next = { ...settings, layout };
     if (native) await invoke('set_notification_settings', { settings: next });

@@ -26,6 +26,25 @@ it('drains once on subscription and stays idle until the native ready event', as
   view.unmount();
   expect(nativeEvents.unlisten).toHaveBeenCalledOnce();
 });
+it.each(['saved', 'cancelled'] as const)('shows desktop %s feedback even when notifications are disabled, then restores settings', async editorFeedback => {
+ vi.useFakeTimers();
+ Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+ try {
+  vi.mocked(invoke).mockImplementation(async command => command === 'poll_notifications' ? {
+   events: [], settings: { overlayEnabled: false, soundEnabled: false, sound: 'glass', volume: 35 }, editorFeedback,
+  } : undefined);
+  render(<NotificationOverlay/>);
+  await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+  expect(screen.getByRole('status')).toHaveAttribute('data-status', editorFeedback);
+  expect(invoke).toHaveBeenCalledWith('set_overlay_visible', { visible: true });
+  await act(async () => { await vi.advanceTimersByTimeAsync(499); });
+  expect(invoke).not.toHaveBeenCalledWith('restore_overlay_editor_host');
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(invoke).toHaveBeenCalledWith('restore_overlay_editor_host');
+  expect(invoke).toHaveBeenLastCalledWith('set_overlay_visible', { visible: false });
+ } finally { cleanup(); Reflect.deleteProperty(window, '__TAURI_INTERNALS__'); }
+});
 it('coalesces readiness during an in-flight drain without overlapping or losing events',async()=>{
   vi.useFakeTimers();
   const settings={overlayEnabled:true,soundEnabled:false,sound:'glass',volume:35};
