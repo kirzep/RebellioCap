@@ -41,11 +41,12 @@ describe('EngineState', () => {
     expect(screen.queryByText('Обычная запись идёт')).not.toBeInTheDocument();
   });
 
-  it('renders continuous recording active state', () => {
+  it('does not insert a duplicate recording status into the workspace', () => {
     const snapshot = createSnapshot({ continuousRecordingActive: true });
     render(<EngineState snapshot={snapshot} />);
 
-    expect(screen.getByText('Обычная запись идёт')).toBeInTheDocument();
+    expect(screen.queryByText('Обычная запись идёт')).not.toBeInTheDocument();
+    expect(screen.getByTestId('engine-lifecycle-badge')).toHaveTextContent('Replay включён');
   });
 
   it('renders last error banner and handles diagnostics trigger', () => {

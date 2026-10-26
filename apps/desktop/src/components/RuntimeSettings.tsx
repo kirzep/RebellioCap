@@ -18,8 +18,10 @@ import { VideoStep } from '../onboarding/steps/VideoStep';
 import { Button, ConfirmDialog, ErrorNotice, InlineStatus } from './Primitives';
 import styles from './RuntimeSettings.module.css';
 import { ApplicationSettings } from './ApplicationSettings';
+import { NotificationSettingsPanel } from './NotificationSettings';
+import { WorkspaceActions } from './WorkspaceActions';
 
-export type RuntimeSettingsSection = 'video' | 'audio' | 'replay' | 'hotkeys' | 'application';
+export type RuntimeSettingsSection = 'video' | 'audio' | 'replay' | 'hotkeys' | 'application' | 'notifications';
 type HotkeyTarget = 'replay' | 'recording';
 
 const sections: readonly { id: RuntimeSettingsSection; label: string }[] = [
@@ -28,6 +30,7 @@ const sections: readonly { id: RuntimeSettingsSection; label: string }[] = [
   { id: 'replay', label: 'Повторы и файлы' },
   { id: 'hotkeys', label: 'Горячие клавиши' },
   { id: 'application', label: 'Приложение' },
+  { id: 'notifications', label: 'Оверлей и уведомления' },
 ];
 
 const validationFieldSelectors: Record<string, string> = {
@@ -618,6 +621,7 @@ export function RuntimeSettings({
 
         <div ref={editorRef} className={styles.editor}>
           {section === 'application' && <ApplicationSettings />}
+          {section === 'notifications' && <NotificationSettingsPanel />}
           {section === 'video' && (
             <VideoStep
               draft={candidate}
@@ -655,6 +659,7 @@ export function RuntimeSettings({
         </div>
       </div>
 
+      <WorkspaceActions><div className={styles.footer}>
       <div className={styles.messages}>
         {validationErrors.length > 0 && (
           <ErrorNotice title={t("Проверьте настройки")} tone="warning">
@@ -699,12 +704,11 @@ export function RuntimeSettings({
             {hotkeyStopNoticeMessage}
           </ErrorNotice>
         )}
-      </div>
-
       {isDirty && <div className={styles.restartNotice}>
         {t("Replay перезапустится; несохранённый повтор будет потерян.")}</div>}
+      </div>
 
-      {(section !== 'application' || isDirty) && <div className={styles.actions}>
+      {(!['application', 'notifications'].includes(section) || isDirty) && <div className={styles.actions}>
         <Button
           variant="secondary"
           onClick={resetCandidate}
@@ -722,6 +726,7 @@ export function RuntimeSettings({
         >
           {t("Применить")}</Button>
       </div>}
+      </div></WorkspaceActions>
 
       <ConfirmDialog
         open={showApplyConfirmation}

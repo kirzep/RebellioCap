@@ -165,3 +165,57 @@ This design targets Windows x64 and NVIDIA encoding. Deterministic tests cannot
 establish compatibility with every display, audio driver, HDR configuration or
 game. [Testing](testing.md) distinguishes those tests from real hardware and
 long-session acceptance.
+
+## Optimization instrumentation and admission
+
+NVENC admission collects completed packets before the converter leases an output
+surface. A saturated queue skips that input tick without losing a pending IDR;
+completed packets still reach fanout when no image is available. Internal pool
+experiments accept 6–12 encoder slots and reserve two additional converter
+surfaces. The default remains 6/8. P2–P5, B=0/1/2, explicit multipass and bounded
+VBR quality/CQP configurations are experiments; the decode timeline uses the
+requested reorder depth. They have not selected new product profiles.
+
+Optional `PipelineTelemetry` records fixed atomic latency histograms without
+allocation on updates. Percentiles are bucket upper bounds; overflow reports
+the observed maximum. Concurrent snapshots are approximate; quiescent snapshots
+are exact. CPU-side scopes measure host elapsed time, including waits inside
+an API, rather than GPU execution or per-thread CPU consumption. NVENC
+submit-to-collection includes B-frame delay and polling. The legacy latency
+histogram remains capped at 1.024 seconds; the optional stage histogram has its
+own wider bound and overflow count. TraceLogging is disabled by default.
+
+Continuous admission publishes a whole batch under one queue lock. The worker
+drains up to 32 packets / 1 MiB by default and permits an oversized first packet.
+Queue byte/age metrics include in-flight work; age is measured from enqueue QPC,
+not media DTS. Age limits are opt-in and remain active while draining on Stop.
+The shared budget accounts encoded owners by allocation capacity; logical queue
+bytes are a separate measure. The copied FFmpeg buffer retains the encoded
+budget owner through interleaving. FFmpeg's additional copy is not a total RAM
+hard-cap guarantee. AVIO defaults to 32 KiB and scheduling remains unchanged.
+
+A missing NVENC completion beyond the internal 30-second deadline is terminal;
+it does not authorize reuse of driver-owned textures. Uninterruptible vendor
+calls remain behind the engine process boundary. The host bounds stdin writes
+and stale validated-snapshot waits, terminating the whole owned process job
+before joining its pipe worker. Device removal remains an explicit failure;
+seamless new-device/container continuation is not implemented.
+
+The optional direct NV12 experiment owns a canonical, unregistered NV12 texture per converter generation. Only free leased pool textures are copied from it and submitted to NVENC. Static ticks do not access previous Desktop Duplication inputs. Up to four input views retain COM identities; reconfiguration invalidates the canonical image/views while preserving registered output surfaces and their leases. The initial unsupported input view can fall back to BGRA before any encode submission; device/resource failures remain terminal. The fallback BGRA allocation is retained in this prototype and must be included in memory comparisons.
+
+Normalized stereo48k PCM passes through a per-source `PcmClockAligner` before
+source AAC, epoch bridging and mixing. It compares capture QPC with emitted
+sample cadence, smooths phase over two seconds and applies bounded soft
+libswresample compensation once per second (at most2000ppm). Ordinary clock
+drift changes sample count smoothly; it is not repaired by relabeling AAC PTS
+or by per-packet silence/overlap cuts. A discontinuity drains the old resampler
+before a fresh segment, retaining the existing bridge recovery-gap policy.
+Under64 startup frames are retained untouched until enough filter support is
+available, or published directly on final drain. Input/output allocations and
+drain work are bounded. Long-session hardware acceptance is still pending.
+
+The stable desktop identifier `com.rebelliocap.desktop` retains its established
+LocalAppData/RebellioCap configuration directory. Separately packaged variants
+select Tauri's per-app local directory before ConfigStore appends RebellioCap,
+so a test package does not reuse stable settings merely because the executable
+and UI retain the same name.

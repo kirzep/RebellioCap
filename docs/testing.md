@@ -159,3 +159,91 @@ The workflow does not run the hardware preset, ignored native media suites,
 actual WebView2 UI, long-session collectors or installer acceptance. Use the
 workflow result for the exact commit under review; the presence of this file
 alone is not a passing-build claim.
+
+## Optimization experiments
+
+`collect-performance.ps1 -PlanOnly -ExperimentMode combined
+-ExperimentOutputRoot build/optimization/fresh-id -SettingsDeclaration '...'
+-ExperimentConfig host.json` generates an offline plan without starting a game,
+engine or PresentMon. Modes are `game-only`, `replay-only`, `continuous-only`,
+`combined`, and `save-burst`. Runtime requires an already running game, an
+explicit repeatable scene and display/game settings, a fresh evidence root,
+60-second warmup and at least three alternating pairs. Evidence inside the
+repository must live in an ignored subtree so later source archives cannot
+recursively contain earlier experiments. The 30-minute acceptance path is kept
+separate; a short result does not imply acceptance PASS.
+
+Short frame analysis retains raw CSV and selects the most populated process /
+swap-chain trace, validates timestamp coverage and interval continuity, and
+stores the selected rows separately without overwrite. Save deadlines begin at
+each submission, including during measurement. Missing/truncated resource
+evidence and late correlated save replies fail the run.
+
+Internal host JSON experiments optionally accept `nvencPreset` (2–5),
+`nvencBFrames` (0–2), `nvencSlotCount` (6–12), `nvencMultipass` (0–2),
+`nvencConstantQp`, `nvencQpI/P/B` (0–51), `nvencTargetQuality` (1–51, zero
+preserves the preset), `pipelineTelemetryEnabled`, `traceTelemetryEnabled`,
+`duplicateOutput1Enabled`, and `continuousAvioBufferBytes` (4 KiB–1 MiB).
+Omitting them preserves existing settings. Change one factor at a time; these
+are not published UI quality profiles.
+
+The CTest `nvenc_encode` test intentionally fixes its soak to 600 seconds.
+For a short headless synthetic functional check, run the executable directly
+with `REBELLIOCAP_NVENC_SOAK_SECONDS=5`; setting that variable before CTest does
+not override the test property. A five-second soak is not long-session or game
+acceptance. Modern duplication/fullscreen transitions, physical input latency,
+A/V marker alignment and multi-device/driver validation remain separate gates.
+
+Short game experiments require an interactive terminal (TTY). Redirected or closed stdin is rejected before the scene gates or evidence creation; PlanOnly and offline analysis remain usable without a terminal. Opt-in session metrics.diagnostics reports pipeline counters and accepted encoder settings. Short-run drops use counter deltas excluding warmup; latency histograms remain session cumulative and represent CPU submit-to-collection, not GPU execution time.
+
+The internal directNv12CacheEnabled boolean enables the O09 canonical NV12 prototype. Baseline BGRA remains the default. Hardware converter checks include pixel readback only in tests, outstanding leases through resize, bounded input-view eviction, static repeat and all rotations. The audio/video lifetime executable also verifies three direct-backend idle/resume cycles. Three short Cyberpunk pairs showed worse game p99.9 on direct in every pair, so the experiment remains off. GPU timing, longer acceptance and other drivers remain separate gates.
+
+The continuous recovery hardware fixture tests 32/128/256/512/1024 KiB AVIO buffers in MP4 and MKV with reordered video and three AAC tracks. Its offline NVENC generator waits for admission with a five-second deadline before conversion and requires every synthetic frame to be submitted and decoded.
+
+For full decode validation of variable frame timestamps, preserve the demux time base: `ffmpeg -v error -xerror -err_detect explode -i clip.mp4 -map 0:v -map 0:a -fps_mode:v passthrough -enc_time_base:v demux -f null NUL`. Independently check per-stream packet DTS with ffprobe. A nominal 1/framerate output time base can round distinct source timestamps together in the null output. Keep decode logs; zero exit code alone does not establish empty diagnostics.
+
+`scripts/measure-replay-snapshot.cpp` is a standalone metadata microbenchmark with its build command in the header. It measures 30-second/2-minute/5-minute/30-minute rings, short/full snapshots, sixteen retained snapshots and GOP-boundary appends. A shared tiny payload does not replace game contention, realistic memory pressure or long-session acceptance.
+
+The hidden mux hardware case `[.quality-reference]` accepts
+`REBELLIOCAP_QUALITY_INPUT` (exactly 240 BGRA frames at640×360) and
+`REBELLIOCAP_QUALITY_OUTPUT` (a fresh, nonexistent directory). Run the mux
+executable directly with that filter. It emits fourteen single-factor NVENC
+profiles and test-only post-converter NV12 references. Validate identical
+reference hashes, all240 decoded frames, per-stream DTS and aligned per-frame
+metrics before comparing SSIM/PSNR. This tiny synthetic workload is not a
+game-quality or throughput acceptance test. The production path has no CPU
+upload/readback added by this fixture.
+
+Continuous unit coverage includes failure partway through a drained batch,
+shared-budget release, four producers racing stop with exact accepted-prefix
+drain, and successive isolated batches making progress before stop supplies
+any extra notification. These tests do not replace storage latency profiling.
+
+The whole-pipeline3600-second soak on24October passed full decode/DTS for all
+three files but failed the50ms A/V endpoint gate (continuous327.038ms,
+final Replay319.550ms). Preserve that failure separately from script exit
+success; see `development/optimization-results.md`. A subsequent synthetic
+marker test is intended to distinguish clock drift from tail trimming.
+
+`pcm_clock_aligner` tests both signs of100/1000ppm drift, zero-drift frame
+preservation, sine continuity with packet jitter, silence/recovery, irregular
+batch sizes through recovery, invalid/unbounded input, sub-filter-length
+segments and timestamp overflow. Hardware audio lifetime checks feed corrected
+PCM through real AAC encoders and exercise buffered44.1k normalization. These
+deterministic checks do not replace hardware marker and long-session acceptance.
+
+`scripts/measure-audio-clock.cpp` is a read-only pinned-loopback clock probe;
+its header contains build/run commands. It records only QPC/device-position
+statistics, never PCM, and cannot establish microphone or other-device results.
+
+The 26 October local Audio Test package is recorded under
+`build/audio-test-2026-10-26`. Check `package-check.json`, build logs and
+packaged-native-smoke evidence before redistribution. Its separate Tauri
+identifier selects an app-local profile; the stable identifier keeps the
+legacy profile path. Unit and config integration tests cover the selection.
+GUI startup/profile creation remains a manual gate if the UI launcher opens
+the registered stable executable instead of the exact portable path.
+
+Interactive performance scene gates continue pumping engine protocol while
+waiting for Enter. A bounded focus handoff precedes timing; focus loss during
+measurement invalidates that run. Automated fixtures cover these paths.

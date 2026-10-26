@@ -2,7 +2,7 @@ import { t, useTranslation } from '../i18n';
 import { FileSearch } from 'lucide-react';
 import { normalizeError } from '../bridge/host';
 import type { EngineSnapshot } from '../config/model';
-import { Button, ErrorNotice, InlineStatus, type InlineStatusTone } from './Primitives';
+import { Button, ErrorNotice, type InlineStatusTone } from './Primitives';
 import styles from './EngineState.module.css';
 
 export interface EngineStateProps {
@@ -37,9 +37,6 @@ export function EngineState({ snapshot, isStale = false, onOpenDiagnostics, onOp
         <div className={styles.headerCopy}>
           <h2 id="engine-state-title" className={styles.title} data-tone={presentation.tone}
             data-testid="engine-lifecycle-badge" aria-live="polite">{presentation.title}</h2>
-          {snapshot.continuousRecordingActive && <InlineStatus tone={isStale ? 'warning' : 'danger'}>
-            {isStale ? t('Состояние обычной записи неизвестно') : t('Обычная запись идёт')}
-          </InlineStatus>}
         </div>
         {onOpenDiagnostics && <Button variant="tertiary" size="icon" busy={isOpeningDiagnostics}
           title={t("Диагностика")} aria-label={diagnosticsExpanded ? t('Скрыть диагностику') : t('Диагностика')}

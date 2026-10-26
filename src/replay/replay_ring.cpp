@@ -56,6 +56,8 @@ Result<void> ReplayRing::append(EncodedPacket packet) {
     memory_boundary_.reset();
     newest_pts_.reset();
     newest_video_pts_.reset();
+    earliest_retained_pts_.reset();
+    latest_retained_pts_.reset();
     time_boundary_.reset();
     waiting_for_video_ = false;
     pruned_from_.reset();
@@ -72,6 +74,8 @@ Result<void> ReplayRing::append(EncodedPacket packet) {
     bytes_ = 0;
     ring_memory_bytes_ = 0;
     newest_video_pts_.reset();
+    earliest_retained_pts_.reset();
+    latest_retained_pts_.reset();
     pruned_from_.reset();
     time_boundary_ = cutoff;
     waiting_for_video_ = true;
@@ -119,6 +123,10 @@ Result<void> ReplayRing::append(EncodedPacket packet) {
     keyframe_pts_[packets_.back().epoch].push_back(packets_.back().pts);
   }
   prune_locked();
+  // Only fold in a packet after pruning: the unchanged-boundary fast path can
+  // discard a newly appended late packet. Bulk pruning already rebuilt extrema;
+  // including its last retained packet again is harmless and constant time.
+  if (!packets_.empty()) include_retained_pts_locked(packets_.back().pts);
   // Leave a quarter of the shared budget for pending saves and the continuous
   // recording queue. A snapshot can keep payloads alive after ring eviction.
   const auto ring_target = budget_->limit() - budget_->limit() / 4;
@@ -246,23 +254,10 @@ std::size_t ReplayRing::bytes() const noexcept {
 
 QpcTicks ReplayRing::retained_duration() const noexcept {
   std::scoped_lock lock(mutex_);
-  if (!active_epoch_.has_value()) {
+  if (!earliest_retained_pts_.has_value() || !latest_retained_pts_.has_value()) {
     return 0;
   }
-
-  std::optional<QpcTicks> earliest;
-  std::optional<QpcTicks> latest;
-  for (const auto& packet : packets_) {
-    if (packet.epoch != *active_epoch_) {
-      continue;
-    }
-    earliest = earliest.has_value() ? std::min(*earliest, packet.pts) : packet.pts;
-    latest = latest.has_value() ? std::max(*latest, packet.pts) : packet.pts;
-  }
-  if (!earliest.has_value() || !latest.has_value()) {
-    return 0;
-  }
-  return saturating_duration(*latest, *earliest);
+  return saturating_duration(*latest_retained_pts_, *earliest_retained_pts_);
 }
 
 bool ReplayRing::memory_limited() const noexcept {
@@ -294,6 +289,8 @@ void ReplayRing::evict_gop_locked() {
     memory_drops_ += packets_.size();
     packets_.clear();
     keyframe_pts_.clear();
+    earliest_retained_pts_.reset();
+    latest_retained_pts_.reset();
     bytes_ = 0;
     ring_memory_bytes_ = 0;
     pruned_from_.reset();
@@ -313,7 +310,7 @@ void ReplayRing::evict_gop_locked() {
   packets_.erase(remove, packets_.end());
   memory_boundary_ = pts;
   pruned_from_.reset();
-  rebuild_keyframe_indices_locked();
+  rebuild_indices_locked();
 }
 
 void ReplayRing::prune_locked() {
@@ -360,13 +357,23 @@ void ReplayRing::prune_locked() {
       });
   if (remove_begin != packets_.end()) {
     packets_.erase(remove_begin, packets_.end());
-    rebuild_keyframe_indices_locked();
+    rebuild_indices_locked();
   }
 }
 
-void ReplayRing::rebuild_keyframe_indices_locked() {
+void ReplayRing::include_retained_pts_locked(QpcTicks pts) {
+  earliest_retained_pts_ = earliest_retained_pts_.has_value()
+      ? std::min(*earliest_retained_pts_, pts) : pts;
+  latest_retained_pts_ = latest_retained_pts_.has_value()
+      ? std::max(*latest_retained_pts_, pts) : pts;
+}
+
+void ReplayRing::rebuild_indices_locked() {
   keyframe_pts_.clear();
+  earliest_retained_pts_.reset();
+  latest_retained_pts_.reset();
   for (const auto& packet : packets_) {
+    include_retained_pts_locked(packet.pts);
     if (packet.stream == StreamKind::Video && packet.keyframe) {
       keyframe_pts_[packet.epoch].push_back(packet.pts);
     }

@@ -55,3 +55,11 @@ See [getting started](getting-started.md) and [Windows toolchain](development/wi
 ## Unsupported cases
 
 macOS/Linux capture, ARM64 builds, AMD/Intel capture encoders, HDR fidelity/tone mapping, injected game capture, and per-process audio isolation are not implemented. The editor's Media Foundation export fallback does not add another capture encoder. Locked/secure desktop intervals cannot provide recoverable imagery.
+
+Internal optimization experiments do not change these requirements. They do not
+add HDR, another vendor encoder, D3D12 or guaranteed performance at GPU saturation.
+DuplicateOutput1 still requests BGRA SDR and falls back on supported compatibility
+failures; its availability is not a measured performance advantage. Larger
+encoder/converter pools increase GPU memory use and require workload comparison.
+
+The direct NV12 prototype still requires compatible D3D11 Video Processor input views on the captured adapter. An unsupported initial input view can use the baseline BGRA copy path; it does not add a capture backend or vendor encoder. Its canonical texture and retained fallback BGRA allocation add GPU memory and remain experimental.

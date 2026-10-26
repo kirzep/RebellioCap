@@ -22,6 +22,7 @@
 #include "video/nvenc_api.h"
 #include "video/nvenc_decode_timeline.h"
 #include "video/nvenc_state_machine.h"
+#include "core/pipeline_telemetry.h"
 
 namespace rebelliocap {
 namespace {
@@ -93,7 +94,24 @@ std::optional<std::uint8_t> h264_sps_profile_idc(
   return std::nullopt;
 }
 
+GUID nvenc_preset_guid(std::uint32_t preset) {
+  switch (preset) {
+    case 2: return NV_ENC_PRESET_P2_GUID;
+    case 3: return NV_ENC_PRESET_P3_GUID;
+    case 4: return NV_ENC_PRESET_P4_GUID;
+    default: return NV_ENC_PRESET_P5_GUID;
+  }
+}
+
 Result<void> validate_config(const NvencConfig& config, QpcClock& clock) {
+  if (config.preset < 2 || config.preset > 5 || config.b_frames > 2 ||
+      (config.multipass && *config.multipass > 2) || config.qp_i > 51 ||
+      config.qp_p > 51 || config.qp_b > 51 || config.target_quality > 51) {
+    return Result<void>::failure(encoder_error("nvenc.invalid_profile", "Invalid internal H.264 experiment configuration."));
+  }
+  if (config.slot_count < kAsyncSlotCount || config.slot_count > 12) {
+    return Result<void>::failure(encoder_error("nvenc.invalid_slot_count", "NVENC slot count must be between 6 and 12."));
+  }
   if (config.width == 0 || config.height == 0 || (config.width % 2U) != 0 ||
       (config.height % 2U) != 0) {
     return Result<void>::failure(encoder_error(
@@ -174,7 +192,7 @@ struct NvencEncoder::Impl {
         config(requested),
         clock(&qpc_clock),
         device(exact_device),
-        lifetime(std::make_shared<NvencLifetimeMetrics>()) {}
+        lifetime(std::make_shared<NvencLifetimeMetrics>()), decode_timeline(requested.b_frames) {}
 
   ~Impl() { shutdown(); }
 
@@ -197,6 +215,9 @@ struct NvencEncoder::Impl {
   QpcTicks last_submitted_pts{(std::numeric_limits<QpcTicks>::min)()};
   std::uint64_t submitted_frames{0};
   std::uint64_t completed_frames{0};
+  std::uint64_t backpressure_dropped_frames{0};
+  std::uint64_t max_in_flight_frames{0};
+  bool pending_keyframe{false};
   std::uint64_t p_picture_frames{0};
   std::uint64_t b_picture_frames{0};
   std::uint64_t driver_timestamp_packets{0};
@@ -414,9 +435,9 @@ struct NvencEncoder::Impl {
         static_cast<std::uint64_t>((config.height + 15U) / 16U);
     const std::uint64_t requested_macroblocks_per_second =
         macroblocks_per_frame * config.fps;
-    if (!capabilities.async_encode || capabilities.max_b_frames < 2U ||
-        (capabilities.rate_control_modes &
-         static_cast<std::uint32_t>(NV_ENC_PARAMS_RC_VBR)) == 0 ||
+    if (!capabilities.async_encode || capabilities.max_b_frames < config.b_frames ||
+        (!config.constant_qp && (capabilities.rate_control_modes &
+         static_cast<std::uint32_t>(NV_ENC_PARAMS_RC_VBR)) == 0) ||
         config.width < capabilities.min_width || config.width > capabilities.max_width ||
         config.height < capabilities.min_height ||
         config.height > capabilities.max_height ||
@@ -436,7 +457,7 @@ struct NvencEncoder::Impl {
               std::to_string(capabilities.max_height) + ", macroblocks/sec=" +
               std::to_string(requested_macroblocks_per_second) + "/" +
               std::to_string(capabilities.max_macroblocks_per_second) +
-              ". Required: async NV12 H.264 VBR with two B-frames."));
+              ". Required: async NV12 H.264 with requested rate control and B depth."));
     }
     return Result<void>::success();
   }
@@ -446,7 +467,7 @@ struct NvencEncoder::Impl {
     preset.version = NV_ENC_PRESET_CONFIG_VER;
     preset.presetCfg.version = NV_ENC_CONFIG_VER;
     NVENCSTATUS status = functions().nvEncGetEncodePresetConfigEx(
-        session, NV_ENC_CODEC_H264_GUID, NV_ENC_PRESET_P5_GUID,
+        session, NV_ENC_CODEC_H264_GUID, nvenc_preset_guid(config.preset),
         NV_ENC_TUNING_INFO_HIGH_QUALITY, &preset);
     if (status != NV_ENC_SUCCESS) {
       return Result<void>::failure(status_error(
@@ -458,12 +479,19 @@ struct NvencEncoder::Impl {
     encoder_config.version = NV_ENC_CONFIG_VER;
     encoder_config.profileGUID = NV_ENC_H264_PROFILE_HIGH_GUID;
     encoder_config.gopLength = config.fps * config.gop_seconds;
-    encoder_config.frameIntervalP = 3;
+    encoder_config.frameIntervalP = static_cast<std::int32_t>(config.b_frames + 1);
     encoder_config.frameFieldMode = NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
     encoder_config.rcParams.version = NV_ENC_RC_PARAMS_VER;
     encoder_config.rcParams.rateControlMode = NV_ENC_PARAMS_RC_VBR;
     encoder_config.rcParams.averageBitRate = config.bitrate;
     encoder_config.rcParams.maxBitRate = config.bitrate + (config.bitrate / 2U);
+    if (config.multipass) encoder_config.rcParams.multiPass = static_cast<NV_ENC_MULTI_PASS>(*config.multipass);
+    if (config.target_quality) encoder_config.rcParams.targetQuality = static_cast<std::uint8_t>(config.target_quality);
+    if (config.constant_qp) {
+      encoder_config.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
+      encoder_config.rcParams.constQP = {config.qp_p, config.qp_b, config.qp_i};
+      encoder_config.rcParams.averageBitRate = encoder_config.rcParams.maxBitRate = 0;
+    }
     encoder_config.rcParams.enableLookahead = 0;
     encoder_config.rcParams.lookaheadDepth = 0;
     encoder_config.rcParams.enableAQ = 0;
@@ -476,7 +504,7 @@ struct NvencEncoder::Impl {
     NV_ENC_INITIALIZE_PARAMS parameters{};
     parameters.version = NV_ENC_INITIALIZE_PARAMS_VER;
     parameters.encodeGUID = NV_ENC_CODEC_H264_GUID;
-    parameters.presetGUID = NV_ENC_PRESET_P5_GUID;
+    parameters.presetGUID = nvenc_preset_guid(config.preset);
     parameters.encodeWidth = config.width;
     parameters.encodeHeight = config.height;
     parameters.darWidth = config.width;
@@ -524,6 +552,10 @@ struct NvencEncoder::Impl {
     stream_description = {StreamKind::Video, "h264", "Video", std::move(sequence),
                    {1, static_cast<std::int32_t>(clock->frequency())}, config.width, config.height};
     accepted.width = config.width;
+    accepted.preset_number = config.preset;
+    accepted.multipass = encoder_config.rcParams.multiPass;
+    accepted.rate_control = encoder_config.rcParams.rateControlMode;
+    accepted.target_quality = encoder_config.rcParams.targetQuality;
     accepted.height = config.height;
     accepted.fps = config.fps;
     accepted.target_bitrate = encoder_config.rcParams.averageBitRate;
@@ -534,7 +566,7 @@ struct NvencEncoder::Impl {
     accepted.lookahead_depth = encoder_config.rcParams.lookaheadDepth;
     accepted.spatial_aq_enabled = encoder_config.rcParams.enableAQ != 0;
     accepted.high_profile = true;
-    accepted.preset_p5 = true;
+    accepted.preset_p5 = config.preset == 5;
     accepted.high_quality_tuning = true;
     accepted.vbr =
         encoder_config.rcParams.rateControlMode == NV_ENC_PARAMS_RC_VBR;
@@ -564,8 +596,8 @@ struct NvencEncoder::Impl {
   }
 
   Result<void> create_async_resources() {
-    slots.reserve(kAsyncSlotCount);
-    for (std::size_t index = 0; index < kAsyncSlotCount; ++index) {
+    slots.reserve(config.slot_count);
+    for (std::size_t index = 0; index < config.slot_count; ++index) {
       slots.emplace_back();
       auto& slot = slots.back();
       auto event_result = create_event(slot.event, slot.event_registered);
@@ -793,6 +825,7 @@ struct NvencEncoder::Impl {
                                  kLatencyBucketWidthMicroseconds),
         kLatencyBucketCount - 1U);
     ++latency_histogram[latency_bucket];
+    if (config.telemetry) config.telemetry->record(PipelineStage::NvencSubmitToCollection, latency_microseconds);
     ++latency_samples;
     return Result<std::optional<EncodedPacket>>::success(EncodedPacket{
         StreamKind::Video, 0, *driver_pts, *packet_dts, slot.duration, keyframe,
@@ -813,6 +846,29 @@ struct NvencEncoder::Impl {
       wait = 0;
     }
     return Result<void>::success();
+  }
+
+  Result<EncoderAdmission> prepare_frame(bool force_keyframe) {
+    PipelineTimingScope timing(config.telemetry.get(), PipelineStage::NvencCollectCpu, submitted_frames);
+    auto accepting = state.require_accepting();
+    if (!accepting.is_success()) return Result<EncoderAdmission>::failure(accepting.error());
+    pending_keyframe |= force_keyframe;
+    EncoderAdmission admission;
+    auto ready = append_ready(admission.completed, 0);
+    if (!ready.is_success()) return Result<EncoderAdmission>::failure(ready.error());
+    if (!pending.empty() && config.completion_stall_timeout_ms != 0) {
+      const auto age = (std::max)(QpcTicks{0}, clock->now() - slots[pending.front()].submitted_at);
+      const auto milliseconds = static_cast<long double>(age) * 1000.0L / clock->frequency();
+      if (milliseconds >= config.completion_stall_timeout_ms) {
+        auto failed = state.fail(encoder_error("nvenc.encoder_stalled",
+            "NVENC made no completion progress within the bounded deadline; restart the engine process."));
+        return Result<EncoderAdmission>::failure(failed.error());
+      }
+    }
+    admission.can_submit = std::any_of(slots.begin(), slots.end(),
+        [](const AsyncSlot& slot) { return !slot.lifecycle.busy; });
+    if (!admission.can_submit) ++backpressure_dropped_frames;
+    return Result<EncoderAdmission>::success(std::move(admission));
   }
 
   Result<std::vector<EncodedPacket>> encode_frame(
@@ -844,30 +900,21 @@ struct NvencEncoder::Impl {
           "Input must be a same-device GPU-only NV12 texture at configured dimensions."));
     }
 
-    std::vector<EncodedPacket> packets;
-    auto ready = append_ready(packets, 0);
-    if (!ready.is_success()) {
-      return Result<std::vector<EncodedPacket>>::failure(std::move(ready).error());
-    }
+    auto admission = prepare_frame(force_keyframe);
+    if (!admission.is_success()) return Result<std::vector<EncodedPacket>>::failure(admission.error());
+    auto packets = std::move(admission.value().completed);
+    if (!admission.value().can_submit) return Result<std::vector<EncodedPacket>>::success(std::move(packets));
 
     auto free_slot = std::find_if(slots.begin(), slots.end(),
                                   [](const AsyncSlot& slot) {
                                     return !slot.lifecycle.busy;
                                   });
     if (free_slot == slots.end()) {
-      ready = append_ready(packets, kCompletionTimeoutMilliseconds);
-      if (!ready.is_success()) {
-        return Result<std::vector<EncodedPacket>>::failure(std::move(ready).error());
-      }
-      free_slot = std::find_if(slots.begin(), slots.end(),
-                               [](const AsyncSlot& slot) {
-                                 return !slot.lifecycle.busy;
-                               });
-      if (free_slot == slots.end()) {
-        return Result<std::vector<EncodedPacket>>::failure(encoder_error(
-            "nvenc.async_queue_stalled",
-            "No asynchronous NVENC slot became available after completion."));
-      }
+      // Queue saturation is backpressure, not an encoder failure. Keep polling
+      // completions on subsequent ticks without reusing driver-owned textures
+      // or blocking capture (and Replay control) for a completion timeout.
+      ++backpressure_dropped_frames;
+      return Result<std::vector<EncodedPacket>>::success(std::move(packets));
     }
     const std::size_t slot_index =
         static_cast<std::size_t>(free_slot - slots.begin());
@@ -909,7 +956,7 @@ struct NvencEncoder::Impl {
     picture.inputWidth = config.width;
     picture.inputHeight = config.height;
     picture.inputPitch = config.width;
-    picture.encodePicFlags = force_keyframe
+    picture.encodePicFlags = pending_keyframe
                                  ? (NV_ENC_PIC_FLAG_FORCEIDR |
                                     NV_ENC_PIC_FLAG_OUTPUT_SPSPPS)
                                  : 0U;
@@ -922,7 +969,10 @@ struct NvencEncoder::Impl {
     picture.bufferFmt = mapped.mappedBufferFmt;
     picture.pictureStruct = NV_ENC_PIC_STRUCT_FRAME;
     const QpcTicks submitted_at = clock->now();
-    status = functions().nvEncEncodePicture(session, &picture);
+    {
+      PipelineTimingScope timing(config.telemetry.get(), PipelineStage::NvencSubmitCpu, submitted_frames);
+      status = functions().nvEncEncodePicture(session, &picture);
+    }
     if (status != NV_ENC_SUCCESS && status != NV_ENC_ERR_NEED_MORE_INPUT) {
       auto failed = state.fail(status_error(
           "nvenc.encode_submission_failed",
@@ -937,11 +987,13 @@ struct NvencEncoder::Impl {
     slot.duration = duration;
     slot.submitted_at = submitted_at;
     pending.push_back(slot_index);
+    max_in_flight_frames = (std::max)(max_in_flight_frames, static_cast<std::uint64_t>(pending.size()));
     decode_timeline.submit(pts, duration);
     last_submitted_pts = pts;
     ++submitted_frames;
+    pending_keyframe = false;
 
-    ready = append_ready(packets, 0);
+    auto ready = append_ready(packets, 0);
     if (!ready.is_success()) {
       return Result<std::vector<EncodedPacket>>::failure(std::move(ready).error());
     }
@@ -1235,6 +1287,11 @@ Result<std::vector<EncodedPacket>> NvencEncoder::encode(
   return implementation_->encode_frame(std::move(frame), pts, force_keyframe);
 }
 
+Result<EncoderAdmission> NvencEncoder::prepare_frame(bool force_keyframe) {
+  std::lock_guard lock(implementation_->mutex);
+  return implementation_->prepare_frame(force_keyframe);
+}
+
 Result<std::vector<EncodedPacket>> NvencEncoder::flush() {
   const std::lock_guard lock(implementation_->mutex);
   return implementation_->flush_encoder();
@@ -1256,7 +1313,17 @@ NvencRuntimeMetrics NvencEncoder::metrics() const {
   const std::lock_guard lock(implementation_->mutex);
   NvencRuntimeMetrics result;
   result.submitted_frames = implementation_->submitted_frames;
+  result.accepted_config = implementation_->accepted;
   result.completed_frames = implementation_->completed_frames;
+  result.backpressure_dropped_frames = implementation_->backpressure_dropped_frames;
+  result.slot_capacity = implementation_->slots.size();
+  result.max_in_flight_frames = implementation_->max_in_flight_frames;
+  if (!implementation_->pending.empty()) {
+    const auto& oldest = implementation_->slots[implementation_->pending.front()];
+    const auto age = (std::max)(QpcTicks{0}, implementation_->clock->now() - oldest.submitted_at);
+    result.oldest_in_flight_age_us = static_cast<std::uint64_t>(
+        static_cast<long double>(age) * 1'000'000.0L / implementation_->clock->frequency());
+  }
   result.in_flight_frames = static_cast<std::uint64_t>(std::count_if(
       implementation_->slots.begin(), implementation_->slots.end(),
       [](const Impl::AsyncSlot& slot) {

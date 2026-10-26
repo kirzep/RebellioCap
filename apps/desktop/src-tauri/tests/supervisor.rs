@@ -145,6 +145,33 @@ fn idle_supervisor_blocks_for_events_without_periodic_wakeups() {
 }
 
 #[test]
+fn silent_ready_session_fails_without_waiting_for_a_user_command() {
+    let supervisor = EngineSupervisor::spawn(
+        &support::fixture(), &["silent_ready".into()], Duration::from_millis(400),
+    ).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while supervisor.is_running() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(!supervisor.is_running(), "silent engine remained ready indefinitely");
+    assert_eq!(supervisor.snapshot().lifecycle, EngineLifecycle::Failed);
+    assert_eq!(supervisor.snapshot().last_error.unwrap().code, "engine.snapshot_timeout");
+    supervisor.stop().unwrap();
+}
+
+#[test]
+fn healthy_idle_snapshots_refresh_deadline_without_advancing_capture_counters() {
+    let supervisor = EngineSupervisor::spawn(
+        &support::fixture(), &["idle_heartbeats".into()], Duration::from_millis(400),
+    ).unwrap();
+    std::thread::sleep(Duration::from_millis(3500));
+    assert!(supervisor.is_running());
+    assert_eq!(supervisor.snapshot().lifecycle, EngineLifecycle::Ready);
+    assert!(!supervisor.snapshot().replay_active);
+    supervisor.stop().unwrap();
+}
+
+#[test]
 fn notification_readiness_is_signalled_after_queueing_and_not_for_unchanged_snapshots() {
     let (sender, receiver) = std::sync::mpsc::channel();
     let supervisor = EngineSupervisor::spawn_with_notification_wake(

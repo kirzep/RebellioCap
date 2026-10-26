@@ -23,6 +23,45 @@ fn command_error(error: &NativeError) -> String {
     }
 }
 
+struct BoundedCommandWriter {
+    commands: Option<SyncSender<Vec<u8>>>,
+    completed: Receiver<Result<()>>,
+    worker: Option<JoinHandle<()>>,
+}
+impl BoundedCommandWriter {
+    fn spawn(mut writer: impl Write + Send + 'static) -> Self {
+        // One outstanding write: the actor waits for its completion or deadline
+        // before submitting another. Neither queue grows with stalled stdin.
+        let (commands, requests) = mpsc::sync_channel::<Vec<u8>>(1);
+        let (finished, completed) = mpsc::sync_channel(1);
+        let worker = thread::spawn(move || {
+            while let Ok(bytes) = requests.recv() {
+                let result = writer.write_all(&bytes)
+                    .map_err(|e| format!("engine.stdin_write_failed: {e}"));
+                let failed = result.is_err();
+                if finished.send(result).is_err() || failed { break; }
+            }
+        });
+        Self { commands: Some(commands), completed, worker: Some(worker) }
+    }
+    fn write(&mut self, bytes: Vec<u8>, timeout: Duration) -> Result<()> {
+        self.commands.as_ref().ok_or("engine.stdin_closed")?
+            .try_send(bytes).map_err(|_| "engine.stdin_closed")?;
+        self.completed.recv_timeout(timeout).map_err(|e| match e {
+            mpsc::RecvTimeoutError::Timeout => "engine.stdin_write_timeout",
+            mpsc::RecvTimeoutError::Disconnected => "engine.stdin_closed",
+        })?
+    }
+}
+impl Drop for BoundedCommandWriter {
+    fn drop(&mut self) {
+        self.commands.take();
+        // OwnedProcess terminates the complete job first. Closing all readers
+        // releases a blocked pipe write; never cancel an individual IO thread.
+        if let Some(worker) = self.worker.take() { let _ = worker.join(); }
+    }
+}
+
 pub fn resolve_engine(
     resources: &Path,
     debug_override: Option<&Path>,
@@ -47,6 +86,7 @@ struct OwnedProcess {
     child: Child,
     job: Job,
     frames: Receiver<Result<Option<Vec<u8>>>>,
+    stdin_writer: Option<BoundedCommandWriter>,
 }
 impl OwnedProcess {
     fn spawn(executable: &Path, args: &[OsString]) -> Result<Self> {
@@ -92,6 +132,9 @@ impl OwnedProcess {
             });
         }
         let stdout = child.stdout.take().ok_or("engine.stdout_missing")?;
+        let stdin_writer = if actor.is_some() {
+            Some(BoundedCommandWriter::spawn(child.stdin.take().ok_or("engine.stdin_closed")?))
+        } else { None };
         let (tx, frames) = mpsc::sync_channel(32);
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
@@ -105,20 +148,16 @@ impl OwnedProcess {
                 if failed || finished { break; }
             }
         });
-        Ok(Self { child, job, frames })
+        Ok(Self { child, job, frames, stdin_writer })
     }
-    fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        self.child
-            .stdin
-            .as_mut()
-            .ok_or("engine.stdin_closed")?
-            .write_all(bytes)
-            .map_err(|e| e.to_string())
+    fn write(&mut self, bytes: Vec<u8>, timeout: Duration) -> Result<()> {
+        self.stdin_writer.as_mut().ok_or("engine.stdin_closed")?.write(bytes, timeout)
     }
     fn terminate(&mut self) {
         self.job.terminate();
         let _ = self.child.kill();
         let _ = self.child.wait();
+        self.stdin_writer.take();
     }
 }
 impl Drop for OwnedProcess {
@@ -338,15 +377,17 @@ fn actor(
     let mut pending: HashMap<String, (Instant, Reply)> = HashMap::new();
     let mut counter = 0u64;
     let mut last_log_snapshot = Instant::now();
+    // The engine publishes a heartbeat snapshot once per second, including
+    // genuine idle. Do not use capture counters as a liveness signal.
+    let snapshot_timeout = timeout.max(Duration::from_secs(3));
+    let mut snapshot_deadline = Instant::now() + snapshot_timeout;
     let mut shutdown: Option<(Instant, SyncSender<Result<()>>, bool)> = None;
     let outcome: Result<()> = (|| loop {
         wakeups.fetch_add(1, Ordering::Relaxed);
         let nearest_deadline = pending.values().map(|(deadline, _)| *deadline)
-            .chain(shutdown.iter().map(|(deadline, _, _)| *deadline)).min();
-        let message = match nearest_deadline {
-            Some(deadline) => control.recv_timeout(deadline.saturating_duration_since(Instant::now())),
-            None => control.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
-        };
+            .chain(shutdown.iter().map(|(deadline, _, _)| *deadline))
+            .chain(shutdown.is_none().then_some(snapshot_deadline)).min().unwrap();
+        let message = control.recv_timeout(nearest_deadline.saturating_duration_since(Instant::now()));
         match message {
             Ok(ActorInput::Control(command)) => {
                 counter += 1;
@@ -357,8 +398,10 @@ fn actor(
                             let _ = reply.send(Err("engine.busy".into()));
                         } else {
                             correlation.begin(&id, kind)?;
-                            process.write(&encode_request(&id, kind)?)?;
-                            pending.insert(id, (Instant::now() + timeout, reply));
+                            let deadline = Instant::now() + timeout;
+                            let bytes = encode_request(&id, kind)?;
+                            pending.insert(id, (deadline, reply));
+                            process.write(bytes, deadline.saturating_duration_since(Instant::now()))?;
                         }
                     }
                     Control::Shutdown(reply) => {
@@ -366,8 +409,10 @@ fn actor(
                             let _ = reply.send(Err("engine.stopping".into()));
                         } else {
                             correlation.begin(&id, SessionCommand::Stop)?;
-                            process.write(&encode_request(&id, SessionCommand::Stop)?)?;
-                            shutdown = Some((Instant::now() + timeout, reply, false));
+                            let deadline = Instant::now() + timeout;
+                            let bytes = encode_request(&id, SessionCommand::Stop)?;
+                            shutdown = Some((deadline, reply, false));
+                            process.write(bytes, deadline.saturating_duration_since(Instant::now()))?;
                         }
                     }
                 }
@@ -394,6 +439,7 @@ fn actor(
                     signals.extend(added);
                     if signals.len() > 32 { let excess = signals.len() - 32; signals.drain(..excess); }
                     *state = value.clone();
+                    snapshot_deadline = Instant::now() + snapshot_timeout;
                 }
                 if notifications_added { if let Some(wake) = &notification_wake { wake(); } }
                 if event.kind == EventType::FatalError {
@@ -449,6 +495,9 @@ fn actor(
             .is_some_and(|(deadline, _, _)| Instant::now() >= *deadline)
         {
             return Err("engine.stop_timeout".into());
+        }
+        if shutdown.is_none() && Instant::now() >= snapshot_deadline {
+            return Err("engine.snapshot_timeout".into());
         }
     })();
     crate::logging::record(if outcome.is_err() {"error"} else {"info"}, "engine", "stopped", serde_json::json!({"error":outcome.as_ref().err()}));
@@ -534,5 +583,78 @@ mod memory_admission_error_tests {
         assert!(command_error(&error).contains("2048 МиБ"));
         error.code = "engine.not_running".into();
         assert_eq!(command_error(&error), "engine.not_running");
+    }
+}
+
+#[cfg(test)]
+mod command_writer_tests {
+    use super::*;
+
+    struct GatedWriter {
+        release: Option<Receiver<()>>,
+        bytes: Arc<Mutex<Vec<u8>>>,
+    }
+    impl Write for GatedWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if let Some(release) = self.release.take() {
+                release.recv_timeout(Duration::from_secs(2)).unwrap();
+            }
+            let count = bytes.len().min(2);
+            self.bytes.lock().unwrap().extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+    }
+
+    #[test]
+    fn blocked_stdin_write_returns_at_deadline_without_cancelling_its_thread() {
+        let (release, gate) = mpsc::channel();
+        let mut writer = BoundedCommandWriter::spawn(GatedWriter {
+            release: Some(gate), bytes: Default::default(),
+        });
+        let unblock = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(400));
+            release.send(()).unwrap();
+        });
+        let started = Instant::now();
+        let result = writer.write(b"command\n".to_vec(), Duration::from_millis(20));
+        let elapsed = started.elapsed();
+        unblock.join().unwrap();
+        drop(writer);
+        assert_eq!(result.unwrap_err(), "engine.stdin_write_timeout");
+        assert!(elapsed < Duration::from_millis(200), "write blocked for {elapsed:?}");
+    }
+
+    #[test]
+    fn stdin_worker_preserves_serial_requests_and_completes_partial_writes() {
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let mut writer = BoundedCommandWriter::spawn(GatedWriter {
+            release: None, bytes: bytes.clone(),
+        });
+        writer.write(b"first\n".to_vec(), Duration::from_secs(1)).unwrap();
+        writer.write(b"second\n".to_vec(), Duration::from_secs(1)).unwrap();
+        assert_eq!(*bytes.lock().unwrap(), b"first\nsecond\n");
+    }
+
+    #[test]
+    fn blocked_child_pipe_is_released_by_terminating_the_owned_job() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let executable = root.join("target").join(format!("stdin-fixture-{}.exe", std::process::id()));
+        let compiler = std::env::var_os("RUSTC").map(PathBuf::from).unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("CARGO_HOME").unwrap()).join("bin/rustc.exe")
+        });
+        assert!(Command::new(compiler).arg(root.join("tests/support/fixture.rs"))
+            .arg("-o").arg(&executable).status().unwrap().success());
+        let (events, _frames) = mpsc::sync_channel(32);
+        let mut process = OwnedProcess::spawn_routed(
+            &executable.canonicalize().unwrap(), &["silent_ready".into()], Some(events),
+        ).unwrap();
+        let started = Instant::now();
+        let result = process.write(vec![b'x'; 1024 * 1024], Duration::from_millis(40));
+        let write_elapsed = started.elapsed();
+        process.terminate();
+        assert_eq!(result.unwrap_err(), "engine.stdin_write_timeout");
+        assert!(write_elapsed < Duration::from_millis(300), "write blocked for {write_elapsed:?}");
+        assert!(process.child.try_wait().unwrap().is_some());
     }
 }

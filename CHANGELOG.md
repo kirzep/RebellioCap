@@ -2,6 +2,22 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## Unreleased
+
+- Keep separately packaged app variants in their own configuration profile while preserving the stable installation's existing path.
+- Keep protocol processing active at interactive benchmark scene gates; wait for game focus before timing and reject focus loss during measurement.
+
+- Add bounded soft audio resampling against capture QPC before source AAC and mixing to compensate device-clock drift. Deterministic and short hardware marker checks pass; long-session acceptance is recorded separately.
+
+- Add an opt-in canonical NV12 capture cache with bounded input views, pre-conversion admission, retained output leases across input reconfiguration, and initial compatibility fallback. BGRA remains the default: short Cyberpunk comparisons did not pass the game frametime tail gate.
+- Reject redirected stdin for interactive game measurements so scene gates cannot be silently skipped.
+
+- Keep Replay running when the NVENC queue is full: skip new video frames without waiting for a completion timeout, resume submission when capacity returns, and preserve keyframe requests across skipped frames. Diagnostics include queue-pressure drops and the age of the oldest pending frame.
+- Collect NVENC completions before leasing converter surfaces; add bounded internal pool/profile experiments while preserving the 6-slot/8-surface P5 baseline.
+- Batch continuous recording admission and disk work, expose queue byte/age diagnostics and opt-in limits, retain payload budget ownership through FFmpeg interleaving, and reuse packet wrappers.
+- Cache Replay duration extrema and add optional pipeline latency histograms/TraceLogging. Add offline-plannable short performance experiments with isolated evidence.
+- Fail stalled encoder sessions explicitly and bound host snapshot/command-pipe waits; healthy idle heartbeats remain supported. DuplicateOutput1 remains an opt-in SDR experiment with fallback.
+
 ## 0.1.17
 
 - Add “Save recordings without game subfolders” in recording settings. Replay clips and continuous recordings can be saved directly to the selected folder; the choice persists across restarts and defaults off.

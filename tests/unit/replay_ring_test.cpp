@@ -581,3 +581,87 @@ TEST_CASE("an audio first epoch transition resets the replay pruning timeline") 
   REQUIRE(ring.bytes() == 12);
   REQUIRE(ring.retained_duration() == 1);
 }
+
+TEST_CASE("retained duration follows PTS extrema rather than append endpoints", "[replay-extrema]") {
+  ReplayRing ring(100);
+  REQUIRE(ring.retained_duration() == 0);
+  append(ring, reordered_video_packet(1, 10, 0, true));
+  REQUIRE(ring.retained_duration() == 0);
+  append(ring, reordered_video_packet(1, 40, 1));
+  append(ring, reordered_video_packet(1, 20, 2));
+  REQUIRE(ring.retained_duration() == 30);
+  append(ring, packet(StreamKind::SystemAudio, 1, 5));
+  REQUIRE(ring.retained_duration() == 35);
+  append(ring, packet(StreamKind::MicrophoneAudio, 1, 50));
+  REQUIRE(ring.retained_duration() == 45);
+  REQUIRE_FALSE(ring.append(reordered_video_packet(1, 90, 1)).is_success());
+  REQUIRE(ring.retained_duration() == 45);
+  append(ring, packet(StreamKind::SystemAudio, 2, 1000));
+  REQUIRE(ring.retained_duration() == 0);
+  append(ring, reordered_video_packet(2, 995, 0, true));
+  REQUIRE(ring.retained_duration() == 5);
+}
+
+TEST_CASE("retained duration rejects late minima and resets after time expiry", "[replay-extrema]") {
+  ReplayRing ring(30);
+  append(ring, reordered_video_packet(1, 0, 0, true));
+  append(ring, reordered_video_packet(1, 30, 1, true));
+  append(ring, reordered_video_packet(1, 60, 2));
+  REQUIRE(ring.retained_duration() == 30);
+  append(ring, reordered_video_packet(1, 29, 3));
+  append(ring, packet(StreamKind::SystemAudio, 1, 20));
+  REQUIRE(ring.retained_duration() == 30);
+  append(ring, packet(StreamKind::SystemAudio, 1, 91));
+  REQUIRE(ring.bytes() == 0);
+  REQUIRE(ring.retained_duration() == 0);
+  append(ring, packet(StreamKind::SystemAudio, 1, 100));
+  REQUIRE(ring.retained_duration() == 0);
+  append(ring, reordered_video_packet(1, 100, 4, true));
+  append(ring, reordered_video_packet(1, 105, 5));
+  REQUIRE(ring.retained_duration() == 5);
+}
+
+TEST_CASE("retained duration removes evicted maximum while a save owns its payload", "[replay-extrema][memory-budget]") {
+  constexpr std::size_t kPayload = 1024;
+  const auto cost = rebelliocap::PacketMemoryBudget::kPayloadOverhead + kPayload;
+  // Four full payloads and one small reference fit in the ring's share.
+  auto budget = std::make_shared<rebelliocap::PacketMemoryBudget>(cost * 6);
+  ReplayRing ring(3600, budget);
+  append(ring, packet(StreamKind::Video, 1, 0, true, kPayload));
+  append(ring, reordered_video_packet(1, 100, 1));
+  append(ring, packet(StreamKind::SystemAudio, 1, 20, false, kPayload));
+  auto saved = ring.snapshot(100, 3600);
+  REQUIRE(saved.is_success());
+  append(ring, packet(StreamKind::Video, 1, 10, true, kPayload));
+  REQUIRE(ring.retained_duration() == 100);
+  append(ring, packet(StreamKind::MicrophoneAudio, 1, 25, false, kPayload));
+  append(ring, packet(StreamKind::MixedAudio, 1, 30, false, kPayload));
+  // The old GOP contains the maximum PTS despite being first in decode order.
+  REQUIRE(ring.memory_limited());
+  REQUIRE(ring.retained_duration() == 20);
+  REQUIRE(saved.value().packets[1].pts == 100);
+  REQUIRE(saved.value().packets.front().payload->size() == kPayload);
+  REQUIRE(budget->bytes() <= budget->limit());
+}
+
+TEST_CASE("retained duration clears when budget admission empties the ring", "[replay-extrema][memory-budget]") {
+  auto budget = std::make_shared<rebelliocap::PacketMemoryBudget>(8192);
+  ReplayRing ring(3600, budget);
+  append(ring, packet(StreamKind::Video, 1, 0, true, 4096));
+  append(ring, packet(StreamKind::Video, 1, 10));
+  REQUIRE(ring.retained_duration() == 10);
+  auto saved = ring.snapshot(10, 3600);
+  REQUIRE(saved.is_success());
+  REQUIRE_FALSE(ring.append(packet(StreamKind::Video, 1, 20, true, 4096)).is_success());
+  REQUIRE(ring.retained_duration() == 0);
+  REQUIRE(ring.bytes() == 0);
+  REQUIRE(saved.value().packets.size() == 2);
+}
+
+TEST_CASE("retained duration saturates across the QPC range", "[replay-extrema]") {
+  ReplayRing ring(std::numeric_limits<QpcTicks>::max());
+  append(ring, packet(StreamKind::Video, 1, std::numeric_limits<QpcTicks>::min(), true));
+  append(ring, packet(StreamKind::Video, 1, -1));
+  append(ring, packet(StreamKind::Video, 1, 0, true));
+  REQUIRE(ring.retained_duration() == std::numeric_limits<QpcTicks>::max());
+}

@@ -1,0 +1,30 @@
+.host {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 32px 20px;
+}
+
+.host::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 100%;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--background));
+  pointer-events: none;
+}
+
+.host:empty { display: none; }
+
+@media (max-width: 959px) {
+  .host { padding-inline: 24px; }
+}
+
+@media (max-width: 699px) {
+  .host { padding-inline: 16px; }
+}
+
+@media (forced-colors: active) {
+  .host::before { display: none; }
+}

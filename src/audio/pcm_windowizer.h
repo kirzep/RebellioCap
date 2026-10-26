@@ -9,7 +9,7 @@ namespace rebelliocap {
 struct SynchronizedPcmWindowPair { PcmBlock system; PcmBlock microphone; };
 
 // Mixing copies live on one QPC-anchored 48 kHz sample grid. Source encoders
-// receive the original normalized blocks before these copies are queued.
+// receive clock-aligned normalized blocks before these copies are queued.
 class SynchronizedPcmWindows {
  public:
   explicit SynchronizedPcmWindows(QpcTicks frequency);

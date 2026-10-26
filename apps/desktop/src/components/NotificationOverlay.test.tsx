@@ -174,3 +174,20 @@ it('uses current sound preferences for queued events while keeping visuals enabl
   expect(screen.getByText('Повтор сохранён')).toBeInTheDocument();
   expect(playNotificationSound).toHaveBeenCalledOnce();
 });
+it('renders only active indicators and removes them on the next authoritative event without polling', async () => {
+ vi.useFakeTimers();
+ const settings = { overlayEnabled: true, soundEnabled: false, sound: 'glass', volume: 35 };
+ vi.mocked(invoke).mockResolvedValue({ events: [], settings, recordingActive: true, replayActive: false });
+ render(<NotificationOverlay/>);
+ await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+ expect(screen.getByLabelText('Идёт запись')).toBeInTheDocument();
+ expect(screen.queryByLabelText('Мгновенный повтор включён')).not.toBeInTheDocument();
+ vi.mocked(invoke).mockResolvedValue({ events: [], settings, recordingActive: false, replayActive: true });
+ await act(async () => { nativeEvents.ready?.(); await vi.advanceTimersByTimeAsync(20); });
+ expect(screen.queryByLabelText('Идёт запись')).not.toBeInTheDocument();
+ expect(screen.getByLabelText('Мгновенный повтор включён')).toBeInTheDocument();
+ vi.mocked(invoke).mockResolvedValue({ events: [], settings, recordingActive: false, replayActive: false });
+ await act(async () => { nativeEvents.ready?.(); await vi.advanceTimersByTimeAsync(20000); });
+ expect(screen.queryByLabelText('Мгновенный повтор включён')).not.toBeInTheDocument();
+ expect(invoke).toHaveBeenCalledTimes(3);
+});

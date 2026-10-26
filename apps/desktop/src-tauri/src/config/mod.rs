@@ -6,6 +6,7 @@ mod validation;
 
 pub use model::*;
 pub use store::{resolve_config_root, ConfigStore};
+pub(crate) use store::profile_data_base;
 pub use validation::{validate_active, validate_draft};
 
 #[derive(Debug, thiserror::Error)]

@@ -56,3 +56,35 @@ fn eof_and_crlf_and_request_ids_are_bounded() {
 fn duplicate_optional_null_fields_are_rejected() {
     assert!(decode_event(br#"{"protocolVersion":1,"type":"clip_saved","requestId":null,"requestId":"r1","outputPath":"C:\\clip.mp4"}"#).is_err());
 }
+
+#[test]
+fn snapshots_accept_optional_pipeline_diagnostics_but_keep_metrics_strict() {
+    use rebelliocap_desktop::model::EngineSnapshot;
+    let snapshot = serde_json::to_value(EngineSnapshot::default()).unwrap();
+    assert!(snapshot["metrics"].get("diagnostics").is_none());
+    let mut event = serde_json::json!({"protocolVersion":1,"type":"snapshot","snapshot":snapshot});
+    assert!(decode_event(&serde_json::to_vec(&event).unwrap()).is_ok());
+    event["snapshot"]["metrics"]["diagnostics"] = serde_json::json!({
+        "capture_session":{"available":true,"api":"DuplicateOutput1","texture_format":87},
+        "pipeline_telemetry":{"enabled":true,"stages":{"video_tick_cpu":{"p99_us":639}}}
+    });
+    let decoded = decode_event(&serde_json::to_vec(&event).unwrap())
+        .expect("native opt-in diagnostics must not invalidate snapshots");
+    assert_eq!(decoded.snapshot.unwrap().metrics.diagnostics.unwrap()["capture_session"]["api"], "DuplicateOutput1");
+    event["snapshot"]["metrics"]["unexpectedTelemetryField"] = true.into();
+    assert!(decode_event(&serde_json::to_vec(&event).unwrap()).is_err());
+}
+
+#[test]
+fn pipeline_diagnostics_require_an_object_and_remain_within_frame_limit() {
+    let snapshot = serde_json::to_value(rebelliocap_desktop::model::EngineSnapshot::default()).unwrap();
+    let mut event = serde_json::json!({"protocolVersion":1,"type":"snapshot","snapshot":snapshot});
+    for bad in [serde_json::json!(true), serde_json::json!("on"), serde_json::json!([1])] {
+        event["snapshot"]["metrics"]["diagnostics"] = bad;
+        assert!(decode_event(&serde_json::to_vec(&event).unwrap()).is_err());
+    }
+    event["snapshot"]["metrics"]["diagnostics"] = serde_json::json!({
+        "padding":"x".repeat(rebelliocap_desktop::engine::protocol::MAX_FRAME)
+    });
+    assert!(decode_event(&serde_json::to_vec(&event).unwrap()).unwrap_err().starts_with("protocol.invalid_frame"));
+}

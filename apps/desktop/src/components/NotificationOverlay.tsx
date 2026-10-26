@@ -2,33 +2,20 @@ import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import replayStartedIcon from '../assets/notifications/replay-started.svg';
-import replaySavedIcon from '../assets/notifications/replay-saved.svg';
-import recordingStartedIcon from '../assets/notifications/recording-started.svg';
-import recordingStoppedIcon from '../assets/notifications/recording-stopped.svg';
-import recordingErrorIcon from '../assets/notifications/recording-error.svg';
-import replayStoppedIcon from '../assets/notifications/replay-stopped.svg';
-import engineStoppedIcon from '../assets/notifications/engine-stopped.svg';
-import replayErrorIcon from '../assets/notifications/replay-error.svg';
-import { defaultNotificationSettings, playNotificationSound, type NotificationSettings } from './notificationSound';
+import { actions, OverlayIndicator, OverlayNotification } from './OverlayVisuals';
+import { defaultOverlayLayout, overlayPosition } from './overlayLayout';
+import { normalizeNotificationSettings, defaultNotificationSettings, playNotificationSound, type NotificationSettings } from './notificationSound';
 import './NotificationOverlay.css';
 
-const actions: Record<string, { text: string; icon: string; tone: string }> = {
-  replay_started: { text: 'Мгновенный повтор включён', icon: replayStartedIcon, tone: 'neutral' },
-  replay_saved: { text: 'Повтор сохранён', icon: replaySavedIcon, tone: 'success' },
-  recording_started: { text: 'Запись началась', icon: recordingStartedIcon, tone: 'recording' },
-  recording_stopped: { text: 'Запись завершена', icon: recordingStoppedIcon, tone: 'neutral' },
-  recording_error: { text: 'Ошибка записи', icon: recordingErrorIcon, tone: 'error' },
-  replay_stopped: { text: 'Мгновенный повтор выключен', icon: replayStoppedIcon, tone: 'neutral' },
-  engine_stopped: { text: 'Движок остановлен из-за ошибки', icon: engineStoppedIcon, tone: 'error' },
-  replay_error: { text: 'Не удалось сохранить повтор', icon: replayErrorIcon, tone: 'error' },
-};
-interface Batch { events: string[]; settings: NotificationSettings }
+interface Batch { events: string[]; settings: NotificationSettings; replayActive?: boolean; recordingActive?: boolean; editorActive?: boolean }
 export function NotificationOverlay() {
   useTranslation();
   const [events, setEvents] = useState<{ kind: string; id: number }[]>([]);
   const [closing, setClosing] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(defaultNotificationSettings.overlayEnabled);
+  const [editorActive, setEditorActive] = useState(false);
+  const [capture, setCapture] = useState({ replay: false, recording: false });
+  const [layout, setLayout] = useState(defaultOverlayLayout);
   const settings = useRef(defaultNotificationSettings);
   const counter = useRef(0);
   const current = events[0];
@@ -57,6 +44,9 @@ export function NotificationOverlay() {
         const batch = await invoke<Batch>('poll_notifications');
         if (disposed) return;
         settings.current = batch.settings;
+        setEditorActive(batch.editorActive ?? false);
+        setLayout(normalizeNotificationSettings(batch.settings).layout!);
+        setCapture({ replay: batch.replayActive ?? false, recording: batch.recordingActive ?? false });
         setOverlayEnabled(batch.settings.overlayEnabled);
         if (!batch.settings.overlayEnabled && !batch.settings.soundEnabled) {
           setEvents(previous => previous.length ? [] : previous);
@@ -92,9 +82,16 @@ export function NotificationOverlay() {
     const removeTimer = setTimeout(() => setEvents(previous => previous.slice(1)), duration + 350);
     return () => { clearTimeout(closingTimer); clearTimeout(removeTimer); };
   }, [current?.id]);
-  if (!overlayEnabled || !action || !current) return null;
-  return <div key={current.id} role="status" className={`capture-notification ${closing ? 'is-closing' : ''}`} data-tone={action.tone}>
-    <div className="capture-notification__icon"><img src={action.icon} alt="" draggable={false} width={42} height={42} /></div>
-    <strong className="capture-notification__text">{t(action.text)}</strong>
-  </div>;
+  const visible = !editorActive && overlayEnabled && (capture.replay || capture.recording || !!(action && current));
+  useEffect(() => {
+    if ('__TAURI_INTERNALS__' in window) void invoke('set_overlay_visible', { visible }).catch(() => {});
+  }, [visible]);
+  if (!overlayEnabled) return null;
+  return <>
+    {capture.recording && <div className="capture-indicator-position" style={overlayPosition(layout.recording)} aria-label={t('Идёт запись')}><OverlayIndicator recording/></div>}
+    {capture.replay && <div className="capture-indicator-position" style={overlayPosition(layout.replay)} aria-label={t('Мгновенный повтор включён')}><OverlayIndicator/></div>}
+    {action && current && <div className="capture-notification-position" style={overlayPosition(layout.messages)}>
+      <OverlayNotification key={current.id} kind={current.kind} closing={closing}/>
+    </div>}
+  </>;
 }

@@ -31,8 +31,109 @@ TEST_CASE("mux refuses an existing destination without touching it") {
 namespace {
 using Microsoft::WRL::ComPtr;
 using nlohmann::json;
+// Explicit offline experiment only. CPU upload/readback here produces a quality
+// reference; the production recording path continues to keep raw pixels on GPU.
+TEST_CASE("NVENC profiles encode an identical deterministic quality reference", "[.quality-reference]") {
+ wchar_t input_path[32768]{}, output_path[32768]{};
+ REQUIRE(GetEnvironmentVariableW(L"REBELLIOCAP_QUALITY_INPUT",input_path,32768)>0);
+ REQUIRE(GetEnvironmentVariableW(L"REBELLIOCAP_QUALITY_OUTPUT",output_path,32768)>0);
+ const std::filesystem::path input(input_path), root(output_path);
+ REQUIRE(input.is_absolute()); REQUIRE(root.is_absolute());
+ constexpr UINT width=640,height=360,frames=240;
+ constexpr std::size_t input_bytes=width*height*4;
+ REQUIRE(std::filesystem::file_size(input)==input_bytes*frames);
+ REQUIRE_FALSE(std::filesystem::exists(root));
+ REQUIRE(std::filesystem::create_directories(root));
+ ComPtr<IDXGIFactory1> factory; REQUIRE(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
+ ComPtr<IDXGIAdapter1> adapter;
+ for(UINT i=0;;++i) {
+  ComPtr<IDXGIAdapter1> candidate;
+  REQUIRE(factory->EnumAdapters1(i,&candidate)!=DXGI_ERROR_NOT_FOUND);
+  DXGI_ADAPTER_DESC1 desc{}; REQUIRE(SUCCEEDED(candidate->GetDesc1(&desc)));
+  if(desc.VendorId==0x10de){adapter=std::move(candidate);break;}
+ }
+ ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context;
+ REQUIRE(SUCCEEDED(D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,
+   D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context)));
+ D3D11_TEXTURE2D_DESC td{};td.Width=width;td.Height=height;td.MipLevels=1;td.ArraySize=1;
+ td.Format=DXGI_FORMAT_B8G8R8A8_UNORM;td.SampleDesc.Count=1;
+ td.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+ CapturedVideoFrame frame{};frame.width=width;frame.height=height;frame.lifetime=std::make_shared<int>(1);
+ REQUIRE(SUCCEEDED(device->CreateTexture2D(&td,nullptr,&frame.texture)));
+ auto staging_desc=td;staging_desc.Format=DXGI_FORMAT_NV12;staging_desc.BindFlags=0;
+ staging_desc.Usage=D3D11_USAGE_STAGING;staging_desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+ ComPtr<ID3D11Texture2D> staging;
+ REQUIRE(SUCCEEDED(device->CreateTexture2D(&staging_desc,nullptr,&staging)));
+ QpcClock clock;const auto origin=clock.frequency(),step=clock.frequency()/60;
+ json manifest={{"width",width},{"height",height},{"fps",60},{"frames",frames},
+   {"input","BGRA deterministic synthetic test pattern"},{"reference","post-converter NV12 readback"},
+   {"scope","offline quality only; concurrent soak; no throughput/game performance claim"},{"profiles",json::array()}};
+ for(int index=0;index<14;++index) {
+  NvencConfig config{width,height,60,3'000'000,2,6};config.multipass=0;
+  std::string id="p5-baseline";
+  if(index>=1&&index<=3){config.preset=index+1;id="p"+std::to_string(config.preset);}
+  if(index==4||index==5){config.b_frames=index-4;id="b"+std::to_string(config.b_frames);}
+  if(index==6||index==7){config.multipass=index-5;id="multipass"+std::to_string(*config.multipass);}
+  if(index==8){config.constant_qp=true;id="cqp20-23-25";}
+  if(index==9){config.target_quality=20;id="target-quality20";}
+  if(index==10||index==11){config.gop_seconds=index==10?1:2;id="gop"+std::to_string(config.gop_seconds);}
+  if(index==12||index==13){config.slot_count=index==12?8:12;id="slots"+std::to_string(config.slot_count);}
+  CAPTURE(id);
+  auto created=NvencEncoder::create(device.Get(),config,clock);
+  if(!created.is_success()) INFO(created.error().code<<": "<<created.error().message);
+  REQUIRE(created.is_success());auto encoder=std::move(created).value();
+  const auto accepted=encoder->accepted_config();
+  REQUIRE(accepted.preset_number==config.preset);REQUIRE(accepted.multipass==*config.multipass);
+  REQUIRE(accepted.frame_interval_p==config.b_frames+1);REQUIRE(accepted.target_quality==config.target_quality);
+  REQUIRE(accepted.rate_control==(config.constant_qp?0U:1U));
+  auto converted=D3d11Nv12Converter::create(device.Get(),context.Get(),{width,height,width,height,config.slot_count+2});
+  REQUIRE(converted.is_success());auto converter=std::move(converted).value();
+  std::ifstream source(input,std::ios::binary);std::vector<char> pixels(input_bytes);
+  std::ofstream reference(root/(id+".nv12"),std::ios::binary);
+  std::vector<EncodedPacket> packets;
+  auto append=[&](auto& values){for(auto& packet:values) packets.push_back(std::move(packet));};
+  for(UINT i=0;i<frames;++i) {
+   const auto deadline=GetTickCount64()+5000;
+   for(;;){auto admission=encoder->prepare_frame(false);REQUIRE(admission.is_success());
+    append(admission.value().completed);if(admission.value().can_submit)break;
+    REQUIRE(GetTickCount64()<deadline);Sleep(1);}
+   source.read(pixels.data(),static_cast<std::streamsize>(pixels.size()));REQUIRE(source.good());
+   context->UpdateSubresource(frame.texture.Get(),0,nullptr,pixels.data(),width*4,0);
+   frame.captured_at=origin+step*i;
+   auto nv12=converter->convert(frame);REQUIRE(nv12.is_success());
+   context->CopyResource(staging.Get(),nv12.value().texture());
+   D3D11_MAPPED_SUBRESOURCE mapped{};
+   REQUIRE(SUCCEEDED(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped)));
+   for(UINT row=0;row<height*3/2;++row)
+    reference.write(static_cast<const char*>(mapped.pData)+static_cast<std::size_t>(row)*mapped.RowPitch,width);
+   context->Unmap(staging.Get(),0);REQUIRE(reference.good());
+   auto encoded=encoder->encode(std::move(nv12).value(),origin+step*i,false);
+   REQUIRE(encoded.is_success());append(encoded.value());
+  }
+  reference.close();REQUIRE(reference.good());
+  auto flushed=encoder->flush();REQUIRE(flushed.is_success());append(flushed.value());
+  REQUIRE(encoder->metrics().submitted_frames==frames);REQUIRE(packets.size()==frames);
+  if(config.b_frames) REQUIRE(encoder->metrics().b_picture_frames>0);
+  else REQUIRE(encoder->metrics().b_picture_frames==0);
+  FfmpegContinuousMuxer mux;REQUIRE(mux.open({encoder->descriptor()},root/(id+".mp4"),Container::Mp4).is_success());
+  std::optional<QpcTicks> previous;json timestamps=json::array();std::uint64_t bytes=0;
+  for(const auto& packet:packets){if(previous)REQUIRE(packet.dts>*previous);previous=packet.dts;
+   REQUIRE(mux.write(packet).is_success());bytes+=packet.payload->size();
+   timestamps.push_back({{"pts",packet.pts},{"dts",packet.dts},{"duration",packet.duration},{"keyframe",packet.keyframe}});}
+  REQUIRE(mux.finalize().is_success());
+  std::ofstream timing(root/(id+"-packets.json"));timing<<timestamps.dump(2);REQUIRE(timing.good());
+  manifest["profiles"].push_back({{"id",id},{"preset",accepted.preset_number},{"multipass",accepted.multipass},
+   {"b_frames",config.b_frames},{"gop_frames",accepted.gop_frames},{"slots",config.slot_count},
+   {"rate_control",accepted.rate_control},{"target_quality",accepted.target_quality},
+   {"qp_i",config.qp_i},{"qp_p",config.qp_p},{"qp_b",config.qp_b},{"encoded_payload_bytes",bytes},
+   {"payload_bitrate",bytes*8.0*60/frames},{"packets",packets.size()}});
+  std::cout<<"QUALITY_PROFILE="<<id<<'\n';
+ }
+ std::ofstream report(root/"manifest.json");report<<manifest.dump(2);REQUIRE(report.good());
+ std::cout<<"QUALITY_ARTIFACTS="<<root.string()<<'\n';
+}
 struct Fixture { ReplaySnapshot snapshot; std::vector<StreamDescriptor> descriptors; std::filesystem::path artifacts; };
-Fixture generate_fixture(bool include_audio=true) {
+Fixture generate_fixture(bool include_audio=true, NvencConfig config={}) {
  Fixture f; QpcClock clock; const auto step=clock.frequency()/60; const auto origin=clock.frequency()*10;
  GUID guid{}; REQUIRE(SUCCEEDED(CoCreateGuid(&guid))); wchar_t name[40]{}; StringFromGUID2(guid,name,40);
  f.artifacts=std::filesystem::path(REBELLIOCAP_SOURCE_DIR)/"artifacts"/(std::wstring(L"task-10-")+name);
@@ -47,16 +148,40 @@ Fixture generate_fixture(bool include_audio=true) {
  CapturedVideoFrame frame{};frame.width=width;frame.height=height;frame.captured_at=origin;frame.lifetime=std::make_shared<int>(1);
  REQUIRE(SUCCEEDED(device->CreateTexture2D(&td,nullptr,&frame.texture)));
  ComPtr<ID3D11RenderTargetView> target; REQUIRE(SUCCEEDED(device->CreateRenderTargetView(frame.texture.Get(),nullptr,&target)));
- auto converted=D3d11Nv12Converter::create(device.Get(),context.Get(),{width,height,width,height,8});REQUIRE(converted.is_success());auto converter=std::move(converted).value();
- auto created=NvencEncoder::create(device.Get(),{width,height,60,3000000,2},clock); if(!created.is_success()) INFO(created.error().code<<": "<<created.error().message); REQUIRE(created.is_success());auto encoder=std::move(created).value();
+ config.width=width;config.height=height;config.fps=60;config.bitrate=3000000;config.gop_seconds=2;
+ auto converted=D3d11Nv12Converter::create(device.Get(),context.Get(),{width,height,width,height,config.slot_count+2});REQUIRE(converted.is_success());auto converter=std::move(converted).value();
+ auto created=NvencEncoder::create(device.Get(),config,clock); if(!created.is_success()) INFO(created.error().code<<": "<<created.error().message); REQUIRE(created.is_success());auto encoder=std::move(created).value();
+ REQUIRE(encoder->accepted_config().preset_number==config.preset);
+ REQUIRE(encoder->accepted_config().frame_interval_p==config.b_frames+1);
+ REQUIRE(encoder->metrics().slot_capacity==config.slot_count);
+ REQUIRE(encoder->accepted_config().rate_control==(config.constant_qp?0U:1U));
+ REQUIRE(encoder->accepted_config().target_quality==config.target_quality);
+ if(config.multipass) REQUIRE(encoder->accepted_config().multipass==*config.multipass);
  f.descriptors.push_back(encoder->descriptor()); REQUIRE(f.descriptors[0].width==width);REQUIRE(f.descriptors[0].height==height);REQUIRE_FALSE(f.descriptors[0].codec_extradata.empty());
  std::vector<EncodedPacket> video;
  for(int i=0;i<90;++i) {
+  // This fixture needs every synthetic frame. Real-time callers may drop new
+  // input under pressure; an offline generator must wait before conversion.
+  const auto admission_deadline=GetTickCount64()+5000;
+  for(;;) {
+   auto admission=encoder->prepare_frame(false);
+   REQUIRE(admission.is_success());
+   for(auto& packet:admission.value().completed) video.push_back(std::move(packet));
+   if(admission.value().can_submit) break;
+   REQUIRE(GetTickCount64()<admission_deadline);
+   Sleep(1);
+  }
   const float color[]{static_cast<float>(i)/100.0f,0.2f,0.4f,1};context->ClearRenderTargetView(target.Get(),color);
   auto nv12=converter->convert(frame);REQUIRE(nv12.is_success());auto encoded=encoder->encode(std::move(nv12).value(),origin+step*i,false); REQUIRE(encoded.is_success());
   for(auto& p:encoded.value()) video.push_back(std::move(p));
  }
- auto flush=encoder->flush();REQUIRE(flush.is_success());for(auto& p:flush.value())video.push_back(std::move(p));REQUIRE(video.size()==90); REQUIRE(encoder->metrics().b_picture_frames>0);
+ // prepare_frame counts denied real-time admission attempts. This offline
+ // loop retries the same source frame, so verify submitted/output counts.
+ INFO("fixture submitted="<<encoder->metrics().submitted_frames<<" admission_denials="<<encoder->metrics().backpressure_dropped_frames);
+ REQUIRE(encoder->metrics().submitted_frames==90);
+ auto flush=encoder->flush();REQUIRE(flush.is_success());for(auto& p:flush.value())video.push_back(std::move(p));REQUIRE(video.size()==90);
+ if(config.b_frames) REQUIRE(encoder->metrics().b_picture_frames>0);
+ else REQUIRE(encoder->metrics().b_picture_frames==0);
  // Full raw output is retained for provenance and independent decode comparison.
  json provenance={{"generator","Direct NVENC, GPU BGRA pattern -> NV12; no captured user content"},{"qpc_frequency",clock.frequency()},{"width",width},{"height",height},{"frame_duration",step},{"origin",origin},{"packets",json::array()}};
  std::ofstream raw(f.artifacts/"video.h264",std::ios::binary); std::size_t offset=0;
@@ -64,7 +189,9 @@ Fixture generate_fixture(bool include_audio=true) {
  ReplayRing ring(clock.frequency()*30);for(const auto& p:video)REQUIRE(ring.append(p).is_success());
  bool selected=false;
  for(int i=40;i<60;++i) {auto cut=ring.snapshot(origin+step*i,step*i);REQUIRE(cut.is_success());if(std::any_of(cut.value().packets.begin(),cut.value().packets.end(),[&](const auto& p){return p.pts>cut.value().end;})){f.snapshot=std::move(cut).value();selected=true;break;}}
+ if(!selected && config.b_frames==0) {auto cut=ring.snapshot(origin+step*45,step*45);REQUIRE(cut.is_success());f.snapshot=std::move(cut).value();selected=true;}
  REQUIRE(selected);provenance["cut_end"]=f.snapshot.end;provenance["cut_video_packets"]=f.snapshot.packets.size();
+ provenance["preset"]=config.preset;provenance["b_frames"]=config.b_frames;provenance["slots"]=config.slot_count;
  const auto fixture_dir=std::filesystem::path(REBELLIOCAP_SOURCE_DIR)/"tests/data/mux-aac";
  for(int stream=0;include_audio && stream<3;++stream) {
   std::ifstream index(fixture_dir/("aac-"+std::to_string(stream)+".json"));json j;index>>j;REQUIRE(j["qpc_frequency"]==clock.frequency());
@@ -78,7 +205,7 @@ Fixture generate_fixture(bool include_audio=true) {
  std::ofstream manifest(f.artifacts/"fixture-provenance.json");manifest<<provenance.dump(2);
  std::cout<<"MUX_ARTIFACTS="<<f.artifacts.string()<<'\n';return f;
 }
-json probe(const std::filesystem::path& file,const std::filesystem::path& artifacts) {
+json probe(const std::filesystem::path& file,const std::filesystem::path& artifacts,std::uint32_t reorder_depth=2) {
  const auto out=artifacts/(file.filename().wstring()+L".probe.json"),err=artifacts/(file.filename().wstring()+L".probe.stderr");
  SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE}; HANDLE stdout_file=CreateFileW(out.c_str(),GENERIC_WRITE,FILE_SHARE_READ,&sa,CREATE_NEW,0,nullptr); REQUIRE(stdout_file!=INVALID_HANDLE_VALUE);
  HANDLE stderr_file=CreateFileW(err.c_str(),GENERIC_WRITE,FILE_SHARE_READ,&sa,CREATE_NEW,0,nullptr);REQUIRE(stderr_file!=INVALID_HANDLE_VALUE);
@@ -93,7 +220,7 @@ json probe(const std::filesystem::path& file,const std::filesystem::path& artifa
   CHECK(line.find("UDTA parsing failed")==std::string::npos);
   // Fragmented recovery lacks a trailer; H.264 discovers its B-frame depth
   // while decoding. Keep all other warnings/errors fatal in this fixture.
-  REQUIRE(line.find("Increasing reorder buffer to 2")!=std::string::npos);
+  REQUIRE(line.find("Increasing reorder buffer to "+std::to_string(reorder_depth))!=std::string::npos);
  }
  std::ifstream data(out);json j;data>>j;return j;
 }
@@ -144,9 +271,11 @@ TEST_CASE("real reordered NVENC and saved MF AAC mux to MP4 and MKV") {
 TEST_CASE("continuous recovery preserves reordered NVENC and all AAC tracks") {
  auto fixture=generate_fixture();
  fixture.descriptors[0].title="Game — тест";
+ for(const std::size_t avio_bytes : {32U*1024,128U*1024,256U*1024,512U*1024,1024U*1024}) {
+ CAPTURE(avio_bytes);
  for(auto container:{Container::Mp4,Container::Mkv}) {
-  FfmpegContinuousMuxer mux;
-  const auto destination=fixture.artifacts/(container==Container::Mp4?L"recovery.mp4":L"recovery.mkv");
+  FfmpegContinuousMuxer mux(avio_bytes);
+  const auto destination=fixture.artifacts/(std::to_wstring(avio_bytes)+(container==Container::Mp4?L"-recovery.mp4":L"-recovery.mkv"));
   REQUIRE(mux.open(fixture.descriptors,destination,container).is_success());
   for(const auto& packet:fixture.snapshot.packets) REQUIRE(mux.write(packet).is_success());
   mux.abort();
@@ -189,6 +318,7 @@ TEST_CASE("continuous recovery preserves reordered NVENC and all AAC tracks") {
   REQUIRE(decoded==expected[0]);
   REQUIRE(bframes>0);
  }
+ }
 }
 
 TEST_CASE("video-only replay muxes without disabled audio streams") {
@@ -200,6 +330,43 @@ TEST_CASE("video-only replay muxes without disabled audio streams") {
  const auto actual=probe(path,fixture.artifacts);
  REQUIRE(actual["streams"].size()==1);
  REQUIRE(actual["streams"][0]["codec_name"]=="h264");
+}
+
+TEST_CASE("experimental NVENC pools presets and B depths preserve decodable Replay") {
+ std::vector<NvencConfig> configurations;
+ for(const auto slots:{6U,8U,10U,12U}) {NvencConfig config;config.slot_count=slots;configurations.push_back(config);}
+ for(const auto preset:{2U,3U,4U}) {NvencConfig config;config.preset=preset;configurations.push_back(config);}
+ for(const auto b_frames:{0U,1U}) {NvencConfig config;config.b_frames=b_frames;configurations.push_back(config);}
+ for(const auto multipass:{0U,1U,2U}) {NvencConfig config;config.multipass=multipass;configurations.push_back(config);}
+ {NvencConfig config;config.constant_qp=true;configurations.push_back(config);}
+ {NvencConfig config;config.target_quality=20;configurations.push_back(config);}
+ for(const auto& config:configurations) {
+  CAPTURE(config.slot_count,config.preset,config.b_frames,config.constant_qp,config.target_quality);
+  auto fixture=generate_fixture(false,config);
+  FfmpegClipMuxer mux;
+  const auto path=fixture.artifacts/"experimental.mp4";
+  REQUIRE(mux.write(fixture.snapshot,fixture.descriptors,path,Container::Mp4).is_success());
+  const auto actual=probe(path,fixture.artifacts,config.b_frames);
+  REQUIRE(actual["streams"].size()==1);
+  std::vector<double> expected_pts;
+  for(const auto& packet:fixture.snapshot.packets)
+   expected_pts.push_back(static_cast<double>(packet.pts-fixture.snapshot.actual_start)/QpcClock{}.frequency());
+  std::sort(expected_pts.begin(),expected_pts.end());
+  std::size_t decoded=0,packets=0,b_pictures=0;
+  double last_dts=-100;
+  for(const auto& item:actual["packets_and_frames"]) {
+   if(item["type"]=="packet") {
+    const auto dts=std::stod(item["dts_time"].get<std::string>());
+    REQUIRE(dts>last_dts);last_dts=dts;++packets;
+   } else if(item["type"]=="frame" && item["media_type"]=="video") {
+    REQUIRE(decoded<expected_pts.size());
+    CHECK(std::abs(std::stod(item["best_effort_timestamp_time"].get<std::string>())-expected_pts[decoded])<.000022);
+    ++decoded;if(item["pict_type"]=="B")++b_pictures;
+   }
+  }
+  REQUIRE(decoded==expected_pts.size());REQUIRE(packets==decoded);
+  if(config.b_frames) REQUIRE(b_pictures>0);else REQUIRE(b_pictures==0);
+ }
 }
 
 // Hidden helper runs only in the subprocess below. Its muxers stay alive until

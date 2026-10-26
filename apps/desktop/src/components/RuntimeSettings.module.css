@@ -50,30 +50,42 @@
 .editor [data-slot='native-select-wrapper'] { width: 100%; }
 .editor [data-slot='field-label'] { font-size: 13px; font-weight: 450; }
 .editor label:has([data-state='checked']) { border-color: #ffffff2b; background: #ffffff05; }
-.actions { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
-.actions { position: sticky; bottom: 0; padding-block: 16px; background: var(--background); z-index: 1; }
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--background);
+}
 
 .messages {
   display: grid;
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  flex: 1;
+  min-width: 0;
+  block-size: 60px;
+  overflow: auto;
+  align-content: start;
+  scrollbar-gutter: stable;
 }
 
 .restartNotice {
-  padding-top: var(--space-5);
-  margin-top: var(--space-7);
-  border-top: 1px solid var(--separator);
   color: var(--text-secondary);
   font-size: var(--text-hint-size);
   line-height: var(--text-hint-line);
 }
 
 .actions {
+  margin-left: auto;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
-  padding-top: var(--space-4);
+  flex-shrink: 0;
   flex-wrap: wrap;
+}
+
+@media (max-width: 699px) {
+  .footer { align-items: stretch; flex-direction: column; gap: var(--space-2); }
+  .messages { flex: none; block-size: 40px; }
 }
 
 @media (max-width: 420px) {

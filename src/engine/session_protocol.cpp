@@ -1,4 +1,5 @@
 #include "engine/session_protocol.h"
+#include "cli/engine_metrics_json.h"
 
 #include <algorithm>
 #include <array>
@@ -120,7 +121,7 @@ json error_json(const Error& error) {
 }
 
 json metrics_json(const EngineMetrics& metrics) {
-  return {{"videoTicks", metrics.video_ticks},
+  json result{{"videoTicks", metrics.video_ticks},
           {"missedVideoDeadlines", metrics.missed_video_deadlines},
           {"videoPackets", metrics.video_packets},
           {"audioPackets", metrics.audio_packets},
@@ -142,6 +143,10 @@ json metrics_json(const EngineMetrics& metrics) {
           {"replayMemoryLimited", metrics.replay_memory_limited},
           {"replayMemoryDrops", metrics.replay_memory_drops},
           {"continuousRecoveryPath", metrics.continuous_recovery_path}};
+  if (metrics.pipeline_telemetry.enabled) {
+    result["diagnostics"] = engine_metrics_json(metrics, metrics.qpc_frequency, metrics.video_pipeline);
+  }
+  return result;
 }
 
 json snapshot_json(const EngineSnapshot& snapshot) {

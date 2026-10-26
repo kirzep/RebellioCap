@@ -1,6 +1,6 @@
 #include "capture/dxgi_capture_source.h"
 
-#include <dxgi1_2.h>
+#include <dxgi1_5.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -78,6 +78,7 @@ struct DxgiCaptureSource::SharedDuplicationState {
   ComPtr<ID3D11Device> device;
   ComPtr<IDXGIOutputDuplication> duplication;
   DXGI_OUTDUPL_DESC description{};
+  DuplicationSelection selection;
   std::mutex mutex;
   bool frame_held{false};
   bool frame_leased{false};
@@ -132,8 +133,41 @@ DXGI_OUTDUPL_DESC DxgiCaptureSource::description() const noexcept {
   return state_->description;
 }
 
+CaptureDuplicationBackend DxgiCaptureSource::duplication_backend() const noexcept {
+  return state_->selection.backend;
+}
+std::optional<HRESULT> DxgiCaptureSource::duplication_fallback_hresult() const noexcept {
+  return state_->selection.fallback_hresult;
+}
+
+Result<DuplicationSelection> select_duplication_backend(
+    bool prefer_duplicate_output1, const std::function<HRESULT()>& modern,
+    const std::function<HRESULT()>& baseline) {
+  DuplicationSelection selection;
+  if (prefer_duplicate_output1) {
+    const auto modern_result = modern();
+    if (SUCCEEDED(modern_result)) {
+      selection.backend = CaptureDuplicationBackend::DuplicateOutput1;
+      return Result<DuplicationSelection>::success(std::move(selection));
+    }
+    // E_INVALIDARG can mean an invalid device/adapter or an already duplicated
+    // output; hiding that (or permission/session/device loss) would mask faults.
+    if (modern_result != E_NOINTERFACE && modern_result != E_NOTIMPL &&
+        modern_result != DXGI_ERROR_UNSUPPORTED) {
+      return Result<DuplicationSelection>::failure(
+          dxgi_capture_error("duplicate_output1_failed", modern_result));
+    }
+    selection.fallback_hresult = modern_result;
+  }
+  const auto baseline_result = baseline();
+  if (FAILED(baseline_result)) return Result<DuplicationSelection>::failure(
+      dxgi_capture_error("duplicate_output_failed", baseline_result));
+  return Result<DuplicationSelection>::success(std::move(selection));
+}
+
 Result<std::unique_ptr<DxgiCaptureSource>> DxgiCaptureSource::create(
-    const D3d11Device& device, MonitorId monitor, QpcClock& clock) {
+    const D3d11Device& device, MonitorId monitor, QpcClock& clock,
+    bool prefer_duplicate_output1) {
   if (!luid_equal(device.adapter_luid(), monitor.adapter_luid)) {
     return Result<std::unique_ptr<DxgiCaptureSource>>::failure(Error{
         "dxgi_capture.adapter_mismatch",
@@ -202,11 +236,30 @@ Result<std::unique_ptr<DxgiCaptureSource>> DxgiCaptureSource::create(
 
   auto state = std::make_shared<SharedDuplicationState>();
   state->device = device.device();
-  result = output1->DuplicateOutput(device.device(), &state->duplication);
-  if (FAILED(result)) {
-    return Result<std::unique_ptr<DxgiCaptureSource>>::failure(
-        dxgi_capture_error("duplicate_output_failed", result));
-  }
+  auto selection = select_duplication_backend(prefer_duplicate_output1,
+      [&]() -> HRESULT {
+        ComPtr<IDXGIOutput5> output5;
+        const auto queried = output.As(&output5);
+        if (FAILED(queried)) return queried;
+        // SDR contract remains GPU BGRA only. A BGRA-only list can still require
+        // fullscreen conversion; this opt-in is not a claim of a faster path.
+        constexpr DXGI_FORMAT formats[]{DXGI_FORMAT_B8G8R8A8_UNORM};
+        const auto duplicated = output5->DuplicateOutput1(
+            device.device(), 0, 1, formats, &state->duplication);
+        if (FAILED(duplicated)) return duplicated;
+        DXGI_OUTDUPL_DESC actual{};
+        state->duplication->GetDesc(&actual);
+        if (actual.ModeDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
+          state->duplication.Reset();
+          return DXGI_ERROR_UNSUPPORTED;
+        }
+        return S_OK;
+      }, [&]() -> HRESULT {
+        state->duplication.Reset();
+        return output1->DuplicateOutput(device.device(), &state->duplication);
+      });
+  if (!selection.is_success()) return Result<std::unique_ptr<DxgiCaptureSource>>::failure(selection.error());
+  state->selection = std::move(selection).value();
   state->duplication->GetDesc(&state->description);
 
   return Result<std::unique_ptr<DxgiCaptureSource>>::success(

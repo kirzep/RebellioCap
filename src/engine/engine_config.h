@@ -4,12 +4,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 
 #include "capture/monitor_catalog.h"
+#include "core/pipeline_telemetry.h"
 #include "config/recording_contract.h"
 #include "hotkey/hotkey_chord.h"
 #include "mux/clip_muxer.h"
+#include "engine/continuous_recording.h"
+#include "video/nvenc_encoder.h"
 
 namespace rebelliocap {
 
@@ -24,6 +28,11 @@ struct EngineConfig {
   std::uint32_t fps{60};
   std::uint32_t bitrate{30'000'000};
   std::uint32_t gop_seconds{2};
+  NvencConfig nvenc_config;
+  bool prefer_duplicate_output1{false};
+  bool direct_nv12_cache{false};
+  std::size_t continuous_avio_buffer_bytes{32 * 1024};
+  ContinuousQueueLimits continuous_queue_limits;
   std::chrono::seconds replay_capacity{30};
   std::chrono::seconds clip_duration{30};
   Container container{Container::Mp4};
@@ -38,6 +47,9 @@ struct EngineConfig {
   // Internal hard cap for deterministic tests and embedding.
   std::size_t maximum_buffer_bytes{0};
   std::filesystem::path naming_settings_file;
+  // Optional diagnostics shared by hardware, capture workers and writer.
+  // Null/disabled by default; keep one instance for the recording session.
+  std::shared_ptr<PipelineTelemetry> pipeline_telemetry;
 };
 
 struct EngineMetrics {
@@ -63,6 +75,10 @@ struct EngineMetrics {
   bool replay_memory_limited{false};
   std::uint64_t replay_memory_drops{0};
   std::string continuous_recovery_path;
+  PipelineTelemetrySnapshot pipeline_telemetry;
+  ContinuousQueueMetrics continuous_queue;
+  QpcTicks qpc_frequency{0};
+  NvencRuntimeMetrics video_pipeline;
 };
 
 }  // namespace rebelliocap

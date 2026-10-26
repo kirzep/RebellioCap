@@ -6,6 +6,13 @@ param(
   [Parameter(Mandatory, ParameterSetName = 'AnalyzeFfprobe')]
   [ValidateNotNullOrEmpty()]
   [string] $AnalyzeFfprobe,
+  [Parameter(Mandatory, ParameterSetName = 'AnalyzeResources')]
+  [string] $AnalyzeSampler,
+  [Parameter(Mandatory, ParameterSetName = 'AnalyzeResources')]
+  [string] $MetricsLog,
+  [Parameter(ParameterSetName = 'AnalyzeResources')]
+  [ValidateRange(0, 86400)]
+  [double] $ExpectedDurationSeconds = 0,
   [Parameter(ParameterSetName = 'Collect')]
   [switch] $PreflightOnly,
   [Parameter(ParameterSetName = 'Collect')]
@@ -20,7 +27,20 @@ param(
   [string] $SceneDeclaration = 'built-in benchmark',
   [Parameter(ParameterSetName = 'Collect')]
   [ValidateRange(1, 60)]
-  [int] $GameWaitMinutes = 10
+  [int] $GameWaitMinutes = 10,
+  [Parameter(ParameterSetName = 'Collect')]
+  [ValidateSet('game-only', 'replay-only', 'continuous-only', 'combined', 'save-burst')]
+  [string] $ExperimentMode,
+  [Parameter(ParameterSetName = 'Collect')]
+  [string] $ExperimentOutputRoot,
+  [Parameter(ParameterSetName = 'Collect')]
+  [string] $ExperimentConfig,
+  [Parameter(ParameterSetName = 'Collect')]
+  [ValidateRange(30, 600)]
+  [int] $ExperimentDurationSeconds = 60,
+  [Parameter(ParameterSetName = 'Collect')]
+  [ValidateRange(3, 20)]
+  [int] $ExperimentPairs = 3
 )
 
 Set-StrictMode -Version Latest
@@ -28,6 +48,13 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 
 . (Join-Path $PSScriptRoot 'performance-build-identity.ps1')
+. (Join-Path $PSScriptRoot 'performance-experiments.ps1')
+
+if ($ExperimentMode -and $PreflightOnly) { throw '-PreflightOnly is for the long acceptance scenario; use -PlanOnly for offline short experiment planning.' }
+if ($ExperimentMode -and $PlanOnly) {
+  Get-ShortExperimentPlan $ExperimentMode $ExperimentOutputRoot $SettingsDeclaration $SceneDeclaration $GameExecutable $ExperimentConfig $ExperimentDurationSeconds $ExperimentPairs $repositoryRoot | ConvertTo-Json -Depth 8
+  exit 0
+}
 
 function Convert-ToInvariantDouble([object] $value) {
   return [double]::Parse([string]$value, [Globalization.CultureInfo]::InvariantCulture)
@@ -61,18 +88,30 @@ function Measure-PresentMonCsv([string] $path) {
     $intervalProperty = $row.PSObject.Properties['msBetweenPresents']
     if ($null -eq $intervalProperty) { throw 'PresentMon CSV lacks msBetweenPresents.' }
     $interval = Convert-ToInvariantDouble $intervalProperty.Value
+    if (-not [double]::IsFinite($interval) -or $interval -lt 0) {
+      throw 'PresentMon CSV contains a nonfinite or negative displayed frame interval.'
+    }
     if ($interval -gt 0) { $displayed.Add($interval) }
   }
   if ($displayed.Count -eq 0) { throw 'PresentMon CSV contains no displayed frames.' }
   $mean = ($displayed | Measure-Object -Average).Average
   $percentile99 = Get-Percentile $displayed.ToArray() 0.99
+  $slowest = @($displayed | Sort-Object -Descending)
+  $onePercentCount = [int][Math]::Ceiling($displayed.Count * 0.01)
+  $pointOnePercentCount = [int][Math]::Ceiling($displayed.Count * 0.001)
   [PSCustomObject]@{
     status = 'passed'
     displayedFrames = $displayed.Count
     averageFps = 1000.0 / $mean
+    medianFps = 1000.0 / (Get-Percentile $displayed.ToArray() 0.5)
     onePercentLowFps = 1000.0 / $percentile99
+    onePercentLowDefinition = '1000 / interpolated p99 frame time (legacy)'
+    worstOnePercentMeanFps = 1000.0 / (($slowest | Select-Object -First $onePercentCount | Measure-Object -Average).Average)
+    worstPointOnePercentMeanFps = 1000.0 / (($slowest | Select-Object -First $pointOnePercentCount | Measure-Object -Average).Average)
+    slowTailDefinition = '1000 / mean of slowest ceil(N * fraction) frame intervals'
     frameTimeP95Ms = Get-Percentile $displayed.ToArray() 0.95
     frameTimeP99Ms = $percentile99
+    frameTimeP999Ms = Get-Percentile $displayed.ToArray() 0.999
   }
 }
 
@@ -327,9 +366,15 @@ function Invoke-PresentMonRun([object] $plan, [object] $run) {
     csv = $run.csv
     displayedFrames = $measurement.displayedFrames
     averageFps = $measurement.averageFps
+    medianFps = $measurement.medianFps
     onePercentLowFps = $measurement.onePercentLowFps
+    onePercentLowDefinition = $measurement.onePercentLowDefinition
+    worstOnePercentMeanFps = $measurement.worstOnePercentMeanFps
+    worstPointOnePercentMeanFps = $measurement.worstPointOnePercentMeanFps
+    slowTailDefinition = $measurement.slowTailDefinition
     frameTimeP95Ms = $measurement.frameTimeP95Ms
     frameTimeP99Ms = $measurement.frameTimeP99Ms
+    frameTimeP999Ms = $measurement.frameTimeP999Ms
   }
 }
 
@@ -445,6 +490,70 @@ function Get-MaxWorkingMemoryExcludingReplay([object[]] $samples,
   return $maximum / 1MB
 }
 
+function Measure-CaptureResources([object[]] $samples, [object[]] $metrics, [double] $expectedSeconds = 0) {
+  if ($samples.Count -lt 2 -or $metrics.Count -lt 2) {
+    throw 'Resource evidence requires at least two process samples and engine metrics for each capture.'
+  }
+  $previousQpc = $null
+  $previousCpu = $null
+  $frequency = Convert-ToInvariantDouble $samples[0].qpcFrequency
+  if (-not [double]::IsFinite($frequency) -or $frequency -le 0) { throw 'Invalid sampler QPC frequency.' }
+  $encoderValues = [Collections.Generic.List[double]]::new()
+  foreach ($sample in $samples) {
+    foreach ($field in @('qpc', 'qpcFrequency', 'cpuTotalMs', 'privateBytes', 'handles')) {
+      $value = Convert-ToInvariantDouble $sample.$field
+      if (-not [double]::IsFinite($value) -or $value -lt 0) { throw "Invalid resource sample: $field." }
+    }
+    $qpc = Convert-ToInvariantDouble $sample.qpc
+    $cpu = Convert-ToInvariantDouble $sample.cpuTotalMs
+    if ((Convert-ToInvariantDouble $sample.qpcFrequency) -ne $frequency -or
+        ($null -ne $previousQpc -and ($qpc -le $previousQpc -or ($qpc - $previousQpc) / $frequency -gt 5)) -or
+        ($null -ne $previousCpu -and $cpu -lt $previousCpu)) { throw 'Resource samples have inconsistent clocks or CPU counters.' }
+    $previousQpc = $qpc; $previousCpu = $cpu
+    if (-not [string]::IsNullOrWhiteSpace([string]$sample.encoderUtilizationPercent)) {
+      $encoder = Convert-ToInvariantDouble $sample.encoderUtilizationPercent
+      if (-not [double]::IsFinite($encoder) -or $encoder -lt 0 -or $encoder -gt 100) { throw 'Invalid encoder utilization.' }
+      $encoderValues.Add($encoder)
+    }
+  }
+  if ($encoderValues.Count -eq 0) { throw 'Encoder utilization evidence is missing.' }
+  $previousMetricQpc = $null
+  $maximumDrops = 0.0
+  foreach ($metric in $metrics) {
+    foreach ($value in @($metric.qpc, $metric.fields.qpc_frequency, $metric.fields.replay_bytes, $metric.fields.dropped_frames_percent)) {
+      $number = Convert-ToInvariantDouble $value
+      if (-not [double]::IsFinite($number) -or $number -lt 0) { throw 'Invalid engine resource metric.' }
+    }
+    $metricQpc = Convert-ToInvariantDouble $metric.qpc
+    if ((Convert-ToInvariantDouble $metric.fields.qpc_frequency) -ne $frequency -or
+        ($null -ne $previousMetricQpc -and ($metricQpc -lt $previousMetricQpc -or ($metricQpc - $previousMetricQpc) / $frequency -gt 5))) { throw 'Engine resource metrics have inconsistent clocks.' }
+    $previousMetricQpc = $metricQpc
+    $maximumDrops = [Math]::Max($maximumDrops, (Convert-ToInvariantDouble $metric.fields.dropped_frames_percent))
+  }
+  $wallSeconds = ((Convert-ToInvariantDouble $samples[-1].qpc) - (Convert-ToInvariantDouble $samples[0].qpc)) / $frequency
+  $metricSeconds = ((Convert-ToInvariantDouble $metrics[-1].qpc) - (Convert-ToInvariantDouble $metrics[0].qpc)) / $frequency
+  if ([Math]::Abs((Convert-ToInvariantDouble $samples[0].qpc) - (Convert-ToInvariantDouble $metrics[0].qpc)) / $frequency -gt 5 -or
+      [Math]::Abs((Convert-ToInvariantDouble $samples[-1].qpc) - (Convert-ToInvariantDouble $metrics[-1].qpc)) / $frequency -gt 5 -or
+      ($expectedSeconds -gt 0 -and ($wallSeconds -lt $expectedSeconds - 10 -or $metricSeconds -lt $expectedSeconds - 10))) {
+    throw 'Resource evidence does not cover the capture lifetime.'
+  }
+  $cpuDelta = (Convert-ToInvariantDouble $samples[-1].cpuTotalMs) - (Convert-ToInvariantDouble $samples[0].cpuTotalMs)
+  $cpuAverage = $cpuDelta / ($wallSeconds * 1000.0 * [Environment]::ProcessorCount) * 100.0
+  $workingMemory = Get-MaxWorkingMemoryExcludingReplay $samples $metrics
+  [PSCustomObject]@{
+    status = if ($cpuAverage -le 2.0 -and $workingMemory -le 250.0 -and $maximumDrops -le 0.1) { 'passed' } else { 'failed' }
+    cpuAveragePercent = $cpuAverage
+    cpuWallTimeClock = 'qpc'
+    workingMemoryExcludingReplayMiB = $workingMemory
+    maximumHandleCount = [int](($samples.handles | ForEach-Object { [int]$_ } | Measure-Object -Maximum).Maximum)
+    encoderUtilizationAveragePercent = [double](($encoderValues | Measure-Object -Average).Average)
+    droppedFramesPercent = $maximumDrops
+    sampleCount = $samples.Count
+    metricCount = $metrics.Count
+    sampledSeconds = $wallSeconds
+  }
+}
+
 function Invoke-CaptureRun([object] $plan, [object] $run) {
   # Each capture owns its process until it has exited. The next baseline
   # therefore measures a system without this collector's capture process.
@@ -504,6 +613,36 @@ function Invoke-BenchmarkCollection([object] $plan) {
   }
 }
 
+function Get-CaptureResourceEvidence([string] $performanceRoot, [object[]] $runs, [double] $expectedSeconds = 1800) {
+  foreach ($run in $runs) {
+    $continuity = $run.index -eq 3
+    $prefix = if ($continuity) { 'capture' } else { "capture-$($run.index)" }
+    $sampleName = if ($continuity) { 'engine-sampler.csv' } else { "$prefix-sampler.csv" }
+    $samples = @(Import-Csv -LiteralPath (Join-Path $performanceRoot $sampleName))
+    $metrics = @(Read-Ndjson (Join-Path $performanceRoot "$prefix-engine.ndjson") | Where-Object { $_.type -eq 'metrics' })
+    $resources = Measure-CaptureResources $samples $metrics $expectedSeconds
+    [PSCustomObject]@{ index = $run.index; resources = $resources }
+  }
+}
+
+if ($PSCmdlet.ParameterSetName -eq 'AnalyzeResources') {
+  try {
+    $samples = @(Import-Csv -LiteralPath $AnalyzeSampler)
+    $metrics = @(Read-Ndjson $MetricsLog | Where-Object { $_.type -eq 'metrics' })
+    Measure-CaptureResources $samples $metrics $ExpectedDurationSeconds | ConvertTo-Json -Compress
+    exit 0
+  } catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+  }
+}
+
+if ($ExperimentMode) {
+  $shortPlan = Get-ShortExperimentPlan $ExperimentMode $ExperimentOutputRoot $SettingsDeclaration $SceneDeclaration $GameExecutable $ExperimentConfig $ExperimentDurationSeconds $ExperimentPairs $repositoryRoot
+  Invoke-ShortExperimentCommand $shortPlan $repositoryRoot | ConvertTo-Json -Depth 14
+  exit 0
+}
+
 $preflight = Get-PerformancePreflight
 if ([string]::IsNullOrWhiteSpace($SettingsDeclaration)) {
   $SettingsDeclaration = Read-Host 'Declare the exact game preset, resolution, and display mode'
@@ -515,7 +654,7 @@ $clips = $plan.captureArguments[-1]
 New-Item -ItemType Directory -Force -Path $clips | Out-Null
 $settingsPath = Join-Path $plan.performanceRoot 'settings-declaration.json'
 $captureLog = Join-Path $plan.performanceRoot 'capture-engine.ndjson'
-$captureError = Join-Path $plan.performanceRoot 'engine.stderr.log'
+$captureError = Join-Path $plan.performanceRoot 'capture-engine.stderr.log'
 $samplerCsv = Join-Path $plan.performanceRoot 'engine-sampler.csv'
 $performanceSummaryPath = Join-Path $repositoryRoot 'artifacts\milestone-1\performance.json'
 foreach ($path in @($settingsPath, $captureLog, $captureError, $samplerCsv,
@@ -556,20 +695,18 @@ $captureLow = Get-Median @($capture.onePercentLowFps)
 $averageRegression = ($baselineAverage - $captureAverage) * 100.0 / $baselineAverage
 $lowRegression = ($baselineLow - $captureLow) * 100.0 / $baselineLow
 
-$samples = @(Import-Csv -LiteralPath $samplerCsv)
-$cpuAverage = $null
-if ($samples.Count -ge 2) {
-  $cpuDelta = (Convert-ToInvariantDouble $samples[-1].cpuTotalMs) - (Convert-ToInvariantDouble $samples[0].cpuTotalMs)
-  $wallSeconds = ([DateTime]::Parse($samples[-1].timestampUtc) - [DateTime]::Parse($samples[0].timestampUtc)).TotalSeconds
-  if ($wallSeconds -gt 0) {
-    $cpuAverage = $cpuDelta / ($wallSeconds * 1000.0 * [Environment]::ProcessorCount) * 100.0
-  }
-}
+$resourceRuns = @(Get-CaptureResourceEvidence $plan.performanceRoot $capture)
+$resourcesPassed = $resourceRuns.Count -eq 3 -and @($resourceRuns | Where-Object { $_.resources.status -ne 'passed' }).Count -eq 0
+# Retain the historical capture-3 scalar fields for milestone consumers.
+$legacyResources = ($resourceRuns | Where-Object { $_.index -eq 3 }).resources
+$cpuAverage = $legacyResources.cpuAveragePercent
+$workingMemory = $legacyResources.workingMemoryExcludingReplayMiB
+$maximumHandles = $legacyResources.maximumHandleCount
+$encoderAverage = $legacyResources.encoderUtilizationAveragePercent
 $records = Read-Ndjson $captureLog
 $metrics = @($records | Where-Object { $_.type -eq 'metrics' })
 if ($metrics.Count -eq 0) { throw 'Capture NDJSON contains no metrics records.' }
 $lastMetrics = $metrics[-1].fields
-$workingMemory = Get-MaxWorkingMemoryExcludingReplay $samples $metrics
 $saveEvidence = Get-SaveEvidence $metrics
 $clipFiles = @(Get-ChildItem -LiteralPath $clips -Filter '*.mp4' -File | Sort-Object Name)
 if ($clipFiles.Count -ne 2) {
@@ -584,17 +721,8 @@ for ($index = 0; $index -lt $clipFiles.Count; ++$index) {
   $clipDrifts.Add((Measure-FfprobeDrift $ffprobePath).avDriftMs)
 }
 $avDrift = [double](($clipDrifts | Measure-Object -Maximum).Maximum)
-$encoderValues = @($samples.encoderUtilizationPercent | Where-Object {
-    -not [string]::IsNullOrWhiteSpace($_)
-  } | ForEach-Object { Convert-ToInvariantDouble $_ })
-$encoderAverage = if ($encoderValues.Count -gt 0) {
-  [double](($encoderValues | Measure-Object -Average).Average)
-} else { $null }
-$maximumHandles = [int](($samples.handles | ForEach-Object { [int]$_ } |
-  Measure-Object -Maximum).Maximum)
 $performancePassed = $baseline.Count -eq 3 -and $capture.Count -eq 3 -and
-  $null -ne $cpuAverage -and $cpuAverage -le 2.0 -and $workingMemory -le 250.0 -and
-  [double]$lastMetrics.dropped_frames_percent -le 0.1 -and
+  $resourcesPassed -and
   $avDrift -le 50.0 -and
   $averageRegression -le 3.0 -and $lowRegression -le 5.0 -and
   [double]$lastMetrics.hotkey_recognition_ms -le 100.0 -and
@@ -608,6 +736,10 @@ $summary = [PSCustomObject]@{
   settingsDeclaration = $SettingsDeclaration
   sceneDeclaration = $SceneDeclaration
   resourceEvidenceCaptureIndex = 3
+  resourceEvidenceCaptureIndices = @($resourceRuns.index)
+  resourceRuns = $resourceRuns
+  resourceSchemaVersion = 1
+  cpuWallTimeClock = 'qpc'
   baselineRuns = $baseline.Count
   captureRuns = $capture.Count
   runs = @($results)

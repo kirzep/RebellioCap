@@ -376,6 +376,40 @@ EngineConfig config() {
 
 }  // namespace
 
+TEST_CASE("optional diagnostics collect the hardware snapshot with the engine QPC frequency") {
+  class MetricProbe final : public IEngineVideoPipeline {
+   public:
+    Result<std::vector<EncodedPacket>> tick(QpcTicks, bool) override { return Result<std::vector<EncodedPacket>>::success({}); }
+    Result<std::vector<EncodedPacket>> flush() override { return Result<std::vector<EncodedPacket>>::success({}); }
+    NvencRuntimeMetrics metrics() const override {
+      ++reads;
+      NvencRuntimeMetrics value{};
+      value.submitted_frames=42;
+      value.accepted_config.width=1920;
+      return value;
+    }
+    mutable std::atomic_uint reads{0};
+  };
+  auto clock=std::make_shared<VirtualEngineClock>(60'000);
+  auto video=std::make_shared<MetricProbe>();
+  RecorderEngine engine({.clock=clock,.video=video,.hotkey=std::make_shared<FakeHotkeySource>(),
+                         .muxer=std::make_shared<BlockingMuxer>()});
+  auto settings=config();
+  REQUIRE(engine.start(settings).is_success());
+  REQUIRE(engine.metrics().video_pipeline.submitted_frames==0);
+  REQUIRE(video->reads.load()==0);
+  REQUIRE(engine.stop().is_success());
+  settings.pipeline_telemetry=std::make_shared<PipelineTelemetry>();
+  settings.pipeline_telemetry->configure(true);
+  REQUIRE(engine.start(settings).is_success());
+  const auto measured=engine.metrics();
+  REQUIRE(measured.qpc_frequency==60'000);
+  REQUIRE(measured.video_pipeline.submitted_frames==42);
+  REQUIRE(measured.video_pipeline.accepted_config.width==1920);
+  REQUIRE(video->reads.load()>0);
+  REQUIRE(engine.stop().is_success());
+}
+
 TEST_CASE("virtual 30 minute schedule has exact frame count and no accumulated drift") {
   constexpr QpcTicks frequency = 60'000;
   constexpr std::size_t frame_count = 30U * 60U * 60U;

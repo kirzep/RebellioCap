@@ -183,6 +183,7 @@ export function RecordingControls({
             {replaySaveLabel}
           </Button>
 
+          <div className={styles.actionMessages}>
           {!replayReady && !saveReplayError && (
             <InlineStatus tone={disabled ? 'warning' : 'neutral'}>
               {disabled
@@ -198,10 +199,12 @@ export function RecordingControls({
             success={saveReplaySuccess}
             onOpenSettings={onOpenSettings}
           />
+          </div>
         </CardFooter>
         </Card>
 
         <Card className={styles.continuousAction} role="region"
+          data-recording={snapshot.continuousRecordingActive}
           aria-labelledby="continuous-action-title"
         >
           <CardHeader className="flex flex-wrap items-start justify-between gap-3">
@@ -240,6 +243,7 @@ export function RecordingControls({
           </Button>
 
 
+          <div className={styles.actionMessages}>
           {!activeConfig.continuous_recording_enabled &&
             !snapshot.continuousRecordingActive &&
             !toggleContinuousError && (
@@ -264,6 +268,7 @@ export function RecordingControls({
             }
             onOpenSettings={onOpenSettings}
           />
+          </div>
         </CardFooter>
         </Card>
       </div>

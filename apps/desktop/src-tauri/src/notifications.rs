@@ -49,7 +49,46 @@ pub struct NotificationSettings {
     pub sound_enabled: bool,
     pub sound: String,
     pub volume: u8,
+    #[serde(default = "default_layout", deserialize_with = "deserialize_layout")]
+    pub layout: std::collections::BTreeMap<String, OverlayPosition>,
+    #[serde(default)]
+    pub custom_sound: Option<String>,
+    #[serde(default)]
+    pub custom_sound_name: Option<String>,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OverlayPosition { pub x: f64, pub y: f64 }
+fn default_layout() -> std::collections::BTreeMap<String, OverlayPosition> {
+    ["messages", "recording", "replay"]
+        .into_iter().map(|key| (key.to_owned(), match key {
+            "recording" => OverlayPosition { x: 0.93, y: 0.98 },
+            "replay" => OverlayPosition { x: 0.99, y: 0.98 },
+            _ => OverlayPosition { x: 0.02, y: 0.03 },
+        })).collect()
+}
+fn deserialize_layout<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<std::collections::BTreeMap<String, OverlayPosition>, D::Error> {
+    let mut layout = std::collections::BTreeMap::<String, OverlayPosition>::deserialize(deserializer)?;
+    if !layout.contains_key("messages") {
+        let legacy = ["replay_started", "replay_saved", "recording_started", "recording_stopped", "recording_error", "replay_stopped", "engine_stopped", "replay_error", "recording", "replay"];
+        if layout.keys().all(|key| legacy.contains(&key.as_str())) {
+            let messages = layout.get("replay_saved").or_else(|| layout.get("recording_started")).cloned().unwrap_or(OverlayPosition { x: 0.02, y: 0.03 });
+            layout.retain(|key, _| key == "recording" || key == "replay");
+            layout.insert("messages".into(), messages);
+        }
+    }
+    Ok(layout)
+}
+fn valid_settings(settings: &NotificationSettings) -> bool {
+    settings.volume <= 100 && ["glass", "soft", "bell", "custom"].contains(&settings.sound.as_str())
+        && default_layout().keys().all(|key| settings.layout.contains_key(key))
+        && settings.layout.len() == default_layout().len()
+        && settings.layout.values().all(|p| p.x.is_finite() && p.y.is_finite() && (0.0..=1.0).contains(&p.x) && (0.0..=1.0).contains(&p.y))
+        && settings.custom_sound.as_ref().is_none_or(|id| valid_sound_id(id))
+        && (settings.sound != "custom" || settings.custom_sound.is_some())
+        && settings.custom_sound_name.as_ref().is_none_or(|name| name.len() <= 512)
+}
+fn valid_sound_id(id: &str) -> bool { id.len() == 64 && id.bytes().all(|c| c.is_ascii_hexdigit()) }
 fn default_overlay_enabled() -> bool {
     true
 }
@@ -60,17 +99,25 @@ impl Default for NotificationSettings {
             sound_enabled: true,
             sound: "glass".into(),
             volume: 35,
+            layout: default_layout(),
+            custom_sound: None,
+            custom_sound_name: None,
         }
     }
 }
+struct EditorWindowState {
+    placement: windows_sys::Win32::UI::WindowsAndMessaging::WINDOWPLACEMENT,
+    fullscreen: bool,
+}
 pub struct NotificationState {
+    editor: Mutex<Option<EditorWindowState>>,
     settings: Mutex<NotificationSettings>,
     path: PathBuf,
 }
 fn read_settings(path: &std::path::Path) -> Option<NotificationSettings> {
     std::fs::read(path).ok()
         .and_then(|bytes| serde_json::from_slice::<NotificationSettings>(&bytes).ok())
-        .filter(|s| s.volume <= 100 && ["glass", "soft", "bell"].contains(&s.sound.as_str()))
+        .filter(valid_settings)
 }
 pub(crate) fn has_canonical_settings(root: &std::path::Path) -> bool {
     read_settings(&root.join("notifications.json")).is_some()
@@ -93,6 +140,7 @@ impl NotificationState {
         });
         let state = Self {
             settings: Mutex::new(settings),
+            editor: Mutex::new(None),
             path,
         };
         if missing {
@@ -105,7 +153,7 @@ impl NotificationState {
         state
     }
     fn save(&self, settings: NotificationSettings) -> Result<(), String> {
-        if settings.volume > 100 || !["glass", "soft", "bell"].contains(&settings.sound.as_str()) {
+        if !valid_settings(&settings) {
             return Err("notifications.invalid_settings".into());
         }
         let mut current = self.settings.lock().map_err(|e| e.to_string())?;
@@ -146,12 +194,18 @@ pub(crate) fn notify_ready(app: &tauri::AppHandle) {
 pub struct NotificationBatch {
     events: Vec<&'static str>,
     settings: NotificationSettings,
+    #[serde(rename = "replayActive")]
+    replay_active: bool,
+    #[serde(rename = "recordingActive")]
+    recording_active: bool,
+    #[serde(rename = "editorActive")]
+    editor_active: bool,
 }
 fn notification_batch(mut events: Vec<&'static str>, settings: NotificationSettings) -> NotificationBatch {
     if !settings.overlay_enabled && !settings.sound_enabled {
         events.clear();
     }
-    NotificationBatch { events, settings }
+    NotificationBatch { events, settings, replay_active: false, recording_active: false, editor_active: false }
 }
 #[tauri::command]
 pub async fn poll_notifications(
@@ -163,8 +217,114 @@ pub async fn poll_notifications(
         return Err("notifications.overlay_only".into());
     }
     let events = host.drain_notifications().await?;
+    let editor_active = state.editor.lock().map_err(|e| e.to_string())?.is_some();
     let settings = get_notification_settings(state)?;
-    Ok(notification_batch(events, settings))
+    let (snapshot, _) = host.tray_status()?;
+    let mut batch = notification_batch(events, settings);
+    let healthy = !matches!(snapshot.lifecycle, EngineLifecycle::Failed | EngineLifecycle::Blocked | EngineLifecycle::Stopped);
+    batch.editor_active = editor_active;
+    batch.replay_active = healthy && snapshot.replay_active;
+    batch.recording_active = healthy && snapshot.continuous_recording_active;
+    Ok(batch)
+}
+
+const MAX_SOUND_BYTES: usize = 2 * 1024 * 1024;
+fn validate_audio(bytes: &[u8]) -> bool {
+    bytes.len() >= 12 && bytes.len() <= MAX_SOUND_BYTES && (
+        (&bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE") || &bytes[..4] == b"OggS" || &bytes[..3] == b"ID3" || (bytes[0] == 0xff && bytes[1] & 0xe0 == 0xe0))
+}
+#[tauri::command]
+pub fn import_notification_sound(window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, bytes: Vec<u8>) -> Result<String, String> {
+    if window.label() != "main" { return Err("notifications.main_only".into()); }
+    if !validate_audio(&bytes) { return Err("notifications.invalid_audio".into()); }
+    use sha2::{Digest, Sha256};
+    let id = format!("{:x}", Sha256::digest(&bytes));
+    let dir = state.path.parent().ok_or("notifications.path")?.join("notification-sounds");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
+    std::io::Write::write_all(&mut file.as_file(), &bytes).map_err(|e| e.to_string())?;
+    file.as_file().sync_all().map_err(|e| e.to_string())?;
+    file.persist(dir.join(&id)).map_err(|e| e.to_string())?;
+    Ok(id)
+}
+#[tauri::command]
+pub fn read_notification_sound(state: tauri::State<'_, NotificationState>, id: String) -> Result<String, String> {
+    if !valid_sound_id(&id) { return Err("notifications.invalid_audio".into()); }
+    use std::io::Read;
+    let path = state.path.parent().ok_or("notifications.path")?.join("notification-sounds").join(id);
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    file.take((MAX_SOUND_BYTES + 1) as u64).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if !validate_audio(&bytes) { return Err("notifications.invalid_audio".into()); }
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+#[derive(Serialize)]
+pub struct OverlayDisplay { width: f64, height: f64 }
+#[tauri::command]
+pub fn get_overlay_display(app: tauri::AppHandle) -> Result<OverlayDisplay, String> {
+    use tauri::Manager;
+    let window = app.get_webview_window("overlay").ok_or("notifications.overlay_missing")?;
+    let size = window.inner_size().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    Ok(OverlayDisplay { width: size.width as f64 / scale, height: size.height as f64 / scale })
+}
+#[tauri::command]
+pub fn set_overlay_visible(window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, visible: bool) -> Result<(), String> {
+    if window.label() != "overlay" { return Err("notifications.overlay_only".into()); }
+    let editing = state.editor.lock().map_err(|e| e.to_string())?.is_some();
+    crate::native::overlay_safety::set_visible(&window, visible && !editing)
+}
+
+fn restore_editor_window(window: &tauri::WebviewWindow, original: &EditorWindowState) -> Result<(), String> {
+    window.set_fullscreen(original.fullscreen).map_err(|e| e.to_string())?;
+    if !original.fullscreen {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
+        if unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPlacement(hwnd, &original.placement) } == 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+    }
+    Ok(())
+}
+pub(crate) fn close_overlay_editor(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::{Emitter, Manager};
+    let state = app.state::<NotificationState>();
+    let mut editor = state.editor.lock().map_err(|e| e.to_string())?;
+    if let Some(original) = editor.as_ref() {
+        let window = app.get_webview_window("main").ok_or("notifications.main_missing")?;
+        restore_editor_window(&window, original)?;
+        *editor = None;
+        drop(editor);
+        notify_ready(app);
+        app.emit_to("main", "overlay-editor-closed", ()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+#[tauri::command]
+pub fn set_overlay_editor_fullscreen(app: tauri::AppHandle, window: tauri::WebviewWindow, state: tauri::State<'_, NotificationState>, open: bool) -> Result<(), String> {
+    if window.label() != "main" { return Err("notifications.main_only".into()); }
+    if !open { return close_overlay_editor(&app); }
+    let mut editor = state.editor.lock().map_err(|e| e.to_string())?;
+    if editor.is_some() { return Ok(()); }
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowPlacement, WINDOWPLACEMENT, SW_SHOWMAXIMIZED};
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
+    let mut placement: WINDOWPLACEMENT = unsafe { std::mem::zeroed() };
+    placement.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+    if unsafe { GetWindowPlacement(hwnd, &mut placement) } == 0 { return Err(std::io::Error::last_os_error().to_string()); }
+    let original = EditorWindowState { placement, fullscreen: window.is_fullscreen().map_err(|e| e.to_string())? };
+    let monitor = window.primary_monitor().map_err(|e| e.to_string())?;
+    let enter = (|| -> Result<(), String> {
+        if !original.fullscreen {
+            if original.placement.showCmd == SW_SHOWMAXIMIZED as u32 { window.unmaximize().map_err(|e| e.to_string())?; }
+            if let Some(monitor) = monitor { window.set_position(*monitor.position()).map_err(|e| e.to_string())?; }
+        }
+        window.set_fullscreen(true).map_err(|e| e.to_string())
+    })();
+    if let Err(error) = enter { let _ = restore_editor_window(&window, &original); return Err(error); }
+    *editor = Some(original);
+    drop(editor);
+    notify_ready(&app);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -173,6 +333,62 @@ mod tests {
         model::{EngineLifecycle, EngineSnapshot},
         notifications::transitions,
     };
+
+    #[test]
+    fn legacy_event_layout_migrates_to_exactly_three_elements() {
+        let root = tempfile::tempdir().unwrap();
+        let value = serde_json::json!({"overlayEnabled": true, "soundEnabled": true, "sound": "bell", "volume": 60,
+          "layout": {"recording": {"x": 0.8, "y": 0.9}, "replay": {"x": 0.9, "y": 0.9},
+          "replay_saved": {"x": 0.6, "y": 0.7}, "recording_error": {"x": 0.1, "y": 0.1}}});
+        std::fs::write(root.path().join("notifications.json"), serde_json::to_vec(&value).unwrap()).unwrap();
+        let state = super::NotificationState::new(root.path().to_path_buf());
+        let settings = state.settings.lock().unwrap().clone();
+        assert_eq!(settings.layout.len(), 3);
+        assert_eq!(settings.layout["messages"].x, 0.6);
+        assert_eq!(settings.layout["recording"].x, 0.8);
+        assert_eq!(settings.sound, "bell");
+        state.save(settings).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(&std::fs::read(root.path().join("notifications.json")).unwrap()).unwrap();
+        assert_eq!(document["layout"].as_object().unwrap().len(), 3);
+        assert!(document["layout"].get("replay_saved").is_none());
+    }
+
+    #[test]
+    fn audio_import_validation_rejects_unbounded_and_unrecognized_files() {
+        assert!(!super::validate_audio(b"not audio"));
+        assert!(!super::validate_audio(&vec![0; super::MAX_SOUND_BYTES + 1]));
+        assert!(super::validate_audio(b"RIFF0000WAVEdata"));
+        assert!(!super::valid_sound_id("../config.json"));
+    }
+    #[test]
+    fn layout_and_custom_sound_survive_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let state = super::NotificationState::new(root.path().to_path_buf());
+        let mut settings = super::NotificationSettings::default();
+        settings.layout.get_mut("recording").unwrap().x = 0.4;
+        settings.custom_sound = Some("a".repeat(64));
+        settings.custom_sound_name = Some("My chime.wav".into());
+        settings.sound = "custom".into();
+        state.save(settings).unwrap();
+        let restored = super::NotificationState::new(root.path().to_path_buf());
+        let settings = restored.settings.lock().unwrap();
+        assert_eq!(settings.layout["recording"].x, 0.4);
+        assert_eq!(settings.sound, "custom");
+        assert_eq!(settings.custom_sound_name.as_deref(), Some("My chime.wav"));
+    }
+
+    #[test]
+    fn legacy_layout_defaults_and_invalid_coordinates_are_rejected() {
+        let settings: super::NotificationSettings = serde_json::from_value(serde_json::json!({
+            "overlayEnabled":true,"soundEnabled":true,"sound":"glass","volume":35
+        })).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let state = super::NotificationState::new(root.path().to_path_buf());
+        assert!(settings.layout["recording"].y > 0.9);
+        let mut invalid = settings;
+        invalid.layout.get_mut("recording").unwrap().x = 1.5;
+        assert!(state.save(invalid).is_err());
+    }
 
     #[test]
     fn events_reach_either_enabled_channel_and_are_dropped_only_when_both_are_off() {

@@ -389,6 +389,31 @@ function Test-PerformanceRawArtifacts([string] $root, [object] $summary) {
     $samples = @(Import-Csv -LiteralPath (Join-Path $performanceRoot 'engine-sampler.csv'))
     if ($samples.Count -lt 2) { throw 'engine sampler requires at least two samples.' }
     $wallSeconds = ([DateTime]::Parse($samples[-1].timestampUtc) - [DateTime]::Parse($samples[0].timestampUtc)).TotalSeconds
+    if ($null -ne $summary.PSObject.Properties['resourceSchemaVersion']) {
+      if ($summary.resourceSchemaVersion -ne 1 -or $summary.cpuWallTimeClock -ne 'qpc' -or
+          ($summary.resourceEvidenceCaptureIndices -join ',') -ne '1,2,3' -or @($summary.resourceRuns).Count -ne 3) {
+        throw 'Unsupported or incomplete per-run resource evidence.'
+      }
+      foreach ($index in 1..3) {
+        $prefix = if ($index -eq 3) { 'capture' } else { "capture-$index" }
+        $sampleName = if ($index -eq 3) { 'engine-sampler.csv' } else { "$prefix-sampler.csv" }
+        $analysisOutput = & $collector -AnalyzeSampler (Join-Path $performanceRoot $sampleName) -MetricsLog (Join-Path $performanceRoot "$prefix-engine.ndjson") -ExpectedDurationSeconds 1800
+        if ($LASTEXITCODE -ne 0) { throw "Invalid resource evidence for capture-$index." }
+        $actual = $analysisOutput | ConvertFrom-Json
+        $declared = @($summary.resourceRuns | Where-Object { $_.index -eq $index })
+        if ($actual.status -ne 'passed' -or $declared.Count -ne 1 -or $declared[0].resources.status -ne 'passed' -or
+            $declared[0].resources.cpuWallTimeClock -ne 'qpc') { throw "Resource gate failed for capture-$index." }
+        foreach ($field in @('cpuAveragePercent', 'workingMemoryExcludingReplayMiB', 'maximumHandleCount', 'encoderUtilizationAveragePercent', 'droppedFramesPercent', 'sampleCount', 'metricCount', 'sampledSeconds')) {
+          if ([Math]::Abs((Convert-ToFiniteDouble $declared[0].resources.$field "capture-$index $field") - [double]$actual.$field) -gt 0.000001) {
+            throw "Resource summary mismatch for capture-$index $field."
+          }
+        }
+      }
+      $frequency = Convert-ToFiniteDouble $samples[0].qpcFrequency 'sampler frequency'
+      $wallSeconds = ((Convert-ToFiniteDouble $samples[-1].qpc 'sampler qpc') -
+        (Convert-ToFiniteDouble $samples[0].qpc 'sampler qpc')) / $frequency
+    }
+    if ($wallSeconds -le 0) { throw 'Invalid sampler wall time.' }
     $cpu = ((Convert-ToFiniteDouble $samples[-1].cpuTotalMs 'sampler cpu') -
       (Convert-ToFiniteDouble $samples[0].cpuTotalMs 'sampler cpu')) /
       ($wallSeconds * 1000.0 * [Environment]::ProcessorCount) * 100.0

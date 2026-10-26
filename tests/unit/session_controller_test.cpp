@@ -297,6 +297,23 @@ TEST_CASE("pipeline failure emits terminal error and disables replay") {
 TEST_CASE("host configuration rejects missing pinned IDs and unbounded test durations") {
   const std::string config=R"({"protocolVersion":1,"monitorId":"1:0","systemAudioEnabled":false,"systemAudioId":"","microphoneEnabled":false,"microphoneId":"","width":1920,"height":1080,"fps":60,"bitrate":30000000,"replaySeconds":30,"clipSeconds":30,"container":"mp4","outputDirectory":"C:\\clips","saveReplayHotkey":"F8","toggleRecordingHotkey":"Ctrl+Shift+R","continuousRecordingEnabled":false})";
   REQUIRE(decode_host_configuration(config,false).is_success());
+  auto experimental=config;
+  experimental.insert(experimental.size()-1, R"(,"nvencPreset":4,"nvencBFrames":1,"nvencSlotCount":8,"nvencMultipass":0,"pipelineTelemetryEnabled":true,"duplicateOutput1Enabled":true,"continuousAvioBufferBytes":262144,"directNv12CacheEnabled":true)");
+  auto decoded=decode_host_configuration(experimental,false);
+  REQUIRE(decoded.is_success());
+  CHECK(decoded.value().engine.nvenc_config.preset==4);
+  CHECK(decoded.value().engine.nvenc_config.b_frames==1);
+  CHECK(decoded.value().engine.nvenc_config.slot_count==8);
+  CHECK(decoded.value().engine.nvenc_config.multipass==0);
+  REQUIRE(decoded.value().engine.pipeline_telemetry);
+  CHECK(decoded.value().engine.pipeline_telemetry->enabled());
+  CHECK(decoded.value().engine.prefer_duplicate_output1);
+  CHECK(decoded.value().engine.direct_nv12_cache);
+  CHECK(decoded.value().engine.continuous_avio_buffer_bytes==262144);
+  for (const auto field : {R"(,"nvencPreset":6)",R"(,"nvencBFrames":3)",R"(,"nvencSlotCount":13)",R"(,"unknownExperiment":true)"}) {
+    auto bad=config; bad.insert(bad.size()-1,field);
+    REQUIRE_FALSE(decode_host_configuration(bad,false).is_success());
+  }
   auto enabled=config; enabled.replace(enabled.find("Enabled\":false"),14,"Enabled\":true");
   REQUIRE_FALSE(decode_host_configuration(enabled,false).is_success());
   const std::string test_config=R"({"protocolVersion":1,"monitorId":"1:0","systemAudioEnabled":false,"systemAudioId":"","microphoneEnabled":false,"microphoneId":"","width":1920,"height":1080,"fps":60,"bitrate":30000000,"replaySeconds":30,"clipSeconds":30,"container":"mp4","outputDirectory":"C:\\clips","saveReplayHotkey":"F8","toggleRecordingHotkey":"Ctrl+Shift+R","continuousRecordingEnabled":false,"durationSeconds":5,"outputPath":"C:\\clips\\test.mp4"})";

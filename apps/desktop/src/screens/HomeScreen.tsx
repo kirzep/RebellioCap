@@ -66,6 +66,7 @@ const HOME_NAVIGATION = [
   { id: 'replay', label: 'Повторы и файлы' },
   { id: 'hotkeys', label: 'Горячие клавиши' },
   { id: 'application', label: 'Приложение', group: 'Общие настройки' },
+  { id: 'notifications', label: 'Оверлей и уведомления' },
 ] as const;
 
 const IDLE_COMMAND: CommandState = {
@@ -763,7 +764,7 @@ export function HomeScreen({
       setActiveView('settings');
       return;
     }
-    if (['video', 'audio', 'replay', 'hotkeys', 'application'].includes(id)) {
+    if (['video', 'audio', 'replay', 'hotkeys', 'application', 'notifications'].includes(id)) {
       setSettingsSection(id as RuntimeSettingsSection);
       setActiveView('settings');
       return;
@@ -990,10 +991,10 @@ export function HomeScreen({
                       <dt>{t("Звук")}</dt>
                       <dd>
                         <span>
-                          {t("Система:")}{describeAudio(activeConfig.system_audio, audioCatalog?.system_audio ?? null)}
+                          {t("Система:")}{' '}{describeAudio(activeConfig.system_audio, audioCatalog?.system_audio ?? null)}
                         </span>
                         <small>
-                          {t("Микрофон:")}{describeAudio(activeConfig.microphone, audioCatalog?.microphones ?? null)}
+                          {t("Микрофон:")}{' '}{describeAudio(activeConfig.microphone, audioCatalog?.microphones ?? null)}
                         </small>
                       </dd>
                     </div>

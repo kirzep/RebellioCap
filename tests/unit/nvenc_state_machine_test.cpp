@@ -48,6 +48,18 @@ TEST_CASE("NVENC decode timestamps preserve fractional frame cadence") {
   CHECK(timeline.take() == 1166666);
 }
 
+TEST_CASE("NVENC decode timeline follows configured B depth and holes") {
+  for (const auto depth : {0U, 1U, 2U}) {
+    CAPTURE(depth);
+    rebelliocap::detail::NvencDecodeTimeline timeline(depth);
+    for (const auto pts : {100, 110, 160, 170}) timeline.submit(pts, 10);
+    for (std::uint32_t index = 0; index < depth; ++index)
+      CHECK(timeline.take() == 100 - static_cast<rebelliocap::QpcTicks>(depth - index) * 10);
+    for (const auto pts : {100, 110, 160, 170}) CHECK(timeline.take() == pts);
+    CHECK_FALSE(timeline.take().has_value());
+  }
+}
+
 TEST_CASE("unlock failure is terminal and preserves the complete slot for cleanup") {
   NvencStateMachine machine;
   NvencTrackedSlotState slot{

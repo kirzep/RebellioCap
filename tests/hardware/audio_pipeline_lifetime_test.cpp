@@ -6,6 +6,10 @@
 namespace rebelliocap {
 namespace {
 struct HardwareAudioPipelineTestAccess {
+  static void aligners(HardwareAudioPipeline& pipeline, QpcClock& clock) {
+    pipeline.system_aligner_ = std::make_unique<PcmClockAligner>(clock.frequency());
+    pipeline.microphone_aligner_ = std::make_unique<PcmClockAligner>(clock.frequency());
+  }
   static bool endpoint_recovery_encoding(QpcClock& clock, const std::string& fault = "audio.endpoint_lost") {
     struct Source final : IAudioCaptureSource {
       QpcTicks& now; QpcTicks lost_at; StreamKind stream; std::string fault; std::uint64_t position{0};
@@ -32,6 +36,7 @@ struct HardwareAudioPipelineTestAccess {
     pipeline.microphone_source_ = install(StreamKind::MicrophoneAudio, true);
     pipeline.system_normalizer_ = std::make_unique<PcmNormalizer>(clock);
     pipeline.microphone_normalizer_ = std::make_unique<PcmNormalizer>(clock);
+    aligners(pipeline, clock);
     auto a = MfAacEncoder::create(StreamKind::SystemAudio, 160'000, clock);
     auto b = MfAacEncoder::create(StreamKind::MicrophoneAudio, 128'000, clock);
     auto c = MfAacEncoder::create(StreamKind::MixedAudio, 192'000, clock);
@@ -67,6 +72,8 @@ struct HardwareAudioPipelineTestAccess {
   static bool overflow_metrics(QpcClock& clock) {
     HardwareAudioPipeline pipeline(clock, L"", L"", false, false);
     for (int cycle = 0; cycle < 2; ++cycle) {
+      aligners(pipeline, clock);
+      const auto before = pipeline.mixing_dropped_frames();
       auto mixed = MfAacEncoder::create(StreamKind::MixedAudio, 192'000, clock);
       auto source = MfAacEncoder::create(StreamKind::SystemAudio, 160'000, clock);
       if (!mixed.is_success() || !source.is_success()) return false;
@@ -78,8 +85,10 @@ struct HardwareAudioPipelineTestAccess {
       std::vector<EncodedPacket> output;
       if (!pipeline.accept_blocks({std::move(block)}, *pipeline.system_encoder_,
           StreamKind::SystemAudio, output).is_success()) return false;
-      const auto expected = static_cast<std::uint64_t>((cycle + 1) * 24'000);
-      if (pipeline.mixing_dropped_frames() != expected) return false;
+      // The soft-resampler retains under64 frames before its final drain.
+      const auto expected = pipeline.mixing_dropped_frames();
+      if (expected < before + 24'000 - 64 || expected > before + 24'000) return false;
+      if (!pipeline.flush_aligner(*pipeline.system_encoder_, StreamKind::SystemAudio, output).is_success()) return false;
       auto tail = pipeline.flush();
       if (!tail.is_success() || pipeline.mixing_dropped_frames() != expected) return false;
       output.insert(output.end(), tail.value().begin(), tail.value().end());
@@ -94,6 +103,7 @@ struct HardwareAudioPipelineTestAccess {
   }
   static bool normalized_clock_encoding(QpcClock& clock) {
     HardwareAudioPipeline pipeline(clock, L"", L"", false, false);
+    aligners(pipeline, clock);
     auto mixed = MfAacEncoder::create(StreamKind::MixedAudio, 192'000, clock);
     auto system = MfAacEncoder::create(StreamKind::SystemAudio, 160'000, clock);
     auto microphone = MfAacEncoder::create(StreamKind::MicrophoneAudio, 128'000, clock);
@@ -134,6 +144,8 @@ struct HardwareAudioPipelineTestAccess {
     if (!ar.is_success() || !br.is_success()) return false;
     if (!accepted(std::move(ar).value(), *pipeline.system_encoder_, StreamKind::SystemAudio) ||
         !accepted(std::move(br).value(), *pipeline.microphone_encoder_, StreamKind::MicrophoneAudio)) return false;
+    if (!pipeline.flush_aligner(*pipeline.system_encoder_, StreamKind::SystemAudio, output).is_success() ||
+        !pipeline.flush_aligner(*pipeline.microphone_encoder_, StreamKind::MicrophoneAudio, output).is_success()) return false;
     auto tail = pipeline.flush();
     if (!tail.is_success()) { std::cerr << "clock flush: " << tail.error().message << '\n'; return false; }
     output.insert(output.end(), tail.value().begin(), tail.value().end());
@@ -195,6 +207,7 @@ struct HardwareAudioPipelineTestAccess {
   }
   static bool missing_peer_encoding(QpcClock& clock) {
     HardwareAudioPipeline pipeline(clock, L"", L"", false, false);
+    aligners(pipeline, clock);
     auto mixed = MfAacEncoder::create(StreamKind::MixedAudio, 192'000, clock);
     auto microphone = MfAacEncoder::create(StreamKind::MicrophoneAudio, 128'000, clock);
     if (!mixed.is_success() || !microphone.is_success()) return false;
@@ -226,6 +239,8 @@ struct HardwareAudioPipelineTestAccess {
           pipeline.windows_.buffered_samples() > 96'000 || pipeline.windows_.dropped_frames()) return false;
       if (i == 99 && (!mixed_packets || !microphone_packets)) return false;
     }
+    std::vector<EncodedPacket> aligned_tail;
+    if (!pipeline.flush_aligner(*pipeline.microphone_encoder_, StreamKind::MicrophoneAudio, aligned_tail).is_success() || !inspect(aligned_tail)) return false;
     auto tail = pipeline.flush();
     if (!tail.is_success() || !inspect(tail.value()) || !mixed_end || !microphone_end) return false;
     const auto expected_end = start + clock.frequency() * 300;
@@ -244,7 +259,8 @@ struct HardwareAudioPipelineTestAccess {
     return !pipeline.system_source_ && !pipeline.microphone_source_ &&
            !pipeline.system_encoder_ && !pipeline.microphone_encoder_ &&
            !pipeline.mixed_encoder_ && !pipeline.system_normalizer_ &&
-           !pipeline.microphone_normalizer_;
+           !pipeline.microphone_normalizer_ && !pipeline.system_aligner_ &&
+           !pipeline.microphone_aligner_;
   }
 };
 struct HardwareVideoPipelineTestAccess {
@@ -445,6 +461,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   auto video = std::move(created).value();
+  const auto initial_capture=video->metrics().capture_session;
+  if (!initial_capture.available || initial_capture.duplicate_output1 || initial_capture.texture_format_available ||
+      initial_capture.adapter_luid_low!=static_cast<std::uint32_t>(monitor.value().id.adapter_luid.LowPart) ||
+      initial_capture.adapter_luid_high!=static_cast<std::int32_t>(monitor.value().id.adapter_luid.HighPart) ||
+      initial_capture.fallback_hresult) {
+    std::cerr << "initial capture diagnostics guessed a format/API or lost the adapter\n";
+    return 1;
+  }
   if (!HardwareVideoPipelineTestAccess::resolution_rebuild(*video, clock)) {
     std::cerr << "resolution rebuild lost encoder continuity, dimensions, IDR or bounded registrations\n";
     return 1;
@@ -453,6 +477,7 @@ int main(int argc, char** argv) {
   for (int cycle = 0; cycle < 5; ++cycle) {
     auto resumed = video->resume();
     if (!resumed.is_success()) { std::cerr << "video resume: " << resumed.error().code << '\n'; return 1; }
+    if (!video->metrics().capture_session.available || video->metrics().capture_session.texture_format_available) return 1;
     auto lifetime = HardwareVideoPipelineTestAccess::lifetime(*video);
     std::vector<EncodedPacket> packets;
     for (int frame = 0; frame < 12; ++frame) {
@@ -465,7 +490,10 @@ int main(int argc, char** argv) {
     if (!tail.is_success()) { std::cerr << "video drain: " << tail.error().code << '\n'; return 1; }
     for (auto& packet : tail.value()) packets.push_back(std::move(packet));
     if (packets.empty() || !packets.front().keyframe) { std::cerr << "video missing first IDR\n"; return 1; }
+    const auto captured=video->metrics().capture_session;
+    if (!captured.available || !captured.texture_format_available || captured.texture_format!=DXGI_FORMAT_B8G8R8A8_UNORM) return 1;
     video->suspend();
+    if (video->metrics().capture_session.available) return 1;
     const auto freed = lifetime->snapshot();
     if (!HardwareVideoPipelineTestAccess::empty(*video) ||
         freed.sessions_created != freed.sessions_released ||
@@ -478,5 +506,53 @@ int main(int argc, char** argv) {
     }
   }
   std::cout << "Five audio/video resume cycles released all resources and began with IDR\n";
+  HardwareVideoOptions direct_options;
+  direct_options.direct_nv12_cache = true;
+  auto direct_created = HardwareVideoPipeline::create(monitor.value(), arguments, clock, direct_options);
+  if (!direct_created.is_success()) return 1;
+  auto direct_video = std::move(direct_created).value();
+  for (int cycle = 0; cycle < 3; ++cycle) {
+    if (!direct_video->resume().is_success()) return 1;
+    auto lifetime = HardwareVideoPipelineTestAccess::lifetime(*direct_video);
+    std::vector<EncodedPacket> packets;
+    for (int frame = 0; frame < 20; ++frame) {
+      auto encoded = direct_video->tick(clock.now(), frame == 0);
+      if (!encoded.is_success()) { std::cerr << encoded.error().code << '\n'; return 1; }
+      for (auto& packet : encoded.value()) packets.push_back(std::move(packet));
+      std::this_thread::sleep_for(std::chrono::milliseconds(17));
+    }
+    auto tail = direct_video->flush();
+    if (!tail.is_success()) return 1;
+    if (!direct_video->metrics().direct_nv12_cache) {
+      std::cerr << "direct cache unexpectedly fell back on this hardware\n";
+      return 1;
+    }
+    for (auto& packet : tail.value()) packets.push_back(std::move(packet));
+    if (packets.empty() || !packets.front().keyframe) return 1;
+    direct_video->suspend();
+    const auto freed = lifetime->snapshot();
+    if (freed.maps_created != freed.maps_released || freed.registrations_created != freed.registrations_released || freed.in_flight != 0) {
+      std::cerr << "direct cache retained encoder resources after suspend\n";
+      return 1;
+    }
+  }
+  std::cout << "Three direct canonical NV12 resume cycles released encoder leases\n";
+  HardwareVideoOptions modern_options;
+  modern_options.prefer_duplicate_output1=true;
+  auto modern=HardwareVideoPipeline::create(monitor.value(),arguments,clock,modern_options);
+  if (!modern.is_success()) return 1;
+  for (int i=0;i<12;++i) {
+    auto encoded=modern.value()->tick(clock.now(),i==0);
+    if (!encoded.is_success()) return 1;
+    std::this_thread::sleep_for(std::chrono::milliseconds(17));
+  }
+  if (!modern.value()->flush().is_success()) return 1;
+  const auto modern_capture=modern.value()->metrics().capture_session;
+  if (!modern_capture.available || !modern_capture.texture_format_available ||
+      modern_capture.texture_format!=DXGI_FORMAT_B8G8R8A8_UNORM ||
+      (!modern_capture.duplicate_output1&&!modern_capture.fallback_hresult)) return 1;
+  std::cout << engine_metrics_json(EngineMetrics{},clock.frequency(),modern.value()->metrics()).at("capture_session").dump() << '\n';
+  modern.value()->suspend();
+  if (modern.value()->metrics().capture_session.available) return 1;
   return 0;
 }

@@ -169,4 +169,22 @@ TEST_CASE("session protocol serializes snapshot and error events as one NDJSON o
   REQUIRE(error_json.at("error").at("hresult") == 5);
 }
 
+TEST_CASE("session diagnostics expose opt-in stage measurements without changing ordinary snapshots") {
+  EngineSnapshot snapshot{};
+  auto ordinary = nlohmann::json::parse(encode_session_event(
+      {.type=SessionEventType::Snapshot,.snapshot=snapshot}));
+  REQUIRE_FALSE(ordinary.at("snapshot").at("metrics").contains("diagnostics"));
+  snapshot.metrics.pipeline_telemetry.enabled=true;
+  snapshot.metrics.pipeline_telemetry.stages[0].count=4;
+  const auto measured=nlohmann::json::parse(encode_session_event(
+      {.type=SessionEventType::Snapshot,.snapshot=snapshot}));
+  const auto& diagnostics=measured.at("snapshot").at("metrics").at("diagnostics");
+  REQUIRE(diagnostics.at("pipeline_telemetry").at("enabled")==true);
+  REQUIRE(diagnostics.at("pipeline_telemetry").at("stages")
+      .at(std::string(pipeline_stage_name(PipelineStage::SchedulerWakeLateness))).at("count")==4);
+  REQUIRE(diagnostics.at("gpu_execution_timing_available")==false);
+  REQUIRE(diagnostics.contains("nvenc_accepted_config"));
+  REQUIRE(diagnostics.contains("continuous_queue"));
+}
+
 }  // namespace

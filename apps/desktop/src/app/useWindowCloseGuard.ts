@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppError } from '../bridge/contracts';
@@ -21,6 +22,7 @@ export function useWindowCloseGuard(_options: WindowCloseGuardOptions): WindowCl
   const hideWindow = useCallback(async () => {
     if (!('__TAURI_INTERNALS__' in window)) return;
     try {
+      await invoke('set_overlay_editor_fullscreen', { open: false });
       await getCurrentWindow().hide();
       setCloseError(null);
     } catch (cause) { setCloseError(normalizeError(cause)); }

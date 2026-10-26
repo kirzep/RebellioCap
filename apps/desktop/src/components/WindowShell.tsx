@@ -11,6 +11,7 @@ import { Sidebar, SidebarProvider, SidebarContent, SidebarFooter,
 import styles from './WindowShell.module.css';
 import { UpdateNotice } from './UpdateNotice';
 import { LanguageSettings } from './LanguageSettings';
+import { WorkspaceActionsFrame } from './WorkspaceActions';
 import type { AvailableUpdate, UpdateProgress } from '../bridge/contracts';
 
 export interface WindowShellNavigationItem {
@@ -75,6 +76,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
     return () => animation?.cancel();
   }, [activeNavigation]);
   const hasNavigation = Boolean(navigation?.length);
+  const editorNavigation = navigation?.find((item) => item.id === 'editor');
   const titlebar = <WindowTitlebar>
     {hasNavigation && <Button variant="ghost" size="icon" type="button" className={styles.sidebarToggle}
       aria-label={sidebarCollapsed ? t('Развернуть боковое меню') : t('Свернуть боковое меню')}
@@ -113,7 +115,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
             <SidebarGroupContent>
               <nav id="workspace-navigation" aria-label={t("Разделы приложения")}>
                 <SidebarMenu>
-                  {navigation?.map((item) => {
+                  {navigation?.filter((item) => item.id !== 'editor').map((item) => {
                     const customIcon = ['recording', 'clips', 'video', 'audio', 'replay', 'hotkeys'].includes(item.id);
                     return <SidebarMenuItem key={item.id}>
                       {item.group && <p className={styles.navGroup}>{t(item.group)}</p>}
@@ -133,6 +135,23 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
               </nav>
             </SidebarGroupContent>
           </SidebarGroup>
+          {editorNavigation && <SidebarGroup className={styles.editorNavigation}>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton type="button" size="lg" className={styles.navButton}
+                  isActive={activeNavigation === editorNavigation.id}
+                  aria-current={activeNavigation === editorNavigation.id ? 'page' : undefined}
+                  aria-label={t(editorNavigation.label)} title={t(editorNavigation.label)}
+                  disabled={editorNavigation.disabled || !onNavigate}
+                  onClick={(event) => {
+                    keyboardNavigation.current = event.detail === 0;
+                    onNavigate?.(editorNavigation.id);
+                  }}>
+                  <Scissors aria-hidden="true" /><span className={styles.navLabel}>{t(editorNavigation.label)}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>}
         </SidebarContent>
         {settingsNavigation && <SidebarFooter className={styles.settingsFooter}>
           <SidebarMenu>
@@ -153,7 +172,7 @@ export function WindowShell({ children, navigation, settingsNavigation, availabl
           </SidebarMenuItem></SidebarMenu>
         </SidebarFooter>}
       </Sidebar>
-      <div className={styles.mainColumn}>{content}</div>
+      <div className={styles.mainColumn}><WorkspaceActionsFrame>{content}</WorkspaceActionsFrame></div>
     </SidebarProvider>
     </div>
   );

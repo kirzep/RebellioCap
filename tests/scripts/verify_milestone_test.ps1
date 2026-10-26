@@ -186,6 +186,65 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "Verifier rejected valid raw evidence: $($output -join [Environment]::NewLine)"
   }
+  # New resource summaries use QPC even when the calendar clock changes.
+  $summaryPath = Join-Path $temporaryRoot 'performance.json'
+  $summary = Get-Content -Raw $summaryPath | ConvertFrom-Json
+  $summary | Add-Member cpuWallTimeClock 'qpc'
+  $summary | Add-Member resourceSchemaVersion 1
+  $summary | Add-Member resourceEvidenceCaptureIndices @(1,2,3)
+  $logPath = Join-Path $performanceRoot 'capture-engine.ndjson'
+  $existing = @(Get-Content $logPath)
+  $last = $existing[-1] | ConvertFrom-Json
+  $extended = @($existing) + @(6..1800 | ForEach-Object {
+    [pscustomobject]@{ type = 'metrics'; qpc = $_ * 1000; fields = $last.fields } | ConvertTo-Json -Depth 4 -Compress
+  })
+  $extended | Set-Content $logPath
+  $longSamples = @(0..1800 | ForEach-Object {
+    [pscustomobject]@{
+      timestampUtc = ([DateTime]::Parse('2026-01-01T00:00:00Z')).AddSeconds($_ * 2).ToString('O')
+      qpc = $_ * 1000; qpcFrequency = 1000; cpuTotalMs = $_ * 10 * [Environment]::ProcessorCount
+      privateBytes = 1MB; handles = 10; encoderUtilizationPercent = 1
+    }
+  })
+  $longSamples | Export-Csv -LiteralPath (Join-Path $performanceRoot 'engine-sampler.csv') -NoTypeInformation
+  $resourceRuns = @(foreach ($index in 1..3) {
+    $prefix = if ($index -eq 3) { 'capture' } else { "capture-$index" }
+    $sampleName = if ($index -eq 3) { 'engine-sampler.csv' } else { "$prefix-sampler.csv" }
+    $samplePath = Join-Path $performanceRoot $sampleName
+    $metricPath = Join-Path $performanceRoot "$prefix-engine.ndjson"
+    if ($index -ne 3) {
+      $longSamples | Export-Csv -LiteralPath $samplePath -NoTypeInformation
+      $extended | Set-Content -LiteralPath $metricPath
+    }
+    $resources = (& $collector -AnalyzeSampler $samplePath -MetricsLog $metricPath -ExpectedDurationSeconds 1800) | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw 'Long resource fixture analysis failed.' }
+    [pscustomobject]@{ index = $index; resources = $resources }
+  })
+  $summary | Add-Member resourceRuns $resourceRuns
+  $summary | ConvertTo-Json -Depth 8 | Set-Content $summaryPath
+  function Update-FixtureArtifactHashes {
+    $path = Join-Path $temporaryRoot 'manifest.json'
+    $document = Get-Content -Raw $path | ConvertFrom-Json
+    foreach ($artifact in $document.artifacts) {
+      $relative = $artifact.path -replace '^artifacts/milestone-1/', ''
+      $artifact.sha256 = (Get-FileHash -LiteralPath (Join-Path $temporaryRoot $relative)).Hash.ToLowerInvariant()
+    }
+    $document | ConvertTo-Json -Depth 8 | Set-Content $path
+  }
+  Update-FixtureArtifactHashes
+  $output = & $verifier -EvidenceRoot $temporaryRoot
+  if ($LASTEXITCODE -ne 0) { throw "Verifier rejected QPC resource evidence: $($output -join [Environment]::NewLine)" }
+  $summary.resourceRuns[0].resources.status = 'failed'
+  $summary | ConvertTo-Json -Depth 8 | Set-Content $summaryPath
+  Update-FixtureArtifactHashes
+  $null = & $verifier -EvidenceRoot $temporaryRoot
+  if ($LASTEXITCODE -eq 0) { throw 'Verifier ignored failed capture-1 resources.' }
+  $summary.resourceRuns[0].resources.status = 'passed'
+  $summary | ConvertTo-Json -Depth 8 | Set-Content $summaryPath
+  Update-FixtureArtifactHashes
+  Remove-Item -LiteralPath (Join-Path $performanceRoot 'capture-2-sampler.csv')
+  $null = & $verifier -EvidenceRoot $temporaryRoot
+  if ($LASTEXITCODE -eq 0) { throw 'Verifier ignored missing capture-2 resource evidence.' }
   Write-Output 'milestone verifier rejection passed'
 } finally {
   $resolved = [IO.Path]::GetFullPath($temporaryRoot)

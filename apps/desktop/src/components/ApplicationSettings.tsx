@@ -2,7 +2,6 @@ import { t, useTranslation } from '../i18n';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DeveloperLogsPanel } from './DeveloperMode';
-import { NotificationSettingsPanel } from './NotificationSettings';
 import { RecordingNameSettings } from '../naming/NamingSettings';
 import { ErrorNotice } from './Primitives';
 
@@ -46,7 +45,6 @@ export function ApplicationSettings() {
     <p className="text-sm text-muted-foreground">{t("Нажмите на значок в трее, чтобы вернуть окно. В меню по правой кнопке мыши доступны быстрые действия и «Выйти».")}</p>
     {!native && <p role="status">{t("Автозапуск доступен в установленном приложении Windows.")}</p>}
     <RecordingNameSettings />
-    <NotificationSettingsPanel />
     <DeveloperLogsPanel />
     {error && <ErrorNotice title={t("Автозапуск")} technicalDetails={technicalError ?? undefined}>{t(error)}</ErrorNotice>}
   </div>;

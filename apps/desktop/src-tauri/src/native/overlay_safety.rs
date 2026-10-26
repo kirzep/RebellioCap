@@ -75,7 +75,25 @@ pub fn initialize(window: &tauri::WebviewWindow) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as HWND;
     // setup runs on this window's UI thread. A failure leaves the initially hidden window hidden.
-    unsafe { protect_and_show(hwnd) }
+    unsafe { protect_and_show(hwnd)?; ShowWindow(hwnd, SW_HIDE); }
+    Ok(())
+}
+
+/// Recheck protections on the UI thread before every passive show.
+pub fn set_visible(window: &tauri::WebviewWindow, visible: bool) -> Result<(), String> {
+    let window = window.clone();
+    window.clone().run_on_main_thread(move || {
+        let Ok(handle) = window.hwnd() else { return; };
+        let hwnd = handle.0 as HWND;
+        unsafe {
+            if visible {
+                if let Err(error) = protect_and_show(hwnd) {
+                    ShowWindow(hwnd, SW_HIDE);
+                    crate::logging::record("error", "overlay", "show_failed", serde_json::json!({"error":error}));
+                }
+            } else { ShowWindow(hwnd, SW_HIDE); }
+        }
+    }).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

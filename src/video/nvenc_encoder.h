@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "core/qpc_clock.h"
 #include "core/result.h"
@@ -11,6 +12,7 @@
 #include "media/stream_descriptor.h"
 
 namespace rebelliocap {
+class PipelineTelemetry;
 
 struct NvencConfig {
   std::uint32_t width{1920};
@@ -18,6 +20,16 @@ struct NvencConfig {
   std::uint32_t fps{60};
   std::uint32_t bitrate{30'000'000};
   std::uint32_t gop_seconds{2};
+  std::uint32_t slot_count{6};
+  std::shared_ptr<PipelineTelemetry> telemetry;
+  std::uint32_t preset{5};
+  std::uint32_t b_frames{2};
+  // nullopt preserves the driver's preset baseline; 0 explicitly disables it.
+  std::optional<std::uint32_t> multipass;
+  bool constant_qp{false};
+  std::uint32_t qp_i{20}, qp_p{23}, qp_b{25};
+  std::uint32_t target_quality{0};
+  std::uint32_t completion_stall_timeout_ms{30'000};
 };
 
 struct NvencCapabilities {
@@ -36,6 +48,10 @@ struct NvencCapabilities {
 // These are the exact values accepted by nvEncInitializeEncoder. They are not
 // queried back after initialization; stream behavior is verified from output.
 struct NvencAcceptedConfig {
+  std::uint32_t preset_number{0};
+  std::uint32_t multipass{0};
+  std::uint32_t rate_control{0};
+  std::uint32_t target_quality{0};
   std::uint32_t width{0};
   std::uint32_t height{0};
   std::uint32_t fps{0};
@@ -51,16 +67,41 @@ struct NvencAcceptedConfig {
   bool vbr{false};
 };
 
+struct CaptureSessionDiagnostics {
+  bool available{false};
+  bool duplicate_output1{false};
+  bool texture_format_available{false};
+  std::uint32_t texture_format{0};
+  std::uint32_t adapter_luid_low{0};
+  std::int32_t adapter_luid_high{0};
+  std::optional<long> fallback_hresult;
+};
+
 struct NvencRuntimeMetrics {
+  CaptureSessionDiagnostics capture_session;
+  NvencAcceptedConfig accepted_config;
+  std::uint64_t new_image_ticks{0}, repeated_image_ticks{0}, no_image_ticks{0};
+  std::uint64_t converter_cache_hits{0}, converter_pool_capacity{0};
+  std::uint64_t converter_input_views_created{0};
+  bool direct_nv12_cache{false};
   std::uint64_t submitted_frames{0};
   std::uint64_t completed_frames{0};
+  std::uint64_t backpressure_dropped_frames{0};
+  std::uint64_t oldest_in_flight_age_us{0};
   std::uint64_t in_flight_frames{0};
+  std::uint64_t slot_capacity{0};
+  std::uint64_t max_in_flight_frames{0};
   std::uint64_t p50_latency_us{0};
   std::uint64_t p95_latency_us{0};
   std::uint64_t p_picture_frames{0};
   std::uint64_t b_picture_frames{0};
   std::uint64_t driver_timestamp_packets{0};
   std::uint64_t driver_timestamp_digest{0};
+};
+
+struct EncoderAdmission {
+  std::vector<EncodedPacket> completed;
+  bool can_submit{false};
 };
 
 struct NvencLifetimeSnapshot {
@@ -103,6 +144,8 @@ class NvencEncoder final : public IVideoEncoder {
 
   Result<std::vector<EncodedPacket>> encode(
       ConvertedVideoFrame frame, QpcTicks pts, bool force_keyframe) override;
+  // Capture-thread only. Collect completions before leasing a converter output.
+  Result<EncoderAdmission> prepare_frame(bool force_keyframe);
   Result<std::vector<EncodedPacket>> flush() override;
 
   [[nodiscard]] const StreamDescriptor& descriptor() const noexcept;

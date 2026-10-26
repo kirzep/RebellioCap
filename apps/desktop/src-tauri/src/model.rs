@@ -134,6 +134,9 @@ pub struct EngineMetrics {
     pub replay_memory_limited: bool,
     #[serde(default)]
     pub replay_memory_drops: u64,
+    /// Optional native telemetry; opaque keys stay within the bounded protocol frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[cfg(test)]

@@ -45,7 +45,8 @@ class ReplayRing {
 
  private:
   void prune_locked();
-  void rebuild_keyframe_indices_locked();
+  void rebuild_indices_locked();
+  void include_retained_pts_locked(QpcTicks pts);
   void evict_gop_locked();
   void discard_locked(const EncodedPacket& packet);
 
@@ -57,6 +58,10 @@ class ReplayRing {
   std::optional<std::uint32_t> active_epoch_;
   std::optional<QpcTicks> newest_pts_;
   std::optional<QpcTicks> newest_video_pts_;
+  // Extrema of retained packets, unlike the arrival high-water marks above.
+  // Rebuilt alongside keyframe indices when bulk pruning removes packets.
+  std::optional<QpcTicks> earliest_retained_pts_;
+  std::optional<QpcTicks> latest_retained_pts_;
   std::optional<QpcTicks> time_boundary_;
   bool waiting_for_video_{false};
   std::optional<QpcTicks> pruned_from_;

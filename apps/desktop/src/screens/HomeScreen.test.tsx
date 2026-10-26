@@ -227,13 +227,13 @@ describe('HomeScreen', () => {
     fireEvent.click(toggleButton);
 
     // Still shows inactive until host publishes confirmed engine snapshot
-    expect(screen.queryByText('Обычная запись идёт')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Состояние записи' })).toHaveTextContent('Запись: не идёт');
 
     // Confirm new revision from engine
     act(() => host.publish(createSnapshot({ revision: 2, continuousRecordingActive: true })));
     act(() => window.dispatchEvent(new Event('focus')));
 
-    expect(await screen.findByText('Обычная запись идёт')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Состояние записи' })).toHaveTextContent('Запись: идёт'));
   });
 
   it('opens the editor from the sidebar and returns with Back', async () => {

@@ -36,7 +36,10 @@ pub fn run() {
             for window in app.webview_windows().values() {
                 window.set_icon(icon.clone())?;
             }
-            let store = config::ConfigStore::from_local_app_data(&app.path().local_data_dir()?)?;
+            let legacy_data = app.path().local_data_dir()?;
+            let per_app_data = app.path().app_local_data_dir()?;
+            let data_base = config::profile_data_base(&legacy_data, &per_app_data, &app.config().identifier);
+            let store = config::ConfigStore::from_local_app_data(data_base)?;
             logging::initialize(store.root())?;
             app.manage(logging::DeveloperState::default());
             app.manage(language::LanguageState::new(store.root().to_path_buf()));
@@ -44,8 +47,8 @@ pub fn run() {
             app.manage(notifications::NotificationState::new(store.root().to_path_buf()));
             if let Some(overlay) = app.get_webview_window("overlay") {
                 if let Some(monitor) = overlay.primary_monitor()? {
-                    let scale = monitor.scale_factor();
-                    overlay.set_position(tauri::PhysicalPosition::new(monitor.position().x + (24.0 * scale) as i32, monitor.position().y + (24.0 * scale) as i32))?;
+                    overlay.set_position(*monitor.position())?;
+                    overlay.set_size(*monitor.size())?;
                 }
                 if let Err(error) = native::overlay_safety::initialize(&overlay) {
                     // Fail closed: recording may continue, but an unprotected overlay stays hidden.
@@ -69,6 +72,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label() == "main" {
+                    if let Err(error) = notifications::close_overlay_editor(window.app_handle()) {
+                        logging::record("error", "overlay", "restore_failed", serde_json::json!({"error":error}));
+                        return;
+                    }
+                }
                 let _ = window.hide();
             }
         })
@@ -95,6 +104,11 @@ pub fn run() {
             notifications::get_notification_settings,
             notifications::set_notification_settings,
             notifications::poll_notifications,
+            notifications::import_notification_sound,
+            notifications::read_notification_sound,
+            notifications::set_overlay_visible,
+            notifications::get_overlay_display,
+            notifications::set_overlay_editor_fullscreen,
             logging::developer_click,
             logging::get_developer_mode,
             logging::export_application_logs,

@@ -38,7 +38,12 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
       if(event==json::parse_event_t::key && !keys.insert(item.get<std::string>()).second) duplicate=true;
       return true;
     });
-    if(duplicate || !value.is_object() || value.size()!=(test?19U:17U)+(value.contains("replayMemoryLimitMb")?1U:0U)+(value.contains("saveWithoutGameFolders")?1U:0U))
+    const std::array experiment_keys{"nvencPreset","nvencBFrames","nvencSlotCount","nvencMultipass",
+      "nvencConstantQp","nvencQpI","nvencQpP","nvencQpB","nvencTargetQuality",
+      "pipelineTelemetryEnabled","traceTelemetryEnabled","duplicateOutput1Enabled","continuousAvioBufferBytes","directNv12CacheEnabled"};
+    std::size_t extras=0;
+    for (const auto* key : experiment_keys) if (value.contains(key)) ++extras;
+    if(duplicate || !value.is_object() || value.size()!=(test?19U:17U)+(value.contains("replayMemoryLimitMb")?1U:0U)+(value.contains("saveWithoutGameFolders")?1U:0U)+extras)
       throw std::runtime_error("Configuration fields are missing, duplicated, or unrecognized");
     if(!value.at("protocolVersion").is_number_unsigned() || value.at("protocolVersion")!=1)
       throw std::runtime_error("Unsupported configuration protocol version");
@@ -93,6 +98,26 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
     auto parsed=parse_arguments(args);
     if(!parsed.is_success()) return Result<HostConfiguration>::failure(parsed.error());
     c.monitor=*parsed.value().monitor;
+    // Internal experiment fields are optional; desktop settings keep their
+    // existing schema and defaults until real A/B evidence selects profiles.
+    if(value.contains("nvencPreset")) c.nvenc_config.preset=number("nvencPreset",2,5);
+    if(value.contains("nvencBFrames")) c.nvenc_config.b_frames=number("nvencBFrames",0,2);
+    if(value.contains("nvencSlotCount")) c.nvenc_config.slot_count=number("nvencSlotCount",6,12);
+    if(value.contains("nvencMultipass")) c.nvenc_config.multipass=number("nvencMultipass",0,2);
+    if(value.contains("nvencConstantQp")) c.nvenc_config.constant_qp=value.at("nvencConstantQp").get<bool>();
+    if(value.contains("nvencQpI")) c.nvenc_config.qp_i=number("nvencQpI",0,51);
+    if(value.contains("nvencQpP")) c.nvenc_config.qp_p=number("nvencQpP",0,51);
+    if(value.contains("nvencQpB")) c.nvenc_config.qp_b=number("nvencQpB",0,51);
+    if(value.contains("nvencTargetQuality")) c.nvenc_config.target_quality=number("nvencTargetQuality",0,51);
+    if(value.contains("duplicateOutput1Enabled")) c.prefer_duplicate_output1=value.at("duplicateOutput1Enabled").get<bool>();
+    if(value.contains("directNv12CacheEnabled")) c.direct_nv12_cache=value.at("directNv12CacheEnabled").get<bool>();
+    if(value.contains("continuousAvioBufferBytes")) c.continuous_avio_buffer_bytes=number("continuousAvioBufferBytes",4096,1024*1024);
+    const bool diagnostics=value.value("pipelineTelemetryEnabled",false);
+    const bool trace=value.value("traceTelemetryEnabled",false);
+    if(diagnostics || trace) {
+      c.pipeline_telemetry=std::make_shared<PipelineTelemetry>();
+      c.pipeline_telemetry->configure(true,trace);
+    }
     if(test) {
       result.duration_seconds=number("durationSeconds",5,5);
       result.test_output=wide(value.at("outputPath").get<std::string>());

@@ -13,6 +13,10 @@
 
 namespace rebelliocap {
 
+// Initial converter compatibility boundary only; device/resource errors must
+// retain their original classification for the engine recovery policy.
+bool can_fallback_direct_input(const Error& error, bool before_first_submission) noexcept;
+
 struct D3d11Nv12ConverterConfig {
   std::uint32_t input_width;
   std::uint32_t input_height;
@@ -20,6 +24,7 @@ struct D3d11Nv12ConverterConfig {
   std::uint32_t output_height;
   std::size_t output_pool_size;
   DXGI_MODE_ROTATION rotation{DXGI_MODE_ROTATION_IDENTITY};
+  bool direct_nv12_cache{false};
 };
 
 struct D3d11Nv12ProcessorState {
@@ -56,6 +61,12 @@ class D3d11Nv12Converter final : public IFrameConverter {
   // NVENC retains exclusive ownership of every in-flight pool surface.
   Result<ConvertedVideoFrame> convert_cached(const CapturedVideoFrame& frame,
                                             std::uint64_t content_revision);
+  // Direct backend only: copies the owned canonical image into an unleased
+  // encoder surface. Never accesses a released Desktop Duplication input.
+  Result<ConvertedVideoFrame> repeat_cached();
+  // Capture-owner boundary after duplication loss. Invalidates image/views,
+  // while preserving all leased/registered encoder output surfaces.
+  void discard_cached_image();
   [[nodiscard]] D3d11Nv12RuntimeMetrics metrics();
 
   // Queries the actual video-processor state through ID3D11VideoContext1.

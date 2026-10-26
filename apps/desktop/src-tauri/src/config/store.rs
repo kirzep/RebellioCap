@@ -16,6 +16,21 @@ const TEMP: &str = "config.json.tmp";
 const BACKUP_TEMP: &str = "config.last-good.json.tmp";
 const MAX_BYTES: u64 = 1024 * 1024;
 
+pub(crate) fn profile_data_base<'a>(legacy: &'a Path, per_app: &'a Path, identifier: &str) -> &'a Path {
+    // Stable installs retain their established folder. Separately packaged
+    // variants use Tauri's per-application directory, never the stable profile.
+    if identifier == "com.rebelliocap.desktop" { legacy } else { per_app }
+}
+
+#[cfg(test)]
+#[test]
+fn packaged_variant_profile_is_separate_and_stable_keeps_legacy_path() {
+    let legacy=Path::new("C:/fixture/LocalAppData");
+    let variant=Path::new("C:/fixture/LocalAppData/com.rebelliocap.desktop.audiotest");
+    assert_eq!(profile_data_base(legacy, variant, "com.rebelliocap.desktop"), legacy);
+    assert_eq!(profile_data_base(legacy, variant, "com.rebelliocap.desktop.audiotest"), variant);
+}
+
 fn has_legacy_overlay(state: &StoredState) -> bool {
     state.draft.preferences.as_ref().is_some_and(|p| p.overlay_enabled.is_some()) ||
         state.active.as_ref().is_some_and(|active| active.preferences.overlay_enabled.is_some())

@@ -9,6 +9,14 @@ fn main() {
     io::stdout().flush().unwrap();
     if mode == "crash" { std::thread::sleep(Duration::from_millis(100)); std::process::exit(23); }
     if mode == "eof" { return; }
+    if mode == "silent_ready" { std::thread::sleep(Duration::from_secs(60)); return; }
+    if mode == "idle_heartbeats" {
+        std::thread::spawn(|| loop {
+            println!(r#"{{"protocolVersion":1,"type":"snapshot","snapshot":{{"revision":2,"lifecycle":"ready","replayActive":false,"continuousRecordingActive":false,"replaySeconds":30,"metrics":{{"videoTicks":1,"missedVideoDeadlines":0,"videoPackets":1,"audioPackets":0,"saveRequests":0,"completedSaves":0,"failedSaves":0,"rejectedSaves":0,"pipelineErrors":0,"continuousPackets":0,"continuousFailures":0,"continuousRecordingActive":false,"lastHotkeySaveLatencyTicks":0,"replayBytes":0}}}}}}"#);
+            io::stdout().flush().unwrap();
+            std::thread::sleep(Duration::from_millis(100));
+        });
+    }
     if mode == "flood_timeout" {
         std::thread::spawn(|| loop {
             println!(r#"{{"protocolVersion":1,"type":"snapshot","snapshot":{{"revision":1,"lifecycle":"ready","replayActive":true,"continuousRecordingActive":false,"replaySeconds":30,"metrics":{{"videoTicks":1,"missedVideoDeadlines":0,"videoPackets":1,"audioPackets":0,"saveRequests":0,"completedSaves":0,"failedSaves":0,"rejectedSaves":0,"pipelineErrors":0,"continuousPackets":0,"continuousFailures":0,"continuousRecordingActive":false,"lastHotkeySaveLatencyTicks":0,"replayBytes":0}}}}}}"#);

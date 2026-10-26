@@ -557,12 +557,14 @@ export function VideoStep({
               </FieldLabel>
             )}
 
-            <p id="video-bitrate-hint" className={styles.fieldHint}>
-              {t("Размеры — чётные числа от 64 до 16384, FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.")}</p>
-            {stretchesImage && (
-              <p className={styles.inlineWarning} role="status">
-                {t("Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.")}</p>
-            )}
+            <div className={styles.videoHint}>
+              <p id="video-bitrate-hint" className={styles.fieldHint}>
+                {t("Размеры — чётные числа от 64 до 16384, FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.")}</p>
+              {stretchesImage && (
+                <p className={styles.inlineWarning} role="status">
+                  {t("Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.")}</p>
+              )}
+            </div>
           </div>
         )}
       </FieldGroup>

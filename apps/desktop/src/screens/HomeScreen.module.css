@@ -5,9 +5,9 @@
   gap: 24px;
 }
 
-.pageHeader { margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
-.breadcrumb { display: flex; gap: 10px; color: #777781; font-size: 11px; margin: 0 0 18px; }
-.breadcrumb span { color: #47474f; }
+.pageHeader { margin-bottom: var(--space-4); padding-bottom: var(--space-6); border-bottom: 1px solid var(--border); }
+.breadcrumb { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--text-secondary); font-size: 11px; margin: 0 0 18px; }
+.breadcrumb span { color: var(--text-secondary); }
 .pageHeader h1 { margin: 0; font-size: 24px; line-height: 1.3; letter-spacing: -.035em; font-weight: 550; }
 .pageDescription { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
 .settingsView { max-width: 780px; }
@@ -38,6 +38,7 @@
 }
 
 .configuration {
+  container-type: inline-size;
   min-width: 0;
   padding: 0 18px;
   background: var(--surface);
@@ -59,7 +60,7 @@
 }
 .configurationToggle::-webkit-details-marker { display: none; }
 .configurationToggle:hover { color: var(--text-primary); }
-.configurationChevron { margin-left: auto; transition: transform 160ms; }
+.configurationChevron { margin-left: auto; transition: transform var(--duration-page) var(--ease-out); }
 .configuration[open] .configurationChevron { transform: rotate(180deg); }
 .configuration[open] { padding-bottom: 18px; }
 @media (prefers-reduced-motion: reduce) { .configurationChevron { transition: none; } }
@@ -162,9 +163,16 @@
   padding: 20px 0;
 }
 
-@media (max-width: 799px) {
+@container (max-width: 640px) {
   .configurationGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 360px) {
+  .configurationItem {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
   }
 }
 

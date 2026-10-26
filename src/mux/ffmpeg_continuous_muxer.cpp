@@ -1,4 +1,5 @@
 #include "mux/ffmpeg_continuous_muxer.h"
+#include "core/pipeline_telemetry.h"
 
 #include <Windows.h>
 
@@ -14,11 +15,18 @@
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/buffer.h>
 #include <libavutil/mem.h>
 }
 
 namespace rebelliocap {
 namespace {
+
+// The copied FFmpeg buffer keeps the original budget owner through interleaving.
+void release_packet_copy(void* opaque, std::uint8_t* data) {
+  av_free(data);
+  delete static_cast<std::shared_ptr<const std::vector<std::byte>>*>(opaque);
+}
 
 struct Failure {
   std::string code;
@@ -36,8 +44,12 @@ void avcheck(int result, const char* action) {
   throw Failure{"mux.ffmpeg", std::string(action) + ": " + text};
 }
 
+struct DiskIoState { HANDLE file{INVALID_HANDLE_VALUE}; std::shared_ptr<PipelineTelemetry> telemetry; };
+
 int write_bytes(void* opaque, const std::uint8_t* bytes, int count) {
-  const auto handle = *static_cast<HANDLE*>(opaque);
+  const auto& io = *static_cast<DiskIoState*>(opaque);
+  const auto handle = io.file;
+  PipelineTimingScope timing(io.telemetry.get(), PipelineStage::DiskWriteCpu);
   DWORD written = 0;
   if (!WriteFile(handle, bytes, static_cast<DWORD>(count), &written, nullptr) ||
       written != static_cast<DWORD>(count)) {
@@ -47,7 +59,7 @@ int write_bytes(void* opaque, const std::uint8_t* bytes, int count) {
 }
 
 std::int64_t seek_bytes(void* opaque, std::int64_t offset, int whence) {
-  const auto handle = *static_cast<HANDLE*>(opaque);
+  const auto handle = static_cast<DiskIoState*>(opaque)->file;
   LARGE_INTEGER distance{};
   LARGE_INTEGER result{};
   distance.QuadPart = offset;
@@ -79,6 +91,11 @@ int kind_index(StreamKind kind) {
 }  // namespace
 
 struct FfmpegContinuousMuxer::Impl {
+  explicit Impl(std::size_t bytes, std::shared_ptr<PipelineTelemetry> telemetry)
+      : avio_buffer_bytes(bytes) { disk_io.telemetry=std::move(telemetry); }
+  const std::size_t avio_buffer_bytes;
+  DiskIoState disk_io;
+  AVPacket* output{nullptr};
   mutable std::mutex mutex;
   HANDLE file{INVALID_HANDLE_VALUE};
   std::filesystem::path final_path;
@@ -95,6 +112,7 @@ struct FfmpegContinuousMuxer::Impl {
   std::filesystem::path retained_path;
 
   void close_context() noexcept {
+    av_packet_free(&output);
     if (context != nullptr) {
       context->pb = nullptr;
       avformat_free_context(context);
@@ -141,8 +159,8 @@ struct FfmpegContinuousMuxer::Impl {
   }
 };
 
-FfmpegContinuousMuxer::FfmpegContinuousMuxer()
-    : implementation_(std::make_unique<Impl>()) {}
+FfmpegContinuousMuxer::FfmpegContinuousMuxer(std::size_t avio_buffer_bytes, std::shared_ptr<PipelineTelemetry> telemetry)
+    : implementation_(std::make_unique<Impl>(avio_buffer_bytes, std::move(telemetry))) {}
 
 FfmpegContinuousMuxer::~FfmpegContinuousMuxer() { abort(); }
 
@@ -156,6 +174,8 @@ Result<void> FfmpegContinuousMuxer::open(
         {"mux.already_open", "A continuous destination is already open.", {}});
   }
   try {
+    require(state.avio_buffer_bytes > 0 && state.avio_buffer_bytes <= static_cast<std::size_t>(INT_MAX),
+            "AVIO buffer size must be positive and fit FFmpeg's integer size");
     require(container == Container::Mp4 || container == Container::Mkv,
             "Unknown output container");
     state.final_path = std::filesystem::absolute(destination);
@@ -183,9 +203,10 @@ Result<void> FfmpegContinuousMuxer::open(
     state.media_packets = 0;
     state.trailer_attempted = false;
 
-    auto* buffer = static_cast<unsigned char*>(av_malloc(32'768));
+    auto* buffer = static_cast<unsigned char*>(av_malloc(state.avio_buffer_bytes));
     if (buffer == nullptr) throw std::bad_alloc();
-    state.io = avio_alloc_context(buffer, 32'768, 1, &state.file, nullptr,
+    state.disk_io.file=state.file;
+    state.io = avio_alloc_context(buffer, static_cast<int>(state.avio_buffer_bytes), 1, &state.disk_io, nullptr,
                                   write_bytes, seek_bytes);
     if (state.io == nullptr) {
       av_free(buffer);
@@ -263,6 +284,8 @@ Result<void> FfmpegContinuousMuxer::open(
     const auto header = avformat_write_header(state.context, &options);
     av_dict_free(&options);
     avcheck(header, "write container header");
+    state.output = av_packet_alloc();
+    if (state.output == nullptr) throw std::bad_alloc();
     state.opened = true;
     return Result<void>::success();
   } catch (const Failure& error) {
@@ -288,12 +311,19 @@ Result<void> FfmpegContinuousMuxer::write(const EncodedPacket& packet) {
             "Packet data is invalid");
     if (!state.origin.has_value()) state.origin = packet.dts;
 
-    AVPacket* output = av_packet_alloc();
-    if (output == nullptr) throw std::bad_alloc();
-    const auto release = [&] { av_packet_free(&output); };
+    AVPacket* output = state.output;
+    av_packet_unref(output);
+    const auto release = [&] { av_packet_unref(output); };
     try {
-      avcheck(av_new_packet(output, static_cast<int>(packet.payload->size())),
-              "allocate packet");
+      auto owner = std::make_unique<std::shared_ptr<const std::vector<std::byte>>>(packet.payload);
+      auto* data = static_cast<std::uint8_t*>(av_malloc(packet.payload->size() + AV_INPUT_BUFFER_PADDING_SIZE));
+      if (!data) throw std::bad_alloc();
+      std::memset(data + packet.payload->size(), 0, AV_INPUT_BUFFER_PADDING_SIZE);
+      output->buf = av_buffer_create(data, packet.payload->size() + AV_INPUT_BUFFER_PADDING_SIZE, release_packet_copy, owner.get(), 0);
+      if (!output->buf) { av_free(data); throw std::bad_alloc(); }
+      owner.release();
+      output->data = data;
+      output->size = static_cast<int>(packet.payload->size());
       std::memcpy(output->data, packet.payload->data(), packet.payload->size());
       output->stream_index = state.stream_indices[static_cast<std::size_t>(kind)];
       output->pts = packet.pts - *state.origin;

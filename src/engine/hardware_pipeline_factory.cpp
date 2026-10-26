@@ -28,6 +28,7 @@ extern "C" {
 #include "audio/audio_endpoint_catalog.h"
 #include "audio/mf_aac_encoder.h"
 #include "audio/pcm_normalizer.h"
+#include "audio/pcm_clock_aligner.h"
 #include "audio/pcm_windowizer.h"
 #include "audio/pcm_epoch_bridge.h"
 #include "audio/recovering_audio_source.h"
@@ -100,25 +101,37 @@ void write_error(DiagnosticWriter& writer, QpcClock& clock, const Error& error) 
   std::cerr << error.code << ": " << error.message << '\n';
 }
 
+struct HardwareVideoOptions {
+  NvencConfig encoder;
+  std::shared_ptr<PipelineTelemetry> telemetry;
+  bool prefer_duplicate_output1{false};
+  bool direct_nv12_cache{false};
+};
+
 class HardwareVideoSession final : public IEngineVideoPipeline {
   friend struct HardwareVideoPipelineTestAccess;
  public:
   static Result<std::shared_ptr<HardwareVideoSession>> create(
-      const MonitorInfo& monitor, const CliArguments& arguments, QpcClock& clock) {
+      const MonitorInfo& monitor, const CliArguments& arguments, QpcClock& clock,
+      HardwareVideoOptions options = {}) {
+    if (options.encoder.slot_count < 6 || options.encoder.slot_count > 12) return Result<std::shared_ptr<HardwareVideoSession>>::failure(
+        pipeline_error("nvenc.invalid_slot_count", "NVENC slot count must be between 6 and 12."));
     auto device_result = create_d3d11_device(monitor.id.adapter_luid);
     if (!device_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(device_result.error());
     auto device = std::move(device_result).value();
-    auto capture_result = DxgiCaptureSource::create(device, monitor.id, clock);
+    auto capture_result = DxgiCaptureSource::create(device, monitor.id, clock, options.prefer_duplicate_output1);
     if (!capture_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(capture_result.error());
     auto capture = std::move(capture_result).value();
     const auto mode = capture->description().ModeDesc;
     D3d11Nv12ConverterConfig converter_config{mode.Width, mode.Height, arguments.width,
-                                               arguments.height, 8, capture->description().Rotation};
+                                               arguments.height, options.encoder.slot_count + 2U, capture->description().Rotation, options.direct_nv12_cache};
     auto converter_result = D3d11Nv12Converter::create(
         device.device(), device.context(), converter_config);
     if (!converter_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(converter_result.error());
-    NvencConfig encoder_config{arguments.width, arguments.height, arguments.fps,
-                               arguments.bitrate, 2};
+    auto encoder_config = options.encoder;
+    encoder_config.width = arguments.width; encoder_config.height = arguments.height;
+    encoder_config.fps = arguments.fps; encoder_config.bitrate = arguments.bitrate;
+    encoder_config.telemetry = options.telemetry;
     auto encoder_result = NvencEncoder::create(device.device(), encoder_config, clock);
     if (!encoder_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(encoder_result.error());
 
@@ -139,21 +152,38 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     }
     auto result = std::shared_ptr<HardwareVideoSession>(new HardwareVideoSession(
         std::move(device), std::move(capture), std::move(converter_result).value(),
-        std::move(encoder_result).value(), std::move(cache), mode.Width, mode.Height, monitor, clock));
+        std::move(encoder_result).value(), std::move(cache), mode.Width, mode.Height, monitor, clock, options));
     return Result<std::shared_ptr<HardwareVideoSession>>::success(std::move(result));
   }
 
   Result<std::vector<EncodedPacket>> tick(QpcTicks pts, bool force_keyframe) override {
     pending_keyframe_ = pending_keyframe_ || force_keyframe;
-    auto acquired = capture_->next_frame(have_frame_ ? 0ms : 100ms);
+    auto admission = encoder_->prepare_frame(pending_keyframe_);
+    if (!admission.is_success()) return Result<std::vector<EncodedPacket>>::failure(admission.error());
+    auto completed = std::move(admission.value().completed);
+    if (!admission.value().can_submit) return Result<std::vector<EncodedPacket>>::success(std::move(completed));
+    auto acquired = [&] {
+      PipelineTimingScope timing(options_.telemetry.get(), PipelineStage::CaptureAcquireCpu, content_revision_);
+      return capture_->next_frame(have_frame_ ? 0ms : 100ms);
+    }();
     if (!acquired.is_success()) return Result<std::vector<EncodedPacket>>::failure(acquired.error());
     if (capture_->suspended()) {
+      ++no_image_ticks_;
+      if (have_frame_) converter_->discard_cached_image();
       have_frame_ = false;
       pending_keyframe_ = true;
-      return Result<std::vector<EncodedPacket>>::success({});
+      return Result<std::vector<EncodedPacket>>::success(std::move(completed));
     }
+    std::optional<ConvertedVideoFrame> direct_frame;
     if (acquired.value().has_value()) {
+      ++new_image_ticks_;
       auto frame = std::move(acquired.value().value());
+      if (!capture_diagnostics_.texture_format_available && frame.texture) {
+        D3D11_TEXTURE2D_DESC actual{};
+        frame.texture->GetDesc(&actual);
+        capture_diagnostics_.texture_format = static_cast<std::uint32_t>(actual.Format);
+        capture_diagnostics_.texture_format_available = true;
+      }
       // First-frame waits and recovery may finish after the scheduled tick.
       // Keep newly acquired content on the same current QPC clock as audio.
       pts = (std::max)(pts, frame.captured_at);
@@ -162,22 +192,61 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         auto rebuilt = rebuild_input(frame.width, frame.height, frame.rotation);
         if (!rebuilt.is_success()) return Result<std::vector<EncodedPacket>>::failure(rebuilt.error());
       }
-      device_.context()->CopyResource(cache_.Get(), frame.texture.Get());
       ++content_revision_;
+      if (options_.direct_nv12_cache) {
+        PipelineTimingScope timing(options_.telemetry.get(), PipelineStage::ConversionSubmitCpu, content_revision_);
+        auto direct = converter_->convert_cached(frame, content_revision_);
+        if (!direct.is_success()) {
+          // Compatibility fallback is permitted only at the initial session
+          // boundary, before any texture has ever been submitted to NVENC.
+          if (!can_fallback_direct_input(direct.error(),
+                  content_revision_ == 1 && encoder_->metrics().submitted_frames == 0))
+            return Result<std::vector<EncodedPacket>>::failure(direct.error());
+          auto fallback_config = converter_->config();
+          fallback_config.direct_nv12_cache = false;
+          auto fallback = D3d11Nv12Converter::create(device_.device(), device_.context(), fallback_config);
+          if (!fallback.is_success()) return Result<std::vector<EncodedPacket>>::failure(fallback.error());
+          converter_ = std::move(fallback).value();
+          options_.direct_nv12_cache = false;
+        } else direct_frame.emplace(std::move(direct).value());
+      }
+      if (!options_.direct_nv12_cache) {
+        PipelineTimingScope copy_timing(options_.telemetry.get(), PipelineStage::CaptureCopySubmitCpu, content_revision_);
+        device_.context()->CopyResource(cache_.Get(), frame.texture.Get());
+      }
       have_frame_ = true;
     }
-    if (!have_frame_) return Result<std::vector<EncodedPacket>>::success({});
+    else if (have_frame_) ++repeated_image_ticks_;
+    if (!have_frame_) { ++no_image_ticks_; return Result<std::vector<EncodedPacket>>::success(std::move(completed)); }
     CapturedVideoFrame cached{cache_, pts, input_width_, input_height_, cache_lifetime_};
-    auto converted = converter_->convert_cached(cached, content_revision_);
+    auto converted = [&] {
+      if (direct_frame.has_value()) return Result<ConvertedVideoFrame>::success(std::move(*direct_frame));
+      PipelineTimingScope timing(options_.telemetry.get(), PipelineStage::ConversionSubmitCpu, content_revision_);
+      if (options_.direct_nv12_cache) return converter_->repeat_cached();
+      return converter_->convert_cached(cached, content_revision_);
+    }();
     if (!converted.is_success()) return Result<std::vector<EncodedPacket>>::failure(converted.error());
     auto encoded = encoder_->encode(std::move(converted).value(), pts, pending_keyframe_);
-    if (encoded.is_success()) pending_keyframe_ = false;
-    return encoded;
+    if (!encoded.is_success()) return encoded;
+    pending_keyframe_ = false;
+    auto& tail = encoded.value();
+    completed.insert(completed.end(), std::make_move_iterator(tail.begin()), std::make_move_iterator(tail.end()));
+    return Result<std::vector<EncodedPacket>>::success(std::move(completed));
   }
 
   Result<std::vector<EncodedPacket>> flush() override { return encoder_->flush(); }
   const StreamDescriptor& descriptor() const noexcept { return encoder_->descriptor(); }
-  NvencRuntimeMetrics metrics() const { return encoder_->metrics(); }
+  NvencRuntimeMetrics metrics() const {
+    auto result=encoder_->metrics();
+    result.capture_session=capture_diagnostics_;
+    result.capture_session.available=!capture_->recovering()&&!capture_->suspended();
+    result.new_image_ticks=new_image_ticks_; result.repeated_image_ticks=repeated_image_ticks_; result.no_image_ticks=no_image_ticks_;
+    result.converter_cache_hits=converter_->metrics().cached_conversions;
+    result.converter_pool_capacity=converter_->config().output_pool_size;
+    result.converter_input_views_created=converter_->metrics().input_views_created;
+    result.direct_nv12_cache=options_.direct_nv12_cache;
+    return result;
+  }
 
  private:
   Result<void> rebuild_input(std::uint32_t width, std::uint32_t height,
@@ -203,18 +272,30 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     return Result<void>::success();
   }
 
+  void update_capture_diagnostics(const DxgiCaptureSource& source) {
+    capture_diagnostics_={};
+    capture_diagnostics_.available=true;
+    capture_diagnostics_.duplicate_output1=source.duplication_backend()==CaptureDuplicationBackend::DuplicateOutput1;
+    capture_diagnostics_.fallback_hresult=source.duplication_fallback_hresult();
+    const auto luid=device_.adapter_luid();
+    capture_diagnostics_.adapter_luid_low=static_cast<std::uint32_t>(luid.LowPart);
+    capture_diagnostics_.adapter_luid_high=static_cast<std::int32_t>(luid.HighPart);
+  }
+
   HardwareVideoSession(D3d11Device device, std::unique_ptr<DxgiCaptureSource> capture,
                         std::unique_ptr<D3d11Nv12Converter> converter,
                         std::unique_ptr<NvencEncoder> encoder,
                         Microsoft::WRL::ComPtr<ID3D11Texture2D> cache,
                         std::uint32_t width, std::uint32_t height,
-                        const MonitorInfo& monitor, QpcClock& clock)
+                        const MonitorInfo& monitor, QpcClock& clock, HardwareVideoOptions options = {})
       : device_(std::move(device)),
         converter_(std::move(converter)), encoder_(std::move(encoder)),
         cache_(std::move(cache)), input_width_(width), input_height_(height),
-        cache_lifetime_(std::make_shared<int>(0)) {
+        cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)) {
+    update_capture_diagnostics(*capture);
+    const auto modern = options_.prefer_duplicate_output1;
     capture_ = std::make_unique<RecoveringCaptureSource>(std::move(capture),
-      [this, monitor, &clock]() -> RecoveringCaptureSource::SourceResult {
+      [this, monitor, &clock, modern]() -> RecoveringCaptureSource::SourceResult {
         const HRESULT removed = device_.device()->GetDeviceRemovedReason();
         if (FAILED(removed)) return RecoveringCaptureSource::SourceResult::failure(
           pipeline_error("capture.device_removed", "The graphics device was removed.", static_cast<long>(removed)));
@@ -223,7 +304,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         const auto found = select_monitor(monitor.id, monitors.value());
         if (!found.is_success()) return RecoveringCaptureSource::SourceResult::failure(
           pipeline_error("capture.monitor_unavailable", "Waiting for the selected monitor to return."));
-        auto recreated = DxgiCaptureSource::create(device_, found.value().id, clock);
+        auto recreated = DxgiCaptureSource::create(device_, found.value().id, clock, modern);
         if (!recreated.is_success()) return RecoveringCaptureSource::SourceResult::failure(recreated.error());
         const auto mode = recreated.value()->description().ModeDesc;
         const auto rotation = recreated.value()->description().Rotation;
@@ -232,6 +313,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
           auto rebuilt = rebuild_input(mode.Width, mode.Height, rotation);
           if (!rebuilt.is_success()) return RecoveringCaptureSource::SourceResult::failure(rebuilt.error());
         }
+        update_capture_diagnostics(*recreated.value());
         return RecoveringCaptureSource::SourceResult::success(std::move(recreated).value());
       }, [](const std::string& event, const Error& error) {
         std::cerr << event << ": " << error.code << ": " << error.message
@@ -250,6 +332,9 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   bool have_frame_{false};
   std::uint64_t content_revision_{0};
   bool pending_keyframe_{false};
+  HardwareVideoOptions options_;
+  CaptureSessionDiagnostics capture_diagnostics_;
+  std::uint64_t new_image_ticks_{0}, repeated_image_ticks_{0}, no_image_ticks_{0};
 };
 
 // Keep descriptors alive for pending saves while releasing the entire GPU
@@ -259,18 +344,19 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
   friend struct HardwareVideoPipelineTestAccess;
  public:
   static Result<std::shared_ptr<HardwareVideoPipeline>> create(
-      const MonitorInfo& monitor, const CliArguments& arguments, QpcClock& clock) {
-    auto session = HardwareVideoSession::create(monitor, arguments, clock);
+      const MonitorInfo& monitor, const CliArguments& arguments, QpcClock& clock,
+      HardwareVideoOptions options = {}) {
+    auto session = HardwareVideoSession::create(monitor, arguments, clock, options);
     if (!session.is_success()) return Result<std::shared_ptr<HardwareVideoPipeline>>::failure(session.error());
     return Result<std::shared_ptr<HardwareVideoPipeline>>::success(
         std::shared_ptr<HardwareVideoPipeline>(new HardwareVideoPipeline(
-            monitor, arguments, clock, std::move(session).value())));
+            monitor, arguments, clock, std::move(session).value(), options)));
   }
 
   Result<void> resume() override {
     std::scoped_lock lock(mutex_);
     if (session_) return Result<void>::success();
-    auto session = HardwareVideoSession::create(monitor_, arguments_, clock_);
+    auto session = HardwareVideoSession::create(monitor_, arguments_, clock_, options_);
     if (!session.is_success()) return Result<void>::failure(session.error());
     const auto& next = session.value()->descriptor();
     if (next.codec != descriptor_.codec || next.codec_extradata != descriptor_.codec_extradata ||
@@ -288,11 +374,18 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
       const auto current = session_->metrics();
       accumulated_.submitted_frames += current.submitted_frames;
       accumulated_.completed_frames += current.completed_frames;
+      accumulated_.backpressure_dropped_frames += current.backpressure_dropped_frames;
       accumulated_.p_picture_frames += current.p_picture_frames;
       accumulated_.b_picture_frames += current.b_picture_frames;
       accumulated_.driver_timestamp_packets += current.driver_timestamp_packets;
       accumulated_.driver_timestamp_digest ^= current.driver_timestamp_digest;
       accumulated_.p50_latency_us = current.p50_latency_us;
+      accumulated_.accepted_config=current.accepted_config;
+      accumulated_.max_in_flight_frames=(std::max)(accumulated_.max_in_flight_frames,current.max_in_flight_frames);
+      accumulated_.new_image_ticks+=current.new_image_ticks; accumulated_.repeated_image_ticks+=current.repeated_image_ticks;
+      accumulated_.no_image_ticks+=current.no_image_ticks; accumulated_.converter_cache_hits+=current.converter_cache_hits;
+      accumulated_.converter_input_views_created+=current.converter_input_views_created;
+      accumulated_.direct_nv12_cache=current.direct_nv12_cache;
       accumulated_.p95_latency_us = current.p95_latency_us;
       session_.reset();
     }
@@ -307,16 +400,23 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
     return session_ ? session_->flush() : Result<std::vector<EncodedPacket>>::success({});
   }
   const StreamDescriptor& descriptor() const noexcept { return descriptor_; }
-  NvencRuntimeMetrics metrics() const {
+  NvencRuntimeMetrics metrics() const override {
     std::scoped_lock lock(mutex_);
     auto result = session_ ? session_->metrics() : NvencRuntimeMetrics{};
     result.submitted_frames += accumulated_.submitted_frames;
     result.completed_frames += accumulated_.completed_frames;
+    result.backpressure_dropped_frames += accumulated_.backpressure_dropped_frames;
+    result.max_in_flight_frames=(std::max)(result.max_in_flight_frames,accumulated_.max_in_flight_frames);
+    result.new_image_ticks+=accumulated_.new_image_ticks; result.repeated_image_ticks+=accumulated_.repeated_image_ticks;
+    result.no_image_ticks+=accumulated_.no_image_ticks; result.converter_cache_hits+=accumulated_.converter_cache_hits;
+    result.converter_input_views_created+=accumulated_.converter_input_views_created;
     result.p_picture_frames += accumulated_.p_picture_frames;
     result.b_picture_frames += accumulated_.b_picture_frames;
     result.driver_timestamp_packets += accumulated_.driver_timestamp_packets;
     result.driver_timestamp_digest ^= accumulated_.driver_timestamp_digest;
     if (!session_) {
+      result.direct_nv12_cache=accumulated_.direct_nv12_cache;
+      result.accepted_config=accumulated_.accepted_config;
       result.p50_latency_us = accumulated_.p50_latency_us;
       result.p95_latency_us = accumulated_.p95_latency_us;
     }
@@ -325,9 +425,10 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
 
  private:
   HardwareVideoPipeline(const MonitorInfo& monitor, const CliArguments& arguments,
-                        QpcClock& clock, std::shared_ptr<HardwareVideoSession> session)
+                        QpcClock& clock, std::shared_ptr<HardwareVideoSession> session,
+                        HardwareVideoOptions options = {})
       : monitor_(monitor), arguments_(arguments), clock_(clock),
-        descriptor_(session->descriptor()), session_(std::move(session)) {}
+        descriptor_(session->descriptor()), session_(std::move(session)), options_(std::move(options)) {}
   MonitorInfo monitor_;
   CliArguments arguments_;
   QpcClock& clock_;
@@ -335,6 +436,7 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
   mutable std::mutex mutex_;
   std::shared_ptr<HardwareVideoSession> session_;
   NvencRuntimeMetrics accumulated_;
+  HardwareVideoOptions options_;
 };
 
 class HardwareAudioPipeline final : public IEngineAudioPipeline {
@@ -411,6 +513,7 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
       system_source_ = recovering_source(std::move(source).value(), AudioEndpointRole::SystemLoopback, system_audio_id_, StreamKind::SystemAudio);
       system_encoder_ = std::move(encoder).value();
       system_normalizer_ = std::make_unique<PcmNormalizer>(clock_);
+      system_aligner_ = std::make_unique<PcmClockAligner>(clock_.frequency());
     }
     if (microphone_enabled_) {
       auto source = WasapiCaptureSource::create({AudioEndpointRole::Microphone, microphone_id_}, clock_);
@@ -420,6 +523,7 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
       microphone_source_ = recovering_source(std::move(source).value(), AudioEndpointRole::Microphone, microphone_id_, StreamKind::MicrophoneAudio);
       microphone_encoder_ = std::move(encoder).value();
       microphone_normalizer_ = std::make_unique<PcmNormalizer>(clock_);
+      microphone_aligner_ = std::make_unique<PcmClockAligner>(clock_.frequency());
     }
     if (system_enabled_ && microphone_enabled_) {
       auto encoder = MfAacEncoder::create(StreamKind::MixedAudio, 192'000, clock_);
@@ -456,6 +560,8 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
     microphone_encoder_.reset();
     system_normalizer_.reset();
     microphone_normalizer_.reset();
+    system_aligner_.reset();
+    microphone_aligner_.reset();
     system_source_.reset();
     microphone_source_.reset();
     initialized_ = false;
@@ -467,7 +573,7 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
     return result;
   }
 
-  Result<void> accept_blocks(std::vector<PcmBlock> blocks, MfAacEncoder& encoder,
+  Result<void> accept_aligned_blocks(std::vector<PcmBlock> blocks, MfAacEncoder& encoder,
                              StreamKind stream, std::vector<EncodedPacket>& output) {
     for (auto& block : blocks) {
       auto& bridge = stream == StreamKind::SystemAudio ? system_bridge_ : microphone_bridge_;
@@ -486,6 +592,18 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
       }
       return Result<void>::success();
       });
+      if (!accepted.is_success()) return accepted;
+    }
+    return Result<void>::success();
+  }
+
+  Result<void> accept_blocks(std::vector<PcmBlock> blocks, MfAacEncoder& encoder,
+                             StreamKind stream, std::vector<EncodedPacket>& output) {
+    auto& aligner = stream == StreamKind::SystemAudio ? *system_aligner_ : *microphone_aligner_;
+    for (auto& block : blocks) {
+      auto aligned = aligner.push(std::move(block));
+      if (!aligned.is_success()) return Result<void>::failure(aligned.error());
+      auto accepted = accept_aligned_blocks(std::move(aligned).value(), encoder, stream, output);
       if (!accepted.is_success()) return accepted;
     }
     return Result<void>::success();
@@ -510,7 +628,17 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
                                 std::vector<EncodedPacket>& output) {
     auto blocks = normalizer.flush();
     if (!blocks.is_success()) return Result<void>::failure(blocks.error());
-    return accept_blocks(std::move(blocks).value(), encoder, stream, output);
+    auto accepted = accept_blocks(std::move(blocks).value(), encoder, stream, output);
+    if (!accepted.is_success()) return accepted;
+    return flush_aligner(encoder, stream, output);
+  }
+
+  Result<void> flush_aligner(MfAacEncoder& encoder, StreamKind stream,
+                              std::vector<EncodedPacket>& output) {
+    auto& aligner = stream == StreamKind::SystemAudio ? *system_aligner_ : *microphone_aligner_;
+    auto tail = aligner.flush();
+    if (!tail.is_success()) return Result<void>::failure(tail.error());
+    return accept_aligned_blocks(std::move(tail).value(), encoder, stream, output);
   }
 
   Result<void> drain_mix(std::vector<EncodedPacket>& output, bool draining = false) {
@@ -544,6 +672,8 @@ class HardwareAudioPipeline final : public IEngineAudioPipeline {
   std::unique_ptr<RecoveringAudioSource> microphone_source_;
   std::unique_ptr<PcmNormalizer> system_normalizer_;
   std::unique_ptr<PcmNormalizer> microphone_normalizer_;
+  std::unique_ptr<PcmClockAligner> system_aligner_;
+  std::unique_ptr<PcmClockAligner> microphone_aligner_;
   std::unique_ptr<MfAacEncoder> mixed_encoder_;
   std::unique_ptr<MfAacEncoder> system_encoder_;
   std::unique_ptr<MfAacEncoder> microphone_encoder_;
@@ -857,6 +987,8 @@ CliExitCode run_recording(const CliArguments& arguments, DiagnosticWriter& write
 }  // namespace
 
 Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineConfig& config) {
+  if (config.continuous_avio_buffer_bytes == 0 || config.continuous_avio_buffer_bytes > 1024 * 1024)
+    return Result<RecorderEngineDependencies>::failure(pipeline_error("mux.invalid_avio_buffer", "AVIO experiment buffer must be between 1 byte and 1 MiB."));
   auto monitors=enumerate_monitors();
   if(!monitors.is_success()) return Result<RecorderEngineDependencies>::failure(monitors.error());
   auto monitor=select_monitor(config.monitor,monitors.value());
@@ -875,7 +1007,8 @@ Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineC
   CliArguments arguments;
   arguments.width=config.width; arguments.height=config.height;
   arguments.fps=config.fps; arguments.bitrate=config.bitrate;
-  auto video=HardwareVideoPipeline::create(monitor.value(),arguments,clock_);
+  auto video=HardwareVideoPipeline::create(monitor.value(),arguments,clock_,
+      HardwareVideoOptions{config.nvenc_config, config.pipeline_telemetry, config.prefer_duplicate_output1, config.direct_nv12_cache});
   if(!video.is_success()) return Result<RecorderEngineDependencies>::failure(video.error());
   auto timer=WaitableTimerEngineClock::create();
   if(!timer.is_success()) return Result<RecorderEngineDependencies>::failure(timer.error());
@@ -888,7 +1021,7 @@ Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineC
   auto categories = GameCategoryResolver::create(monitor.value(), config.output_directory);
   return Result<RecorderEngineDependencies>::success({.clock=timer.value(),.video=video.value(),
     .audio=std::move(audio),.hotkey=std::make_shared<RawInputHotkey>(),.muxer=std::make_shared<FfmpegClipMuxer>(),
-    .continuous_muxer=std::make_shared<FfmpegContinuousMuxer>(),.stream_descriptors=std::move(descriptors),
+    .continuous_muxer=std::make_shared<FfmpegContinuousMuxer>(config.continuous_avio_buffer_bytes, config.pipeline_telemetry),.stream_descriptors=std::move(descriptors),
     .capture_category=[categories] { return categories->foreground_folder(); },
     .cache_category_icon=[categories](const std::filesystem::path& category) { categories->cache_folder_icon(category); }});
 }

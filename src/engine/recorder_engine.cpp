@@ -296,14 +296,17 @@ struct RecorderEngine::Impl {
   }
 
   bool append_packets(std::vector<EncodedPacket> packets, bool video, std::uint32_t epoch) {
+    PipelineTimingScope fanout_timing(config.pipeline_telemetry.get(), PipelineStage::PacketFanoutCpu,
+                                     static_cast<std::uint64_t>(epoch) << 32);
     for (auto& packet : packets) {
       packet.epoch = epoch;
-      auto continuous_packet = packet;
       {
         std::scoped_lock replay_lock(replay_mutex);
         if (replay_enabled) {
+          PipelineTimingScope replay_timing(config.pipeline_telemetry.get(), PipelineStage::ReplayAppendCpu,
+                                           static_cast<std::uint64_t>(epoch) << 32);
           const bool was_limited = replay->memory_limited();
-          const auto result = replay->append(std::move(packet));
+          const auto result = replay->append(packet);
           if (was_limited != replay->memory_limited()) notify_state_changed();
           if (!result.is_success() && result.error().code != "replay.memory_budget_exceeded") {
             ++pipeline_errors;
@@ -322,10 +325,8 @@ struct RecorderEngine::Impl {
       }
       // The controller lives until capture workers have joined. Its queue lock
       // is independent of start/stop and disk IO, so Replay never waits for IO.
-      if (continuous && continuous->active()) {
-        static_cast<void>(continuous->accept(std::move(continuous_packet)));
-      }
     }
+    if (continuous) static_cast<void>(continuous->accept_batch(packets));
     return true;
   }
 
@@ -347,6 +348,15 @@ struct RecorderEngine::Impl {
       if (!dependencies.clock->wait_until(deadline, stop)) {
         break;
       }
+      const auto correlation = (static_cast<std::uint64_t>(epoch) << 32) |
+          (frame & 0xffffffffULL);
+      if (config.pipeline_telemetry && config.pipeline_telemetry->enabled()) {
+        const auto wake = dependencies.clock->now();
+        const auto late_ticks = wake > deadline ? wake - deadline : 0;
+        const auto late_us = static_cast<std::uint64_t>(
+            static_cast<long double>(late_ticks) * 1'000'000.0L / frequency);
+        config.pipeline_telemetry->record(PipelineStage::SchedulerWakeLateness, late_us, correlation);
+      }
       // Keep a toggle-start request pending while its muxer is opening. Frames
       // produced before the controller can accept them cannot be the recording
       // keyframe, because they are deliberately not fanned out to it.
@@ -358,7 +368,10 @@ struct RecorderEngine::Impl {
       // A deadline schedules work; it is not the time of the acquired image.
       // If Windows wakes us late, stamping that image with the old deadline
       // makes video content run ahead of QPC-stamped WASAPI audio.
-      auto packets = dependencies.video->tick(dependencies.clock->now(), force_keyframe);
+      auto packets = [&] {
+        PipelineTimingScope timing(config.pipeline_telemetry.get(), PipelineStage::VideoTickCpu, correlation);
+        return dependencies.video->tick(dependencies.clock->now(), force_keyframe);
+      }();
       if (!packets.is_success()) {
         ++pipeline_errors;
         record_failure(packets.error());
@@ -730,8 +743,13 @@ std::future<Result<std::filesystem::path>> RecorderEngine::Impl::enqueue_save(
     request->sequence = next_save_sequence++;
     ++outstanding_saves;
     ++save_requests;
-    auto snapshot = replay->snapshot(
-        requested_at, seconds_to_ticks(config.clip_duration, dependencies.clock->frequency()));
+    auto snapshot = [&] {
+      // Measured inside replay_mutex: this is snapshot work while holding the
+      // lock, excluding time spent waiting to acquire it and queue bookkeeping.
+      PipelineTimingScope timing(config.pipeline_telemetry.get(), PipelineStage::ReplaySnapshotCpu);
+      return replay->snapshot(
+          requested_at, seconds_to_ticks(config.clip_duration, dependencies.clock->frequency()));
+    }();
     if (!snapshot.is_success()) {
       --outstanding_saves;
       ++failed_saves;
@@ -820,7 +838,7 @@ Result<void> RecorderEngine::start(const EngineConfig& config) {
   state.replay_enabled = true;
   state.continuous = state.dependencies.continuous_muxer
       ? std::make_unique<ContinuousRecording>(*state.dependencies.continuous_muxer,
-                                              state.dependencies.stream_descriptors, state.buffer_budget, [&state] { state.notify_continuous_changed(); })
+                                              state.dependencies.stream_descriptors, state.buffer_budget, [&state] { state.notify_continuous_changed(); }, config.continuous_queue_limits, config.pipeline_telemetry)
       : nullptr;
   state.reset_metrics();
   state.capture_epoch = 0;
@@ -970,6 +988,7 @@ EngineMetrics RecorderEngine::metrics() const {
   const auto& state = *implementation_;
   std::scoped_lock lifecycle_lock(state.lifecycle_mutex);
   std::scoped_lock replay_lock(state.replay_mutex);
+  if (state.continuous) static_cast<void>(state.continuous->check_health());
   std::uint64_t mixing_drops = 0;
   std::uint32_t unavailable = 0;
   for (const auto& audio : state.dependencies.audio) {
@@ -999,7 +1018,13 @@ EngineMetrics RecorderEngine::metrics() const {
               ? static_cast<double>(state.replay->retained_duration()) / state.dependencies.clock->frequency() : 0,
           .replay_memory_limited = state.replay && state.replay->memory_limited(),
           .replay_memory_drops = state.replay ? state.replay->memory_drops() : 0,
-          .continuous_recovery_path = state.continuous ? state.continuous->recovery_path() : ""};
+          .continuous_recovery_path = state.continuous ? state.continuous->recovery_path() : "",
+          .pipeline_telemetry = state.config.pipeline_telemetry
+              ? state.config.pipeline_telemetry->snapshot() : PipelineTelemetrySnapshot{},
+          .continuous_queue = state.continuous ? state.continuous->queue_metrics() : ContinuousQueueMetrics{},
+          .qpc_frequency = state.dependencies.clock->frequency(),
+          .video_pipeline = state.config.pipeline_telemetry && state.config.pipeline_telemetry->enabled()
+              ? state.dependencies.video->metrics() : NvencRuntimeMetrics{}};
 }
 
 std::vector<EngineSaveCompletion> RecorderEngine::take_hotkey_save_completions() {

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -131,8 +132,23 @@ bool same_com_identity(IUnknown* left, IUnknown* right) {
          left_identity.Get() == right_identity.Get();
 }
 
+std::vector<std::uint8_t> read_nv12(TestDevice& device, ID3D11Texture2D* texture) {
+  D3D11_TEXTURE2D_DESC desc{}; texture->GetDesc(&desc);
+  desc.Usage = D3D11_USAGE_STAGING; desc.BindFlags = 0; desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+  if (FAILED(device.device->CreateTexture2D(&desc, nullptr, &staging))) return {};
+  device.context->CopyResource(staging.Get(), texture);
+  D3D11_MAPPED_SUBRESOURCE mapped{};
+  if (FAILED(device.context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return {};
+  std::vector<std::uint8_t> pixels(desc.Width * desc.Height * 3 / 2);
+  for (UINT row = 0; row < desc.Height * 3 / 2; ++row)
+    std::memcpy(pixels.data() + row * desc.Width, static_cast<const std::uint8_t*>(mapped.pData) + row * mapped.RowPitch, desc.Width);
+  device.context->Unmap(staging.Get(), 0);
+  return pixels;
+}
+
 bool check_rotation(TestDevice& device, DXGI_MODE_ROTATION rotation,
-                    const std::array<int, 4>& expected) {
+                    const std::array<int, 4>& expected, bool direct = false) {
   constexpr UINT width = 64, height = 32;
   auto frame = make_input_frame(device.device.Get(), device.context.Get(), width, height);
   if (!frame.is_success()) return false;
@@ -147,7 +163,7 @@ bool check_rotation(TestDevice& device, DXGI_MODE_ROTATION rotation,
   const bool portrait = rotation == DXGI_MODE_ROTATION_ROTATE90 || rotation == DXGI_MODE_ROTATION_ROTATE270;
   const UINT out_width = portrait ? height : width, out_height = portrait ? width : height;
   auto converter = rebelliocap::D3d11Nv12Converter::create(device.device.Get(), device.context.Get(),
-      {width, height, out_width, out_height, 1, rotation});
+      {width, height, out_width, out_height, 1, rotation, direct});
   if (!converter.is_success()) { std::cerr << converter.error().code << '\n'; return false; }
   auto converted = converter.value()->convert(frame.value());
   if (!converted.is_success()) return false;
@@ -229,6 +245,11 @@ int main() {
       !check_rotation(test_device, DXGI_MODE_ROTATION_ROTATE180, {208, 153, 98, 43}) ||
       !check_rotation(test_device, DXGI_MODE_ROTATION_ROTATE270, {98, 208, 43, 153}))
     return fail("GPU rotation did not preserve the four asymmetric quadrants");
+  if (!check_rotation(test_device, DXGI_MODE_ROTATION_IDENTITY, {43, 98, 153, 208}, true) ||
+      !check_rotation(test_device, DXGI_MODE_ROTATION_ROTATE90, {153, 43, 208, 98}, true) ||
+      !check_rotation(test_device, DXGI_MODE_ROTATION_ROTATE180, {208, 153, 98, 43}, true) ||
+      !check_rotation(test_device, DXGI_MODE_ROTATION_ROTATE270, {98, 208, 43, 153}, true))
+    return fail("direct canonical GPU rotation changed pixel output");
 
   Microsoft::WRL::ComPtr<ID3D11InfoQueue> info_queue;
   if (test_device.debug_flag_succeeded) {
@@ -264,6 +285,100 @@ int main() {
     return fail(input_result.error().message);
   }
   auto input = std::move(input_result).value();
+
+  // The canonical image must remain independent of every leased encoder input.
+  {
+    auto direct_config = config;
+    direct_config.direct_nv12_cache = true;
+    auto direct_result = D3d11Nv12Converter::create(test_device.device.Get(), test_device.context.Get(), direct_config);
+    if (!direct_result.is_success()) return fail("direct cache creation failed");
+    auto direct = std::move(direct_result).value();
+    if (direct->repeat_cached().is_success()) return fail("direct repeat accepted an empty canonical image");
+    std::vector<ConvertedVideoFrame> leases;
+    auto converted = direct->convert_cached(input, 1);
+    if (!converted.is_success()) return fail("first direct conversion failed");
+    leases.push_back(std::move(converted).value());
+    for (std::size_t i = 1; i < kPoolSize; ++i) {
+      auto repeated = direct->repeat_cached();
+      if (!repeated.is_success()) return fail("direct repeat failed with a free output");
+      leases.push_back(std::move(repeated).value());
+    }
+    if (direct->metrics().processing_submissions != 1) return fail("direct repeats reran video processing");
+    const auto original_pixels = read_nv12(test_device, leases.front().texture());
+    if (original_pixels.empty()) return fail("could not read direct output pixels");
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> changed_target;
+    if (FAILED(test_device.device->CreateRenderTargetView(input.texture.Get(), nullptr, &changed_target))) return fail("input target failed");
+    const float green[]{0.F, 1.F, 0.F, 1.F};
+    test_device.context->ClearRenderTargetView(changed_target.Get(), green);
+    const auto before = direct->metrics();
+    if (direct->convert_cached(input, 2).is_success() ||
+        direct->metrics().processing_submissions != before.processing_submissions)
+      return fail("direct saturation performed work or overwrote a lease");
+    leases.erase(leases.begin() + 1, leases.end());
+    {
+      auto unchanged = direct->repeat_cached();
+      if (!unchanged.is_success() || read_nv12(test_device, unchanged.value().texture()) != original_pixels)
+        return fail("rejected input changed the canonical image");
+    }
+    {
+      // Even the same external revision must refresh a newly acquired image.
+      auto changed = direct->convert_cached(input, 1);
+      if (!changed.is_success()) return fail("changed direct image failed");
+      const auto changed_pixels = read_nv12(test_device, changed.value().texture());
+      if (changed_pixels.empty() || changed_pixels == original_pixels || read_nv12(test_device, leases.front().texture()) != original_pixels)
+        return fail("direct cache reused stale pixels or mutated an outstanding lease");
+      auto repeated = direct->repeat_cached();
+      if (!repeated.is_success() || read_nv12(test_device, repeated.value().texture()) != changed_pixels)
+        return fail("repeat did not use the latest canonical pixels");
+    }
+    leases.clear();
+    auto second_input = make_input_frame(test_device.device.Get(), test_device.context.Get());
+    if (!second_input.is_success()) return fail("direct alternate input creation failed");
+    for (int i = 0; i < 12; ++i) {
+      auto fresh = direct->convert_cached(i % 2 ? input : second_input.value(), 10 + i);
+      if (!fresh.is_success()) return fail("alternating direct textures failed");
+    }
+    if (direct->metrics().input_views_created != 2) return fail("direct input-view cache is not bounded and reusable");
+    std::vector<CapturedVideoFrame> identities;
+    for (int i = 0; i < 5; ++i) {
+      auto frame = make_input_frame(test_device.device.Get(), test_device.context.Get());
+      if (!frame.is_success()) return fail("eviction input creation failed");
+      identities.push_back(std::move(frame).value());
+      auto converted_identity = direct->convert_cached(identities.back(), 100 + i);
+      if (!converted_identity.is_success()) return fail("view cache eviction failed");
+    }
+    const auto before_evicted = direct->metrics().input_views_created;
+    {
+      auto revisited = direct->convert_cached(identities.front(), 105);
+      if (!revisited.is_success() || direct->metrics().input_views_created != before_evicted + 1)
+        return fail("input view cache retained more than four identities");
+    }
+    for (std::size_t i = 0; i < kPoolSize; ++i) {
+      auto retained = direct->repeat_cached();
+      if (!retained.is_success()) return fail("direct resize lease failed");
+      leases.push_back(std::move(retained).value());
+    }
+    auto* registered_surface = leases.front().texture();
+    if (!direct->reconfigure_input(800, 600, DXGI_MODE_ROTATION_ROTATE90).is_success()) return fail("direct resize failed");
+    auto resized = make_input_frame(test_device.device.Get(), test_device.context.Get(), 800, 600);
+    if (!resized.is_success() || direct->convert_cached(resized.value(), 1).is_success()) return fail("direct resize lost outstanding leases");
+    leases.erase(leases.begin());
+    {
+      auto resumed = direct->convert_cached(resized.value(), 1);
+      if (!resumed.is_success() || resumed.value().texture() != registered_surface) return fail("direct resize replaced a registered surface");
+    }
+    leases.clear();
+    direct->discard_cached_image();
+    if (direct->repeat_cached().is_success()) return fail("duplication generation retained a canonical image");
+    const auto views_before_recovery = direct->metrics().input_views_created;
+    {
+      auto recovered = direct->convert_cached(resized.value(), 1);
+      if (!recovered.is_success() || direct->metrics().input_views_created != views_before_recovery + 1)
+        return fail("same-size recovery reused a prior-generation input view");
+    }
+    if (!direct->reconfigure_input(kInputWidth, kInputHeight).is_success() || direct->repeat_cached().is_success())
+      return fail("direct reconfiguration reused stale canonical pixels");
+  }
 
   std::optional<ConvertedVideoFrame> first;
   std::optional<ConvertedVideoFrame> second;

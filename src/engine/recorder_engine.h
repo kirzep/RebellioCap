@@ -58,6 +58,7 @@ class IEngineVideoPipeline {
   virtual Result<std::vector<EncodedPacket>> tick(QpcTicks pts,
                                                    bool force_keyframe) = 0;
   virtual Result<std::vector<EncodedPacket>> flush() = 0;
+  [[nodiscard]] virtual NvencRuntimeMetrics metrics() const { return {}; }
 };
 
 class IEngineAudioPipeline {

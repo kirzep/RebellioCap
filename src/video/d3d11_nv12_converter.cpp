@@ -1,6 +1,7 @@
 #include "video/d3d11_nv12_converter.h"
 
 #include <d3d11_1.h>
+#include <dxgi.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -11,6 +12,11 @@
 #include <vector>
 
 namespace rebelliocap {
+bool can_fallback_direct_input(const Error& error, bool before_first_submission) noexcept {
+  return before_first_submission && error.code == "nv12_converter.input_view_creation_failed" &&
+      error.hresult.has_value() && (*error.hresult == static_cast<long>(E_INVALIDARG) ||
+                                    *error.hresult == static_cast<long>(DXGI_ERROR_UNSUPPORTED));
+}
 namespace {
 
 constexpr DXGI_COLOR_SPACE_TYPE kInputColorSpace =
@@ -132,6 +138,14 @@ struct D3d11Nv12Converter::Impl {
   D3d11Nv12RuntimeMetrics metrics;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> input_texture;
   Microsoft::WRL::ComPtr<ID3D11VideoProcessorInputView> input_view;
+  struct InputView {
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+    Microsoft::WRL::ComPtr<ID3D11VideoProcessorInputView> view;
+  };
+  std::vector<InputView> input_views;
+  OutputSlot canonical;
+  bool canonical_valid{false};
+  std::uint64_t canonical_serial{0};
 };
 
 D3d11Nv12Converter::D3d11Nv12Converter(std::unique_ptr<Impl> implementation) noexcept
@@ -281,7 +295,8 @@ Result<std::unique_ptr<D3d11Nv12Converter>> D3d11Nv12Converter::create(
 
   implementation->output_pool = std::make_shared<OutputPoolState>();
   implementation->output_pool->slots.reserve(config.output_pool_size);
-  for (std::size_t index = 0; index < config.output_pool_size; ++index) {
+  const auto allocation_count = config.output_pool_size + (config.direct_nv12_cache ? 1U : 0U);
+  for (std::size_t index = 0; index < allocation_count; ++index) {
     D3D11_TEXTURE2D_DESC texture_description{};
     texture_description.Width = config.output_width;
     texture_description.Height = config.output_height;
@@ -311,7 +326,8 @@ Result<std::unique_ptr<D3d11Nv12Converter>> D3d11Nv12Converter::create(
           "nv12_converter.output_view_creation_failed",
           "Could not bind a pooled NV12 surface as video-processor output.", result));
     }
-    implementation->output_pool->slots.push_back(std::move(slot));
+    if (index == config.output_pool_size) implementation->canonical = std::move(slot);
+    else implementation->output_pool->slots.push_back(std::move(slot));
   }
 
   implementation->video_context->VideoProcessorSetStreamFrameFormat(
@@ -398,6 +414,18 @@ Result<ConvertedVideoFrame> D3d11Nv12Converter::convert_impl(
         "The BGRA frame dimensions differ from the reusable processor configuration."));
   }
   const std::lock_guard conversion_lock(state.conversion_mutex);
+  std::optional<AcquiredOutput> admitted;
+  if (state.config.direct_nv12_cache) {
+    auto free_output = acquire_output(state.output_pool);
+    if (!free_output.is_success()) return Result<ConvertedVideoFrame>::failure(free_output.error());
+    admitted.emplace(std::move(free_output).value());
+    const auto retained = std::find_if(state.input_views.begin(), state.input_views.end(),
+        [&](const Impl::InputView& entry) { return entry.texture.Get() == frame.texture.Get(); });
+    if (retained != state.input_views.end()) {
+      state.input_texture = retained->texture;
+      state.input_view = retained->view;
+    }
+  }
   // Descriptors and device identity are immutable. Retain one input view; the
   // production pipeline writes into one persistent BGRA texture.
   if (state.input_texture.Get() != frame.texture.Get()) {
@@ -431,21 +459,30 @@ Result<ConvertedVideoFrame> D3d11Nv12Converter::convert_impl(
     state.input_view = std::move(input_view);
     state.input_texture = frame.texture;
     ++state.metrics.input_views_created;
+    if (state.config.direct_nv12_cache) {
+      // COM references prevent address reuse; the cache belongs to this
+      // processor generation and is discarded transactionally on reconfigure.
+      if (state.input_views.size() == 4) state.input_views.erase(state.input_views.begin());
+      state.input_views.push_back({state.input_texture, state.input_view});
+    }
     // Revisions apply to one input texture, including when its COM address
     // would otherwise be reused. Our retained reference prevents that reuse.
-    for (auto& slot : state.output_pool->slots) slot.revision.reset();
+    if (!state.config.direct_nv12_cache)
+      for (auto& slot : state.output_pool->slots) slot.revision.reset();
   }
 
   // Preserve the capture lease through GPU submission. Output ownership is
   // separate: only an unleased NV12 surface can be handed to another encode.
   const auto input_lifetime = frame.lifetime;
-  auto output_result = acquire_output(state.output_pool);
+  auto output_result = admitted.has_value()
+      ? Result<AcquiredOutput>::success(std::move(*admitted))
+      : acquire_output(state.output_pool);
   if (!output_result.is_success()) {
     return Result<ConvertedVideoFrame>::failure(std::move(output_result).error());
   }
   auto output = std::move(output_result).value();
   auto& slot = state.output_pool->slots[output.index];
-  if (revision.has_value() && slot.revision == revision) {
+  if (!state.config.direct_nv12_cache && revision.has_value() && slot.revision == revision) {
     ++state.metrics.cached_conversions;
     return Result<ConvertedVideoFrame>::success(
         ConvertedVideoFrame(std::move(output.texture), std::move(output.lease)));
@@ -455,16 +492,48 @@ Result<ConvertedVideoFrame> D3d11Nv12Converter::convert_impl(
   stream.Enable = TRUE;
   stream.pInputSurface = state.input_view.Get();
   const HRESULT result = state.video_context->VideoProcessorBlt(
-      state.processor.Get(), output.view.Get(), 0, 1, &stream);
+      state.processor.Get(), state.config.direct_nv12_cache ? state.canonical.view.Get() : output.view.Get(), 0, 1, &stream);
   if (FAILED(result)) {
+    state.canonical_valid = false;
     return Result<ConvertedVideoFrame>::failure(hresult_error(
         "nv12_converter.video_process_failed",
         "The GPU rejected BGRA-to-NV12 video processing submission.", result));
   }
   ++state.metrics.processing_submissions;
-  slot.revision = revision;
+  if (state.config.direct_nv12_cache) {
+    state.canonical_valid = true;
+    ++state.canonical_serial;
+    state.context->CopyResource(output.texture.Get(), state.canonical.texture.Get());
+    slot.revision = state.canonical_serial;
+  } else slot.revision = revision;
   return Result<ConvertedVideoFrame>::success(
       ConvertedVideoFrame(std::move(output.texture), std::move(output.lease)));
+}
+Result<ConvertedVideoFrame> D3d11Nv12Converter::repeat_cached() {
+  auto& state = *implementation_;
+  const std::lock_guard lock(state.conversion_mutex);
+  if (!state.config.direct_nv12_cache || !state.canonical_valid)
+    return Result<ConvertedVideoFrame>::failure(converter_error(
+        "nv12_converter.no_cached_image", "No owned canonical NV12 image is available."));
+  auto acquired = acquire_output(state.output_pool);
+  if (!acquired.is_success()) return Result<ConvertedVideoFrame>::failure(acquired.error());
+  auto output = std::move(acquired).value();
+  auto& slot = state.output_pool->slots[output.index];
+  if (slot.revision != state.canonical_serial) {
+    state.context->CopyResource(output.texture.Get(), state.canonical.texture.Get());
+    slot.revision = state.canonical_serial;
+  }
+  ++state.metrics.cached_conversions;
+  return Result<ConvertedVideoFrame>::success(ConvertedVideoFrame(std::move(output.texture), std::move(output.lease)));
+}
+void D3d11Nv12Converter::discard_cached_image() {
+  auto& state = *implementation_;
+  const std::lock_guard lock(state.conversion_mutex);
+  state.canonical_valid = false;
+  state.input_views.clear();
+  state.input_view.Reset();
+  state.input_texture.Reset();
+  for (auto& slot : state.output_pool->slots) slot.revision.reset();
 }
 D3d11Nv12RuntimeMetrics D3d11Nv12Converter::metrics() {
   const std::lock_guard conversion_lock(implementation_->conversion_mutex);

@@ -89,7 +89,8 @@ pub fn decode_event(bytes: &[u8]) -> Result<Event> {
     {
         return Err("protocol.invalid_frame".into());
     }
-    // Deriving Deserialize on each nested structure rejects duplicate fields as well as unknown keys.
+    // Typed contract structures reject duplicate/unknown fields. The optional
+    // diagnostics object is opaque telemetry bounded by MAX_FRAME, not controls.
     let e: Event =
         serde_json::from_slice(bytes).map_err(|e| format!("protocol.invalid_event: {e}"))?;
     if e.protocol_version != 1 || e.request_id.as_deref().is_some_and(|id| !valid_id(id)) {

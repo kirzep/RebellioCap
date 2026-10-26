@@ -1,11 +1,14 @@
 .library { min-width: 0; display: grid; gap: 20px; }
+.feedback { block-size:48px; min-width:0; overflow:auto; scrollbar-gutter:stable; }
+.feedback:empty { visibility:hidden; }
 .pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .pagination span { color: var(--text-secondary); font-size: 13px; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .header h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .header p { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
 .search { display: flex; align-items: center; gap: 10px; width: min(100%, 360px); color: var(--text-secondary); padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
-.search input { background: transparent; border: 0; outline: none; width: 100%; font-size: 13px; }
+.search input { min-width: 0; background: transparent; border: 0; outline: none; width: 100%; font-size: 13px; }
+.search > svg { flex-shrink: 0; }
 .search:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
 .empty { display: grid; justify-items: center; text-align: center; padding: 40px 24px; border: 1px dashed var(--border); border-radius: 12px; color: var(--text-secondary); }
 .empty svg { color: var(--muted-foreground); margin-bottom: 12px; }
@@ -49,8 +52,9 @@
 .viewSwitch button { padding: 8px 12px; border-radius: 6px; font-size: 13px; color: var(--text-secondary); }
 .viewSwitch button[aria-pressed='true'] { background: #ffffff12; color: var(--text-primary); }
 .viewSwitch button:focus-visible, .back:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.back { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
-.back span { color: var(--text-primary); font-weight: 600; }
+.back { display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; color: var(--text-secondary); font-size: 13px; }
+.back svg { flex-shrink: 0; }
+.back span { min-width: 0; overflow-wrap: anywhere; text-align: start; color: var(--text-primary); font-weight: 600; }
 .folderTitle { display: flex; align-items: center; gap: 9px; margin: 10px 0 4px; min-width: 0; }
 .folderTitle h3 { margin: 0; }
 .folderIcon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; color: var(--text-secondary); }

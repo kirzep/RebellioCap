@@ -19,6 +19,13 @@ endfunction()
 add_custom_target(rebelliocap_tests)
 
 find_package(Catch2 CONFIG REQUIRED)
+add_executable(rebelliocap_pipeline_telemetry_test unit/pipeline_telemetry_test.cpp ../src/core/pipeline_telemetry.cpp)
+target_include_directories(rebelliocap_pipeline_telemetry_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(rebelliocap_pipeline_telemetry_test PRIVATE Catch2::Catch2WithMain advapi32)
+rebelliocap_add_test(NAME pipeline_telemetry COMMAND rebelliocap_pipeline_telemetry_test LABELS unit)
+add_executable(rebelliocap_duplication_policy_test unit/duplication_policy_test.cpp)
+target_link_libraries(rebelliocap_duplication_policy_test PRIVATE rebelliocap_core Catch2::Catch2WithMain)
+rebelliocap_add_test(NAME duplication_policy COMMAND rebelliocap_duplication_policy_test LABELS unit)
 add_executable(rebelliocap_recording_name_test unit/recording_name_test.cpp)
 target_link_libraries(rebelliocap_recording_name_test PRIVATE rebelliocap_core Catch2::Catch2WithMain)
 rebelliocap_add_test(NAME recording_name COMMAND rebelliocap_recording_name_test LABELS unit)
@@ -254,6 +261,19 @@ rebelliocap_add_test(
   COMMAND ${REBELLIOCAP_PWSH_EXECUTABLE} -NoProfile -NonInteractive -File
           ${PROJECT_SOURCE_DIR}/tests/scripts/performance_run_order_test.ps1
   LABELS unit)
+foreach(script_test IN ITEMS performance_build_identity performance_source_archive)
+  rebelliocap_add_test(
+    NAME ${script_test}
+    COMMAND ${REBELLIOCAP_PWSH_EXECUTABLE} -NoProfile -NonInteractive -File
+            ${PROJECT_SOURCE_DIR}/tests/scripts/${script_test}_test.ps1
+    LABELS unit)
+endforeach()
+rebelliocap_add_test(NAME product_identity_policy
+  COMMAND ${REBELLIOCAP_PWSH_EXECUTABLE} -NoProfile -NonInteractive -File
+          ${PROJECT_SOURCE_DIR}/tests/scripts/product_identity_test.ps1 LABELS unit)
+rebelliocap_add_test(NAME performance_experiments
+  COMMAND ${REBELLIOCAP_PWSH_EXECUTABLE} -NoProfile -NonInteractive -File
+          ${PROJECT_SOURCE_DIR}/tests/scripts/performance_experiments_test.ps1 LABELS unit)
 rebelliocap_add_test(
   NAME verify_milestone_rejects_not_run
   COMMAND ${REBELLIOCAP_PWSH_EXECUTABLE} -NoProfile -NonInteractive -File
@@ -276,5 +296,9 @@ rebelliocap_add_test(
   LABELS unit)
 
 add_executable(rebelliocap_packet_budget_policy_test unit/packet_budget_policy_test.cpp)
+add_executable(rebelliocap_pcm_clock_aligner_test unit/pcm_clock_aligner_test.cpp)
+target_link_libraries(rebelliocap_pcm_clock_aligner_test PRIVATE rebelliocap_core Catch2::Catch2WithMain)
+rebelliocap_add_test(NAME pcm_clock_aligner COMMAND rebelliocap_pcm_clock_aligner_test LABELS unit)
+rebelliocap_copy_ffmpeg_runtime(rebelliocap_pcm_clock_aligner_test)
 target_link_libraries(rebelliocap_packet_budget_policy_test PRIVATE rebelliocap_core Catch2::Catch2WithMain)
 rebelliocap_add_test(NAME packet_budget_policy COMMAND rebelliocap_packet_budget_policy_test LABELS unit)

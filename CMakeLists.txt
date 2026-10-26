@@ -18,7 +18,15 @@ include(cmake/CompilerWarnings.cmake)
 include(cmake/CopyRuntimeDependencies.cmake)
 
 find_package(nlohmann_json CONFIG REQUIRED)
+# Older build caches found only the mux libraries. Refresh discovery once when
+# adding the already-installed soft-resampling component.
+if(NOT FFMPEG_libswresample_LIBRARY)
+  unset(FFMPEG_FOUND CACHE)
+endif()
 find_package(FFMPEG REQUIRED)
+if(NOT FFMPEG_libswresample_LIBRARY)
+  message(FATAL_ERROR "FFmpeg libswresample is required for audio clock alignment")
+endif()
 
 add_library(rebelliocap_core STATIC
   src/cli/arguments.cpp
@@ -27,6 +35,7 @@ add_library(rebelliocap_core STATIC
   src/audio/audio_mixer.cpp
   src/audio/pcm_windowizer.cpp
   src/audio/pcm_normalizer.cpp
+  src/audio/pcm_clock_aligner.cpp
   src/audio/mf_aac_encoder.cpp
   src/audio/wasapi_capture_source.cpp
   src/audio/wasapi_pcm.cpp
@@ -36,6 +45,7 @@ add_library(rebelliocap_core STATIC
   src/capture/monitor_catalog.cpp
   src/core/diagnostic_writer.cpp
   src/core/qpc_clock.cpp
+  src/core/pipeline_telemetry.cpp
   src/engine/recording_name.cpp
   src/engine/recorder_engine.cpp
   src/engine/game_category.cpp
@@ -75,6 +85,7 @@ target_link_libraries(rebelliocap_core PUBLIC
   wmcodecdspuuid
   ole32
   avrt
+  advapi32
   user32)
 rebelliocap_enable_warnings(rebelliocap_core)
 
@@ -104,6 +115,19 @@ add_subdirectory(tests)
 add_executable(rebelliocap_game_catalog_probe tools/game-catalog-probe.cpp)
 target_link_libraries(rebelliocap_game_catalog_probe PRIVATE rebelliocap_core)
 
+# Offline developer workload; not packaged as an application runtime component.
+add_executable(rebelliocap_avio_probe tools/avio-probe.cpp)
+target_link_libraries(rebelliocap_avio_probe PRIVATE rebelliocap_core)
+target_include_directories(rebelliocap_avio_probe SYSTEM PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_compile_options(rebelliocap_avio_probe PRIVATE /utf-8)
+rebelliocap_enable_warnings(rebelliocap_avio_probe)
+rebelliocap_copy_ffmpeg_runtime(rebelliocap_avio_probe)
+
+add_executable(rebelliocap_duplication_api_probe tools/duplication-api-probe.cpp)
+target_link_libraries(rebelliocap_duplication_api_probe PRIVATE rebelliocap_core)
+rebelliocap_enable_warnings(rebelliocap_duplication_api_probe)
+rebelliocap_copy_ffmpeg_runtime(rebelliocap_duplication_api_probe)
+
 target_include_directories(rebelliocap_core SYSTEM PRIVATE ${FFMPEG_INCLUDE_DIRS})
-# Link only the mux/demux, packet and utility libraries; no encoder API is used.
-target_link_libraries(rebelliocap_core PUBLIC ${FFMPEG_libavformat_LIBRARY} ${FFMPEG_libavcodec_LIBRARY} ${FFMPEG_libavutil_LIBRARY})
+# Mux/demux/packet utilities and soft audio-clock resampling; no FFmpeg encoder API.
+target_link_libraries(rebelliocap_core PUBLIC ${FFMPEG_libavformat_LIBRARY} ${FFMPEG_libavcodec_LIBRARY} ${FFMPEG_libavutil_LIBRARY} ${FFMPEG_libswresample_LIBRARY})

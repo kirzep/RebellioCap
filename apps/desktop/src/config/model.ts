@@ -117,6 +117,8 @@ export interface EngineMetrics {
   replayRetainedSeconds?: number;
   replayMemoryLimited?: boolean;
   replayMemoryDrops?: number;
+  /** Optional native pipeline telemetry; experimental keys are not UI settings. */
+  diagnostics?: Record<string, unknown>;
 }
 
 export interface NativeError {

@@ -423,6 +423,17 @@ int main() {
   };
 
   const auto submit_one = [&](bool force_keyframe) -> std::optional<std::string> {
+    // Functional frames must be accepted, rather than silently counted after
+    // a nonblocking saturation drop. This wait belongs only to the test feeder.
+    const auto admission_deadline = clock.now() + 2 * clock.frequency();
+    for (;;) {
+      auto admission = encoder->prepare_frame(force_keyframe);
+      if (!admission.is_success()) return "NVENC admission failed: " + admission.error().code;
+      if (const auto error = observe_packets(std::move(admission.value().completed)); error) return error;
+      if (admission.value().can_submit) break;
+      if (clock.now() >= admission_deadline) return "NVENC test feeder could not obtain capacity within two seconds";
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     auto conversion = converter->convert(input);
     if (!conversion.is_success()) {
       return "NV12 conversion failed during encode: " + conversion.error().code;
@@ -601,6 +612,10 @@ int main() {
       {"spatial_aq", accepted.spatial_aq_enabled},
       {"high_profile_sps", *profile_idc == 100U},
       {"preset_p5_accepted", accepted.preset_p5},
+      {"preset_number", accepted.preset_number},
+      {"multipass", accepted.multipass},
+      {"rate_control", accepted.rate_control},
+      {"target_quality", accepted.target_quality},
       {"high_quality_tuning_accepted", accepted.high_quality_tuning},
       {"vbr_accepted", accepted.vbr},
       {"annex_b", true},

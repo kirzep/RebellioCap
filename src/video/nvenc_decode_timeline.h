@@ -5,13 +5,14 @@
 #include "core/qpc_clock.h"
 
 namespace rebelliocap::detail {
-// Decode order trails presentation order by the configured two B frames.
+// Decode order trails presentation order by the configured B-frame depth.
 class NvencDecodeTimeline {
  public:
+  explicit NvencDecodeTimeline(std::uint32_t depth = 2) : depth_(depth) {}
   void submit(QpcTicks pts, QpcTicks duration) {
     if (!initialized_) {
-      timestamps_.push_back(pts - 2 * duration);
-      timestamps_.push_back(pts - duration);
+      for (auto offset = depth_; offset > 0; --offset)
+        timestamps_.push_back(pts - static_cast<QpcTicks>(offset) * duration);
       initialized_ = true;
     }
     // Shift submitted timestamps by two frames, not two nominal durations.
@@ -27,5 +28,6 @@ class NvencDecodeTimeline {
  private:
   std::deque<QpcTicks> timestamps_;
   bool initialized_{};
+  std::uint32_t depth_;
 };
 }

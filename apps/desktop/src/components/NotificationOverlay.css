@@ -3,7 +3,10 @@ html.notification-surface, .notification-surface body, .notification-surface #ro
   min-width: 0;
   pointer-events: none;
 }
-.notification-surface #root { padding: 12px; }
+.notification-surface #root { padding: 0; width: 100vw; height: 100vh; overflow: hidden; position: relative; }
+.capture-notification-position, .capture-indicator-position { position: absolute; }
+.capture-indicator { box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: #b9d5bd; background: #202124dc; border: 1px solid #ffffff20; }
+.capture-indicator--recording { color: #ed9a94; }
 .capture-notification {
   --accent: #d8d5cd;
   position: relative;
@@ -76,3 +79,5 @@ html.notification-surface, .notification-surface body, .notification-surface #ro
 @media (prefers-reduced-motion: reduce) {
   .capture-notification, .capture-notification__text { animation-duration: 1ms; animation-delay: 0ms; }
 }
+
+.capture-notification--preview, .capture-notification--preview .capture-notification__text { animation: none; }
