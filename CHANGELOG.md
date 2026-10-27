@@ -2,7 +2,9 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
-## 0.1.18
+## 0.1.19
+
+Version 0.1.18 was tagged but not published; this release includes the reviewed overlay changes and scheduler test corrections.
 
 ### Added
 
@@ -19,6 +21,8 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 - Make recording work more resilient under load and report stalled encoder sessions clearly. Optional capture experiments remain off by default.
 
 ### Fixed
+
+- Wait for the recording controller to accept packets before advancing the virtual test clock. Keep the virtual 30-minute schedule check independent of shared-runner speed.
 
 - Create the overlay editor outside the Windows synchronous command dispatcher and match the shared WebView2 browser arguments to prevent hangs and window creation errors. Keep the main window size and position intact.
 - Close the editor before showing saved or discarded feedback on a transparent desktop overlay, then restore settings. Keep Escape available if editor settings fail to load.

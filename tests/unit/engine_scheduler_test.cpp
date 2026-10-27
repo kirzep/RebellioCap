@@ -422,7 +422,8 @@ TEST_CASE("virtual 30 minute schedule has exact frame count and no accumulated d
 
   REQUIRE(engine.start(config()).is_success());
   clock->advance_through(static_cast<QpcTicks>(frame_count - 1) * 1'000);
-  REQUIRE(video->wait_for_frames(frame_count, 10s));
+  // This checks virtual timestamps, not the speed of a shared CI runner.
+  REQUIRE(video->wait_for_frames(frame_count, 60s));
 
   const auto timestamps = video->timestamps();
   const auto keyframes = video->forced_keyframes();
@@ -1240,6 +1241,14 @@ TEST_CASE("continuous recording keeps the hotkey category through a slow open an
   foreground = L"Desktop";
   continuous_muxer->release_open();
   REQUIRE(continuous_muxer->wait_opened());
+  // open() signals before the controller enables packet acceptance. Do not
+  // consume the virtual recording interval while start() is still finishing.
+  const auto ready_deadline = std::chrono::steady_clock::now() + 10s;
+  while (!engine.metrics().continuous_recording_active &&
+         std::chrono::steady_clock::now() < ready_deadline) {
+    std::this_thread::sleep_for(1ms);
+  }
+  REQUIRE(engine.metrics().continuous_recording_active);
   clock->advance_through(frequency);
   REQUIRE(video->wait_for_frames(61, 5s));
   REQUIRE(engine.toggle_continuous_recording().is_success());
