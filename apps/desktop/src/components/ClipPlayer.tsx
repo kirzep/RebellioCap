@@ -212,7 +212,7 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
             <div className={styles.transportEnd}>
               {media.tracks.length > 0 && <button ref={soundButton} className={styles.iconButton} data-active={mixerOpen} onClick={() => setMixerOpen(open => !open)}
                 aria-label={t("Звук и дорожки")} aria-expanded={mixerOpen} aria-controls={soundId} title={t("Звук и дорожки")}>{activeTracks ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>}
-              <label className={styles.speed}><NativeSelect aria-label={t("Скорость воспроизведения")} value={speed} onChange={event => changeSpeed(Number(event.target.value))}>{[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <NativeSelectOption key={value} value={value}>{value}×</NativeSelectOption>)}</NativeSelect></label>
+              <label className={styles.speed}><NativeSelect className={styles.speedTrigger} contentClassName={styles.speedMenu} aria-label={t("Скорость воспроизведения")} value={speed} onChange={event => changeSpeed(Number(event.target.value))}>{[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <NativeSelectOption key={value} value={value}>{value}×</NativeSelectOption>)}</NativeSelect></label>
               <button className={styles.iconButton} onClick={() => void toggleFullscreen()} aria-label={fullscreen ? t('Выйти из полноэкранного режима') : t('Полноэкранный режим')} title={t("Полноэкранный режим · F")}>{fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
             </div>
           </div>

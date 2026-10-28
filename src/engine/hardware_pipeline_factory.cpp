@@ -152,7 +152,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     }
     auto result = std::shared_ptr<HardwareVideoSession>(new HardwareVideoSession(
         std::move(device), std::move(capture), std::move(converter_result).value(),
-        std::move(encoder_result).value(), std::move(cache), mode.Width, mode.Height, monitor, clock, options));
+        std::move(encoder_result).value(), std::move(cache), mode.Width, mode.Height, arguments.fps, monitor, clock, options));
     return Result<std::shared_ptr<HardwareVideoSession>>::success(std::move(result));
   }
 
@@ -164,7 +164,13 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     if (!admission.value().can_submit) return Result<std::vector<EncodedPacket>>::success(std::move(completed));
     auto acquired = [&] {
       PipelineTimingScope timing(options_.telemetry.get(), PipelineStage::CaptureAcquireCpu, content_revision_);
-      return capture_->next_frame(have_frame_ ? 0ms : 100ms);
+      // ReleaseFrame is deferred until this acquisition. Windows may need a
+      // short asynchronous desktop copy after that release; a zero-time poll
+      // then times out on alternating ticks even while the desktop animates
+      // above 60 Hz, encoding only 30 fresh images into a 60 FPS stream. Allow
+      // a bounded wait for that copy, still reusing the cache on a static screen.
+      // Reserve at least half the frame interval for conversion and encoding.
+      return capture_->next_frame(have_frame_ ? capture_wait_ : 100ms);
     }();
     if (!acquired.is_success()) return Result<std::vector<EncodedPacket>>::failure(acquired.error());
     if (capture_->suspended()) {
@@ -286,12 +292,14 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
                         std::unique_ptr<D3d11Nv12Converter> converter,
                         std::unique_ptr<NvencEncoder> encoder,
                         Microsoft::WRL::ComPtr<ID3D11Texture2D> cache,
-                        std::uint32_t width, std::uint32_t height,
+                        std::uint32_t width, std::uint32_t height, std::uint32_t fps,
                         const MonitorInfo& monitor, QpcClock& clock, HardwareVideoOptions options = {})
       : device_(std::move(device)),
         converter_(std::move(converter)), encoder_(std::move(encoder)),
         cache_(std::move(cache)), input_width_(width), input_height_(height),
-        cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)) {
+        cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)),
+        capture_wait_(std::chrono::milliseconds(
+            (std::max)(1U, (std::min)(8U, 500U / fps)))) {
     update_capture_diagnostics(*capture);
     const auto modern = options_.prefer_duplicate_output1;
     capture_ = std::make_unique<RecoveringCaptureSource>(std::move(capture),
@@ -333,6 +341,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   std::uint64_t content_revision_{0};
   bool pending_keyframe_{false};
   HardwareVideoOptions options_;
+  std::chrono::milliseconds capture_wait_;
   CaptureSessionDiagnostics capture_diagnostics_;
   std::uint64_t new_image_ticks_{0}, repeated_image_ticks_{0}, no_image_ticks_{0};
 };

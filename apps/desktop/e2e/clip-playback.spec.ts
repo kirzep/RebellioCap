@@ -6,6 +6,50 @@ import { join, resolve } from 'node:path';
 
 if (process.env.PLAYWRIGHT_CHANNEL) test.use({ channel: process.env.PLAYWRIGHT_CHANNEL });
 
+for (const width of [1120, 560]) {
+  test(`playback speed menu keeps every rate on one line at ${width}px`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.setViewportSize({ width, height: 780 });
+    await page.route('**/speed-menu-qa', route => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><meta charset="utf-8"><title>Playback speed QA</title></head><body><div id="root"></div>
+        <script type="module">import RefreshRuntime from '/@react-refresh'; RefreshRuntime.injectIntoGlobalHook(window);
+        window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>type=>type;window.__vite_plugin_react_preamble_installed__=true;</script>
+        <script type="module">
+        import React from '/node_modules/.vite/deps/react.js';import ReactDOM from '/node_modules/.vite/deps/react-dom_client.js';
+        import { ClipPlayer } from '/src/components/ClipPlayer.tsx';import '/src/styles/global.css';
+        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(ClipPlayer,{
+          name:'Speed menu sample',media:{id:'speed-qa',video:'/e2e/fixtures/editor-sample.mp4',tracks:[]},onClose:()=>{}
+        }));</script></body></html>`,
+    }));
+    await page.goto('/speed-menu-qa');
+    await expect(page).toHaveTitle('Playback speed QA');
+    await page.locator('video').evaluate((video: HTMLVideoElement) => video.pause());
+    const speed = page.getByRole('combobox', { name: 'Скорость воспроизведения' });
+    await speed.click();
+    const options = page.getByRole('option');
+    await expect(options).toHaveCount(6);
+    const geometry = await options.evaluateAll(elements => elements.map(element => {
+      const label = element.querySelector('span:last-child')!;
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const box = element.getBoundingClientRect();
+      const text = range.getBoundingClientRect();
+      return { lines: new Set(Array.from(range.getClientRects(), rect => Math.round(rect.top))).size, height: box.height, contained: text.left >= box.left && text.right <= box.right };
+    }));
+    expect(geometry).toEqual(Array.from({ length: 6 }, () => ({ lines: 1, height: expect.any(Number), contained: true })));
+    expect(geometry.every(option => option.height <= 44)).toBe(true);
+    await expect(page.getByRole('option', { name: '2×', exact: true })).toBeInViewport();
+    await page.screenshot({ path: test.info().outputPath('speed-menu.png'), animations: 'disabled' });
+    await page.getByRole('option', { name: '1.25×', exact: true }).click();
+    await expect(speed).toHaveText('1.25×');
+    await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.playbackRate)).toBe(1.25);
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('plays a real clip with separate synchronized audio and releases it on close', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

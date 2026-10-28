@@ -2,6 +2,17 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.20
+
+### Fixed
+
+- Prevent half-rate desktop capture: allow Windows to finish preparing the next image before reusing the previous frame. Previously, a 60 FPS recording could contain only about 30 fresh images per second.
+- Keep playback speed options on one line in a wider menu, with room for the selected-rate checkmark.
+
+### Added
+
+- Add an interactive hardware regression check that measures fresh desktop images as well as encoded frames against an independently animated window.
+
 ## 0.1.19
 
 Version 0.1.18 was tagged but not published; this release includes the reviewed overlay changes and scheduler test corrections.

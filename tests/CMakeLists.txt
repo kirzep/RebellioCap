@@ -169,6 +169,12 @@ if(REBELLIOCAP_ENABLE_HARDWARE_TESTS)
     LABELS hardware)
   set_tests_properties(dxgi_capture PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 90)
 
+  add_executable(rebelliocap_capture_cadence_test hardware/capture_cadence_test.cpp)
+  target_link_libraries(rebelliocap_capture_cadence_test PRIVATE rebelliocap_core dwmapi)
+  rebelliocap_add_test(NAME capture_cadence COMMAND rebelliocap_capture_cadence_test LABELS "hardware;performance")
+  set_tests_properties(capture_cadence PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+  rebelliocap_copy_ffmpeg_runtime(rebelliocap_capture_cadence_test)
+
   add_executable(rebelliocap_hotkey_passthrough_test
     hardware/hotkey_passthrough_test.cpp)
   target_link_libraries(rebelliocap_hotkey_passthrough_test PRIVATE

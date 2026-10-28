@@ -250,3 +250,13 @@ manual check in the packaged Windows application.
 Interactive performance scene gates continue pumping engine protocol while
 waiting for Enter. A bounded focus handoff precedes timing; focus loss during
 measurement invalidates that run. Automated fixtures cover these paths.
+
+The opt-in hardware/performance CTest `capture_cadence` opens a small, independently
+animated desktop window for six seconds and runs the production video pipeline
+at 60 FPS. It requires at least 85% fresh images and submitted frames, and drains
+every submitted frame. It skips when capture/NVENC is unavailable or the desktop
+stimulus cannot sustain 58 updates/second. Run with
+`scripts/invoke-dev.ps1 -Command @('ctest', '--test-dir', 'build/windows-hardware-release', '-R', '^capture_cadence$', '--output-on-failure')`.
+Packet FPS alone is insufficient: before the fix, this test encoded all 360
+frames but acquired only 180 new images on a 144 Hz desktop. This short cadence
+check does not replace game-load or long-session A/V acceptance.
