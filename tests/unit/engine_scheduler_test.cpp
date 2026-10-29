@@ -315,6 +315,8 @@ TEST_CASE("continuous recording repeatedly wakes idle capture and returns to idl
 
 class LateWakeClock final : public IEngineClock {
  public:
+  explicit LateWakeClock(std::vector<QpcTicks> delays = {2'500})
+      : delays_(std::move(delays)) {}
   QpcTicks now() const noexcept override { return clock_.now(); }
   QpcTicks frequency() const noexcept override { return clock_.frequency(); }
   bool wait_until(QpcTicks deadline, std::stop_token stop) override {
@@ -324,9 +326,10 @@ class LateWakeClock final : public IEngineClock {
     }
     condition_.notify_all();
     if (!clock_.wait_until(deadline, stop)) return false;
-    clock_.elapse(2'500); // A loaded system wakes the capture worker after its deadline.
+    clock_.elapse(delays_[wake_++ % delays_.size()]);
     return true;
   }
+  void advance_through(QpcTicks limit) { clock_.advance_through(limit); }
   bool wait_for_second_deadline() {
     std::unique_lock lock(mutex_);
     return condition_.wait_for(lock, 5s, [&] { return deadlines_ >= 2; });
@@ -336,6 +339,8 @@ class LateWakeClock final : public IEngineClock {
   std::mutex mutex_;
   std::condition_variable condition_;
   std::size_t deadlines_{0};
+  std::vector<QpcTicks> delays_;
+  std::size_t wake_{0};
 };
 
 class PriorityProbeVideoPipeline final : public IEngineVideoPipeline {
@@ -1140,7 +1145,25 @@ TEST_CASE("hotkey dispatches a bounded save without pausing capture") {
   REQUIRE(metrics.video_ticks >= 361);
 }
 
-TEST_CASE("late capture wakeups cannot label a new image with an old video timestamp") {
+TEST_CASE("sub-frame wake jitter does not change the video presentation grid") {
+  auto clock = std::make_shared<LateWakeClock>(
+      std::vector<QpcTicks>{100, 650, 300, 50, 400});
+  auto video = std::make_shared<FakeVideoEncoder>();
+  RecorderEngine engine({.clock = clock, .video = video,
+      .hotkey = std::make_shared<FakeHotkeySource>(), .muxer = std::make_shared<BlockingMuxer>()});
+  REQUIRE(engine.start(config()).is_success());
+  clock->advance_through(30'000);
+  REQUIRE(video->wait_for_frames(31, 5s));
+  REQUIRE(engine.stop().is_success());
+  const auto timestamps = video->timestamps();
+  REQUIRE(timestamps.size() == 31);
+  for (std::size_t index = 0; index < timestamps.size(); ++index) {
+    CHECK(timestamps[index] == static_cast<QpcTicks>(index) * 1'000);
+  }
+  CHECK(engine.metrics().missed_video_deadlines == 0);
+}
+
+TEST_CASE("multi-frame wake delays stay on the video grid without compressing elapsed time") {
   auto clock = std::make_shared<LateWakeClock>();
   auto video = std::make_shared<FakeVideoEncoder>();
   RecorderEngine engine({.clock = clock, .video = video,
@@ -1150,7 +1173,7 @@ TEST_CASE("late capture wakeups cannot label a new image with an old video times
   REQUIRE(clock->wait_for_second_deadline());
   REQUIRE(engine.stop().is_success());
   const auto timestamps = video->timestamps();
-  REQUIRE(timestamps.front() == 2'500);
+  REQUIRE(timestamps.front() == 2'000);
   REQUIRE(engine.metrics().missed_video_deadlines == 2);
 }
 

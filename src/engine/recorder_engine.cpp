@@ -1,6 +1,7 @@
 #include "engine/recorder_engine.h"
 #include "engine/packet_budget_policy.h"
 #include "engine/recording_name.h"
+#include "video/video_frame_grid.h"
 
 #include <atomic>
 #include <algorithm>
@@ -84,14 +85,6 @@ QpcTicks seconds_to_ticks(std::chrono::seconds value, QpcTicks frequency) {
     return (std::numeric_limits<QpcTicks>::max)();
   }
   return seconds * frequency;
-}
-
-QpcTicks frame_deadline(QpcTicks origin, std::uint64_t frame_index,
-                        std::uint32_t fps, QpcTicks frequency) {
-  const auto whole_seconds = frame_index / fps;
-  const auto partial_frames = frame_index % fps;
-  return origin + static_cast<QpcTicks>(whole_seconds) * frequency +
-         static_cast<QpcTicks>(partial_frames) * frequency / fps;
 }
 
 }  // namespace
@@ -340,18 +333,24 @@ struct RecorderEngine::Impl {
     }
     const auto origin = dependencies.clock->now();
     const auto frequency = dependencies.clock->frequency();
+    const VideoFrameGrid presentation(origin, config.fps, frequency);
     const std::uint64_t keyframe_interval =
         static_cast<std::uint64_t>(config.fps) * config.gop_seconds;
     std::uint64_t next_keyframe_frame = 0;
     for (std::uint64_t frame = 0; !stop.stop_requested();) {
-      const auto deadline = frame_deadline(origin, frame, config.fps, frequency);
+      const auto deadline = presentation.at(frame);
       if (!dependencies.clock->wait_until(deadline, stop)) {
         break;
       }
+      const auto wake = dependencies.clock->now();
+      // Ignore sub-frame wake jitter, but never stamp a capture several frames
+      // late with an old deadline: retain those missed slots in media time.
+      const auto current_frame = (std::max)(frame, presentation.index_at(wake));
+      missed_video_deadlines += current_frame - frame;
+      frame = current_frame;
       const auto correlation = (static_cast<std::uint64_t>(epoch) << 32) |
           (frame & 0xffffffffULL);
       if (config.pipeline_telemetry && config.pipeline_telemetry->enabled()) {
-        const auto wake = dependencies.clock->now();
         const auto late_ticks = wake > deadline ? wake - deadline : 0;
         const auto late_us = static_cast<std::uint64_t>(
             static_cast<long double>(late_ticks) * 1'000'000.0L / frequency);
@@ -365,12 +364,11 @@ struct RecorderEngine::Impl {
       const bool replay_keyframe = replay_keyframe_requested.exchange(false);
       const bool force_keyframe = frame >= next_keyframe_frame ||
           recording_keyframe || replay_keyframe;
-      // A deadline schedules work; it is not the time of the acquired image.
-      // If Windows wakes us late, stamping that image with the old deadline
-      // makes video content run ahead of QPC-stamped WASAPI audio.
+      // The pipeline receives the current presentation slot. Acquisition may
+      // advance it by whole slots, never by arbitrary sub-frame QPC jitter.
       auto packets = [&] {
         PipelineTimingScope timing(config.pipeline_telemetry.get(), PipelineStage::VideoTickCpu, correlation);
-        return dependencies.video->tick(dependencies.clock->now(), force_keyframe);
+        return dependencies.video->tick(presentation.at(frame), force_keyframe);
       }();
       if (!packets.is_success()) {
         ++pipeline_errors;
@@ -389,7 +387,7 @@ struct RecorderEngine::Impl {
       ++frame;
       const auto completed_at = dependencies.clock->now();
       while (!stop.stop_requested() &&
-             frame_deadline(origin, frame, config.fps, frequency) < completed_at) {
+             presentation.at(frame) < completed_at) {
         ++missed_video_deadlines;
         ++frame;
       }

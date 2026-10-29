@@ -2,6 +2,17 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.21
+
+### Fixed
+
+- Improve recording smoothness at 60 FPS by keeping frame presentation times evenly spaced instead of including capture and scheduling jitter.
+- Preserve elapsed time across delayed capture and missed frames without accumulating video timing drift against audio.
+
+### Added
+
+- Add regression coverage for frame pacing, including a hardware check of presentation timestamps.
+
 ## 0.1.20
 
 ### Fixed

@@ -2,10 +2,12 @@
 #include <dwmapi.h>
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <future>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -82,13 +84,16 @@ int main() {
   const auto frequency = dependencies.value().clock->frequency();
   const auto first_present = presents.load();
   constexpr unsigned ticks = 360;
+  std::vector<QpcTicks> presentation;
   for (unsigned tick = 0; tick < ticks; ++tick) {
-    dependencies.value().clock->wait_until(origin + tick * frequency / 60, {});
-    auto packets = pipeline->tick(dependencies.value().clock->now(), tick == 0);
+    const auto scheduled = origin + tick * frequency / 60;
+    dependencies.value().clock->wait_until(scheduled, {});
+    auto packets = pipeline->tick(scheduled, tick == 0);
     if (!packets.is_success()) {
       std::cerr << packets.error().code << '\n';
       return 1;
     }
+    for (const auto& packet : packets.value()) presentation.push_back(packet.pts);
   }
   const double seconds = duration<double>(steady_clock::now() - begin).count();
   const auto present_count = presents.load() - first_present;
@@ -101,6 +106,15 @@ int main() {
     std::cerr << flushed.error().code << '\n';
     return 1;
   }
+  for (const auto& packet : flushed.value()) presentation.push_back(packet.pts);
+  std::sort(presentation.begin(), presentation.end());
+  std::size_t off_grid = 0;
+  for (const auto pts : presentation) {
+    const auto elapsed = pts - origin;
+    const auto index = (elapsed * 60 + frequency - 1) / frequency;
+    const auto expected = origin + index * frequency / 60;
+    if (pts != expected) ++off_grid;
+  }
   std::cout << nlohmann::json{
       {"seconds", seconds}, {"ticks", ticks},
       {"stimulus_fps", present_count / seconds},
@@ -108,7 +122,8 @@ int main() {
       {"new_images", metrics.new_image_ticks},
       {"repeated_images", metrics.repeated_image_ticks},
       {"submitted_frames", metrics.submitted_frames},
-      {"completed_frames", metrics.completed_frames}}.dump() << '\n';
+      {"completed_frames", metrics.completed_frames},
+      {"off_grid_presentation_timestamps", off_grid}}.dump() << '\n';
   if (present_count / seconds < 58) {
     std::cerr << "SKIP: desktop stimulus did not sustain 60 Hz\n";
     return 77;
@@ -116,5 +131,5 @@ int main() {
   // Allow ordinary scheduling/compositor jitter, but reject half-rate capture.
   return metrics.new_image_ticks >= ticks * 85 / 100 &&
          metrics.submitted_frames >= ticks * 85 / 100 &&
-         metrics.completed_frames == metrics.submitted_frames ? 0 : 1;
+         metrics.completed_frames == metrics.submitted_frames && off_grid == 0 ? 0 : 1;
 }

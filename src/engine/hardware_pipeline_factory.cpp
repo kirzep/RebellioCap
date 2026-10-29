@@ -43,6 +43,7 @@ extern "C" {
 #include "core/diagnostic_writer.h"
 #include "engine/recorder_engine.h"
 #include "engine/hardware_pipeline_factory.h"
+#include "video/video_frame_grid.h"
 #include <sstream>
 #include "hotkey/raw_input_hotkey.h"
 #include "mux/ffmpeg_clip_muxer.h"
@@ -157,6 +158,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   }
 
   Result<std::vector<EncodedPacket>> tick(QpcTicks pts, bool force_keyframe) override {
+    if (!presentation_grid_) presentation_grid_.emplace(pts, fps_, frequency_);
     pending_keyframe_ = pending_keyframe_ || force_keyframe;
     auto admission = encoder_->prepare_frame(pending_keyframe_);
     if (!admission.is_success()) return Result<std::vector<EncodedPacket>>::failure(admission.error());
@@ -190,8 +192,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         capture_diagnostics_.texture_format = static_cast<std::uint32_t>(actual.Format);
         capture_diagnostics_.texture_format_available = true;
       }
-      // First-frame waits and recovery may finish after the scheduled tick.
-      // Keep newly acquired content on the same current QPC clock as audio.
+      // First-frame waits and recovery may span several presentation slots.
+      // Retain elapsed time, then quantize on the session's shared QPC grid.
       pts = (std::max)(pts, frame.captured_at);
       if (frame.width != input_width_ || frame.height != input_height_ ||
           frame.rotation != converter_->config().rotation) {
@@ -224,6 +226,12 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     }
     else if (have_frame_) ++repeated_image_ticks_;
     if (!have_frame_) { ++no_image_ticks_; return Result<std::vector<EncodedPacket>>::success(std::move(completed)); }
+    pts = presentation_grid_->at_or_before(pts);
+    // Direct callers or recovery can revisit the slot used by a delayed
+    // acquisition. Keep the newest cached pixels/keyframe request, but never
+    // submit equal or backward presentation timestamps to NVENC.
+    if (last_presentation_ && pts <= *last_presentation_)
+      return Result<std::vector<EncodedPacket>>::success(std::move(completed));
     CapturedVideoFrame cached{cache_, pts, input_width_, input_height_, cache_lifetime_};
     auto converted = [&] {
       if (direct_frame.has_value()) return Result<ConvertedVideoFrame>::success(std::move(*direct_frame));
@@ -234,6 +242,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     if (!converted.is_success()) return Result<std::vector<EncodedPacket>>::failure(converted.error());
     auto encoded = encoder_->encode(std::move(converted).value(), pts, pending_keyframe_);
     if (!encoded.is_success()) return encoded;
+    last_presentation_ = pts;
     pending_keyframe_ = false;
     auto& tail = encoded.value();
     completed.insert(completed.end(), std::make_move_iterator(tail.begin()), std::make_move_iterator(tail.end()));
@@ -298,6 +307,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         converter_(std::move(converter)), encoder_(std::move(encoder)),
         cache_(std::move(cache)), input_width_(width), input_height_(height),
         cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)),
+        fps_(fps), frequency_(clock.frequency()),
         capture_wait_(std::chrono::milliseconds(
             (std::max)(1U, (std::min)(8U, 500U / fps)))) {
     update_capture_diagnostics(*capture);
@@ -341,6 +351,10 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   std::uint64_t content_revision_{0};
   bool pending_keyframe_{false};
   HardwareVideoOptions options_;
+  std::uint32_t fps_;
+  QpcTicks frequency_;
+  std::optional<VideoFrameGrid> presentation_grid_;
+  std::optional<QpcTicks> last_presentation_;
   std::chrono::milliseconds capture_wait_;
   CaptureSessionDiagnostics capture_diagnostics_;
   std::uint64_t new_image_ticks_{0}, repeated_image_ticks_{0}, no_image_ticks_{0};

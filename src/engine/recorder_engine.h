@@ -55,6 +55,9 @@ class IEngineVideoPipeline {
   // Called on the capture worker, including after an idle interval.
   virtual Result<void> resume() { return Result<void>::success(); }
   virtual void suspend() noexcept {}
+  // pts is a slot on the session's rational FPS/QPC presentation grid. A slow
+  // acquisition may advance by whole slots; sub-frame latency must not become
+  // presentation jitter or a duration-dependent offset against audio.
   virtual Result<std::vector<EncodedPacket>> tick(QpcTicks pts,
                                                    bool force_keyframe) = 0;
   virtual Result<std::vector<EncodedPacket>> flush() = 0;
