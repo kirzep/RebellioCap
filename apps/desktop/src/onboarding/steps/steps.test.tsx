@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { HostBridge } from '../../bridge/contracts';
+import type { OnboardingDraft } from '../../config/model';
 import { AudioStep } from './AudioStep';
 import { HotkeysStep } from './HotkeysStep';
 import { PreferencesStep } from './PreferencesStep';
@@ -14,6 +15,7 @@ function createMockHost(): HostBridge {
     bootstrapApp: vi.fn(),
     getOnboardingState: vi.fn(),
     runSystemCheck: vi.fn(),
+    listGameWindows: async () => [],
     listMonitors: vi.fn().mockResolvedValue([
       { id: 'mon-0', name: 'Primary Display', width: 1920, height: 1080, primary: true },
     ]),
@@ -53,16 +55,69 @@ describe('Onboarding Steps', () => {
     expect(screen.getByText(/автоматически сокращается/i)).toBeInTheDocument();
     expect(screen.getByText(/сохранённый клип может быть короче/i)).toBeInTheDocument();
   });
-  it('VideoStep updates resolution and presets', async () => {
+  it('VideoStep size choices change only dimensions', async () => {
     const host = createMockHost();
+    vi.mocked(host.listMonitors).mockResolvedValue([
+      { id: 'mon-0', name: 'Primary Display', width: 3840, height: 2160, primary: true },
+    ]);
     const onChange = vi.fn();
-    render(<VideoStep draft={{ monitor_id: 'mon-0', width: 1280, height: 720, fps: 30 }} hostBridge={host} onChange={onChange} />);
+    render(<VideoStep draft={{ monitor_id: 'mon-0', width: 1280, height: 720, fps: 30,
+      bitrate: 8_000_000, rate_control: 'cqp', cqp: 21, recording_priority: true }} hostBridge={host} onChange={onChange} />);
 
     expect(screen.getByTestId('video-step')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('video-monitor-select')).toBeEnabled());
     onChange.mockClear();
-    fireEvent.click(screen.getByRole('radio', { name: 'Сбалансированное' }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ width: 1920, height: 1080, fps: 60 }));
+    fireEvent.click(screen.getByRole('radio', { name: '1920×1080' }));
+    expect(onChange).toHaveBeenLastCalledWith({ width: 1920, height: 1080 });
+    fireEvent.click(screen.getByRole('radio', { name: 'Как у экрана' }));
+    expect(onChange).toHaveBeenLastCalledWith({ width: 3840, height: 2160 });
+  });
+
+  it('VideoStep recognizes restored sizes and keeps FPS independent of size selection', async () => {
+    const host = createMockHost();
+    vi.mocked(host.listMonitors).mockResolvedValue([
+      { id: 'mon-0', name: 'Primary Display', width: 3840, height: 2160, primary: true },
+    ]);
+    const draft: OnboardingDraft = { monitor_id: 'mon-0', width: 1920, height: 1080, fps: 60, bitrate: 12_000_000 };
+    const { rerender } = render(<VideoStep draft={draft} hostBridge={host} onChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('video-monitor-select')).toBeEnabled());
+    expect(screen.getByRole('radio', { name: '1920×1080' })).toBeChecked();
+    rerender(<VideoStep draft={{ ...draft, fps: 120 }} hostBridge={host} onChange={vi.fn()} />);
+    expect(screen.getByRole('radio', { name: '1920×1080' })).toBeChecked();
+    rerender(<VideoStep draft={{ ...draft, width: 3840, height: 2160 }} hostBridge={host} onChange={vi.fn()} />);
+    expect(screen.getByRole('radio', { name: 'Как у экрана' })).toBeChecked();
+    rerender(<VideoStep draft={{ ...draft, width: 1600, height: 900 }} hostBridge={host} onChange={vi.fn()} />);
+    expect(screen.getByRole('radio', { name: 'Свой размер' })).toBeChecked();
+    expect(screen.getByTestId('video-width-input')).toHaveValue('1600');
+  });
+
+  it('VideoStep follows the monitor only for Match screen and keeps custom sizing separate from FPS', async () => {
+    const host = createMockHost();
+    vi.mocked(host.listMonitors).mockResolvedValue([
+      { id: 'mon-0', name: 'Primary Display', width: 3840, height: 2160, primary: true },
+      { id: 'mon-1', name: 'Second Display', width: 2560, height: 1440, primary: false },
+    ]);
+    function Editor() {
+      const [draft, setDraft] = React.useState<OnboardingDraft>({ monitor_id: 'mon-0', width: 3840, height: 2160, fps: 120, bitrate: 8_000_000 });
+      return <VideoStep draft={draft} hostBridge={host} onChange={patch => setDraft(current => ({ ...current, ...patch }))} />;
+    }
+    render(<Editor />);
+    const monitor = screen.getByTestId('video-monitor-select');
+    await waitFor(() => expect(monitor).toBeEnabled());
+    fireEvent.change(monitor, { target: { value: 'mon-1' } });
+    expect(screen.getByRole('radio', { name: 'Как у экрана' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: '1920×1080' }));
+    fireEvent.change(monitor, { target: { value: 'mon-0' } });
+    expect(screen.getByRole('radio', { name: '1920×1080' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Свой размер' }));
+    fireEvent.change(screen.getByTestId('video-width-input'), { target: { value: '1600' } });
+    fireEvent.change(screen.getByTestId('video-height-input'), { target: { value: '900' } });
+    fireEvent.change(screen.getByTestId('video-fps-select'), { target: { value: '30' } });
+    expect(screen.getByRole('radio', { name: 'Свой размер' })).toBeChecked();
+    expect(screen.getByTestId('video-width-input')).toHaveValue('1600');
+    fireEvent.change(monitor, { target: { value: 'mon-1' } });
+    expect(screen.getByTestId('video-width-input')).toHaveValue('1600');
+    expect(screen.getByTestId('video-height-input')).toHaveValue('900');
   });
 
   it('AudioStep measures audio level on demand', async () => {

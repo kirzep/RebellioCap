@@ -31,6 +31,9 @@ pub fn fixture() -> PathBuf {
 }
 pub fn draft(path: &Path) -> OnboardingDraft {
     OnboardingDraft {
+        rate_control: None, cqp: None, recording_priority: None,
+        capture_mode: None,
+        game_executable: None,
         monitor_id: Some("monitor-1".into()),
         system_audio: Some(AudioSelection::Disabled),
         microphone: Some(AudioSelection::Disabled),

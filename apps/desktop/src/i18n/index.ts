@@ -4,12 +4,13 @@ import core from './core.en.json';
 import editor from './editor.en.json';
 import native from './native.en.json';
 import settings from './settings.en.json';
+import help from './help.en.json';
 
 export type Language = 'ru' | 'en';
 export type LanguagePreference = 'system' | Language;
 export interface LanguageSettings { preference: LanguagePreference; language: Language; systemLanguage?: Language }
 export interface LanguageSnapshot extends LanguageSettings { ready: boolean; systemLanguage: Language }
-export const englishCatalog: Readonly<Record<string, string>> = { ...native, ...editor, ...core, ...settings };
+export const englishCatalog: Readonly<Record<string, string>> = { ...native, ...editor, ...core, ...settings, ...help };
 const storageKey = 'rebelliocap.language';
 let snapshot: LanguageSnapshot = { preference: 'system', language: 'ru', systemLanguage: languageForLocale(navigator.language), ready: false };
 const subscribers = new Set<() => void>();

@@ -177,5 +177,15 @@
   "Монтаж слишком длинный для {0} МБ. Сократите его.": "The edit is too long for {0} MB. Shorten it.",
   "Не удалось воспроизвести медиа: {0}. Нажмите «Воспроизвести», чтобы повторить.": "Could not play media: {0}. Click “Play” to retry.",
   "Отменить действие": "Undo",
-  "Повторить действие": "Redo"
+  "Повторить действие": "Redo",
+  "Проверьте параметры сжатия.": "Check the compression settings.",
+  "Способ сжатия": "Compression method",
+  "Умное — сначала сохранить качество": "Smart — preserve quality first",
+  "По размеру — тщательное сжатие": "Fit to size — thorough compression",
+  "Быстрое": "Fast",
+  "Сохранить разрешение и FPS": "Keep resolution and FPS",
+  "Сначала пробуем выбранные разрешение и FPS. Если файл больше лимита, подбираем параметры. Это может занять больше времени.": "First we try your chosen resolution and FPS. If the file exceeds the limit, we adjust the settings. This may take longer.",
+  "Параметры выше — резервный вариант для подгонки размера.": "The settings above are the fallback for fitting the size limit.",
+  "Разрешение и FPS останутся выбранными. При тесном лимите детализация может снизиться.": "Your chosen resolution and FPS will be kept. A tight size limit may reduce detail.",
+  "Проверяем сжатие с сохранением качества": "Checking quality-preserving compression"
 }

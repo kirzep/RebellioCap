@@ -554,6 +554,10 @@ struct NvencEncoder::Impl {
     accepted.width = config.width;
     accepted.preset_number = config.preset;
     accepted.multipass = encoder_config.rcParams.multiPass;
+    accepted.constant_qp=encoder_config.rcParams.rateControlMode==NV_ENC_PARAMS_RC_CONSTQP;
+    accepted.qp_i=encoder_config.rcParams.constQP.qpIntra;
+    accepted.qp_p=encoder_config.rcParams.constQP.qpInterP;
+    accepted.qp_b=encoder_config.rcParams.constQP.qpInterB;
     accepted.rate_control = encoder_config.rcParams.rateControlMode;
     accepted.target_quality = encoder_config.rcParams.targetQuality;
     accepted.height = config.height;

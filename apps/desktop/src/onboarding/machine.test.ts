@@ -8,6 +8,7 @@ function createMockHost(saveDraftMock?: (draft: OnboardingDraft, step: number) =
     bootstrapApp: vi.fn(),
     getOnboardingState: vi.fn(),
     runSystemCheck: vi.fn(),
+    listGameWindows: async () => [],
     listMonitors: vi.fn(),
     listAudioEndpoints: vi.fn(),
     measureAudioLevel: vi.fn(),

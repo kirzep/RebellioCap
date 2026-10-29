@@ -145,6 +145,20 @@ json metrics_json(const EngineMetrics& metrics) {
           {"continuousRecoveryPath", metrics.continuous_recovery_path}};
   if (metrics.pipeline_telemetry.enabled) {
     result["diagnostics"] = engine_metrics_json(metrics, metrics.qpc_frequency, metrics.video_pipeline);
+  } else {
+    // Operational state must reach the UI even when optional timing collection
+    // is off. Keep ordinary snapshots small; do not build timing histograms.
+    const auto& video=metrics.video_pipeline;
+    const auto& accepted=video.accepted_config;
+    result["diagnostics"]={
+      {"capture_waiting_for_game",video.capture_waiting_for_game},
+      {"recording_priority_requested",video.recording_priority_requested},
+      {"recording_priority_applied",video.recording_priority_applied},
+      {"recording_gpu_priority",video.recording_priority_requested && video.recording_priority_hresult ? json(nullptr) : json(video.recording_gpu_priority)},
+      {"recording_priority_hresult",video.recording_priority_hresult ? json(*video.recording_priority_hresult) : json(nullptr)},
+      {"nvenc_accepted_config",{{"available",accepted.width!=0},{"constant_qp",accepted.constant_qp},
+        {"qp_i",accepted.qp_i},{"qp_p",accepted.qp_p},{"qp_b",accepted.qp_b},
+        {"target_bitrate",accepted.target_bitrate},{"max_bitrate",accepted.max_bitrate}}}};
   }
   return result;
 }

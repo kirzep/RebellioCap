@@ -169,11 +169,12 @@ TEST_CASE("session protocol serializes snapshot and error events as one NDJSON o
   REQUIRE(error_json.at("error").at("hresult") == 5);
 }
 
-TEST_CASE("session diagnostics expose opt-in stage measurements without changing ordinary snapshots") {
+TEST_CASE("session timing diagnostics remain opt in while operational status is always present") {
   EngineSnapshot snapshot{};
   auto ordinary = nlohmann::json::parse(encode_session_event(
       {.type=SessionEventType::Snapshot,.snapshot=snapshot}));
-  REQUIRE_FALSE(ordinary.at("snapshot").at("metrics").contains("diagnostics"));
+  REQUIRE(ordinary.at("snapshot").at("metrics").contains("diagnostics"));
+  REQUIRE_FALSE(ordinary.at("snapshot").at("metrics").at("diagnostics").contains("pipeline_telemetry"));
   snapshot.metrics.pipeline_telemetry.enabled=true;
   snapshot.metrics.pipeline_telemetry.stages[0].count=4;
   const auto measured=nlohmann::json::parse(encode_session_event(
@@ -188,3 +189,20 @@ TEST_CASE("session diagnostics expose opt-in stage measurements without changing
 }
 
 }  // namespace
+TEST_CASE("recording priority and accepted CQP status are published without timing telemetry") {
+  EngineSnapshot snapshot;
+  snapshot.metrics.video_pipeline.recording_priority_requested=true;
+  snapshot.metrics.video_pipeline.recording_priority_applied=false;
+  snapshot.metrics.video_pipeline.recording_priority_hresult=static_cast<long>(E_ACCESSDENIED);
+  snapshot.metrics.video_pipeline.accepted_config.constant_qp=true;
+  snapshot.metrics.video_pipeline.accepted_config.qp_p=23;
+  const auto encoded=nlohmann::json::parse(encode_session_event({SessionEventType::Snapshot,{},snapshot,{},{}}));
+  const auto& metrics=encoded.at("snapshot").at("metrics");
+  REQUIRE(metrics.contains("diagnostics"));
+  const auto& status=metrics.at("diagnostics");
+  REQUIRE(status.at("recording_priority_requested")==true);
+  REQUIRE(status.at("recording_priority_applied")==false);
+  REQUIRE(status.at("recording_gpu_priority").is_null());
+  REQUIRE(status.at("nvenc_accepted_config").at("constant_qp")==true);
+  REQUIRE(status.at("nvenc_accepted_config").at("qp_p")==23);
+}

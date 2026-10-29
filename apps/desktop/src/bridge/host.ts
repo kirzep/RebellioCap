@@ -6,6 +6,7 @@ import type {
   Bootstrap,
   EngineSnapshot,
   MonitorChoice,
+  GameWindowChoice,
   OnboardingDraft,
   RecordingTestSummary,
   StoredState,
@@ -56,6 +57,10 @@ function friendlySummary(message: string, subsystem: AppSubsystem): string {
   if (/[А-Яа-яЁё]/.test(message)) return message;
 
   const hint = message.toLowerCase();
+  if (/capture\.desktop_blocked_by_game_selection/.test(hint)) {
+    return 'Захват экрана заблокирован после выбора режима «Только игра». Примените область захвата явно.';
+  }
+  if (/game_executable/.test(hint)) return 'Выберите игру из списка.';
   if (/dialog\.|dialog thread/.test(hint)) {
     return 'Не удалось открыть системный выбор папки.';
   }
@@ -283,6 +288,10 @@ export class TauriHostBridge implements HostBridge {
 
   async listMonitors(): Promise<MonitorChoice[]> {
     return invokeHost<MonitorChoice[]>('list_monitors');
+  }
+
+  async listGameWindows(): Promise<GameWindowChoice[]> {
+    return invokeHost<GameWindowChoice[]>('list_game_windows');
   }
 
   async listAudioEndpoints(): Promise<AudioCatalog> {

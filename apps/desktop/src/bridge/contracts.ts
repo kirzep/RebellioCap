@@ -5,6 +5,7 @@ import type {
   Bootstrap,
   EngineSnapshot,
   MonitorChoice,
+  GameWindowChoice,
   OnboardingDraft,
   RecordingTestSummary,
   StoredState,
@@ -60,6 +61,7 @@ export interface HostBridge {
   getOnboardingState(): Promise<StoredState>;
   runSystemCheck(): Promise<SystemCheckResult>;
   listMonitors(): Promise<MonitorChoice[]>;
+  listGameWindows(): Promise<GameWindowChoice[]>;
   listAudioEndpoints(): Promise<AudioCatalog>;
   measureAudioLevel(endpointId: string | null): Promise<AudioMeasurement>;
   chooseOutputDirectory(): Promise<string | null>;

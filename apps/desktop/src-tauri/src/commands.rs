@@ -20,6 +20,9 @@ use std::{
     time::Duration,
 };
 
+// Temporarily paused at user request; retain the game source and privacy policy.
+const GAME_CAPTURE_ENABLED: bool = false;
+
 pub fn complete_transaction(
     store: &ConfigStore,
     explicit: bool,
@@ -58,6 +61,21 @@ pub fn apply_transaction(
         .active
         .as_ref()
         .ok_or("config.onboarding_required")?;
+    if candidate.capture_mode == CaptureMode::Game {
+        // Stop even if the privacy latch cannot be written. Never resume the
+        // previous profile after a game-only request, including on disk errors.
+        let guarded = store.block_desktop_capture().map_err(|e| e.to_string());
+        let stopped = stop();
+        let mut next = previous.clone();
+        next.active = Some(candidate.clone());
+        next.draft = candidate.as_draft();
+        next.last_successful_test = None;
+        let persisted = store.replace_host_state(&next).map_err(|e| e.to_string());
+        guarded?;
+        persisted?;
+        stopped?;
+        return start(&candidate);
+    }
     if let Err(e) = stop() {
         let restart = start(old);
         return Err(format!("{e}; restore start: {restart:?}"));
@@ -69,12 +87,16 @@ pub fn apply_transaction(
     let apply = store
         .replace_host_state(&next)
         .map_err(|e| e.to_string())
+        .and_then(|()| store.allow_desktop_capture().map_err(|e| e.to_string()))
         .and_then(|()| start(&candidate));
     if let Err(e) = apply {
         let restored = store
             .replace_host_state(&previous)
             .map_err(|e| e.to_string());
-        let restarted = start(old);
+        if old.capture_mode == CaptureMode::Game { let _ = store.block_desktop_capture(); }
+        let restarted = if old.capture_mode == CaptureMode::Game || !store.desktop_capture_blocked().unwrap_or(true) {
+            start(old)
+        } else { Err("capture.desktop_blocked_by_game_selection".into()) };
         return Err(format!(
             "{e}; rollback: {restored:?}; previous engine: {restarted:?}"
         ));
@@ -113,6 +135,7 @@ pub struct Host {
     notification_wake: Option<NotificationWake>,
     tray_updates: Arc<crate::tray::TrayUpdates>,
     continuous_recording_enabled: bool,
+    desktop_capture_blocked: bool,
 }
 pub struct HostState {
     inner: Arc<Mutex<Host>>,
@@ -160,6 +183,7 @@ impl HostState {
                 diagnostics: None,
                 test_clip: None,
                 last_snapshot: EngineSnapshot::default(),
+                desktop_capture_blocked: false,
                 notifications: Vec::new(),
                 notification_wake,
                 tray_updates: tray_updates.clone(),
@@ -205,6 +229,24 @@ impl Host {
         Ok(native::catalogs::load(self.executable()?)?.inventory())
     }
     fn start(&mut self, config: &ActiveConfig) -> Result<()> {
+        let mut effective = config.clone();
+        if !GAME_CAPTURE_ENABLED && effective.capture_mode == CaptureMode::Game {
+            let catalog = native::catalogs::load(self.executable()?)?;
+            if !catalog.monitors.iter().any(|monitor| monitor.id == effective.monitor_id) {
+                effective.monitor_id = catalog.monitors.iter().find(|monitor| monitor.primary)
+                    .or_else(|| catalog.monitors.first()).ok_or("capture.monitor_unavailable")?.id.clone();
+            }
+            effective.capture_mode = CaptureMode::Desktop;
+        }
+        let config = &effective;
+        if GAME_CAPTURE_ENABLED && config.capture_mode == CaptureMode::Game {
+            self.desktop_capture_blocked = true;
+            self.store.block_desktop_capture().map_err(|e| e.to_string())?;
+        }
+        if GAME_CAPTURE_ENABLED && config.capture_mode == CaptureMode::Desktop &&
+            (self.desktop_capture_blocked || self.store.desktop_capture_blocked().map_err(|e| e.to_string())?) {
+            return Err("capture.desktop_blocked_by_game_selection".into());
+        }
         if self
             .engine
             .as_ref()
@@ -284,17 +326,42 @@ impl Host {
         complete_transaction(&store, explicit, &devices, |active| self.start(active))
     }
     fn apply(&mut self, candidate: ActiveConfig) -> Result<()> {
-        let devices = self.inventory()?;
+        let game_requested = GAME_CAPTURE_ENABLED && candidate.capture_mode == CaptureMode::Game;
+        if game_requested {
+            self.desktop_capture_blocked = true;
+            // Establish the privacy boundary before even querying devices.
+            let guard = self.store.block_desktop_capture().map_err(|e| e.to_string());
+            if let Err(error) = guard { let _ = self.stop(); self.blocked(&error); return Err(error); }
+        }
+        let devices = match self.inventory() {
+            Ok(devices) => devices,
+            Err(error) => {
+                if candidate.capture_mode == CaptureMode::Game { let _ = self.stop(); self.blocked(&error); }
+                return Err(error);
+            }
+        };
         let store = ConfigStore::from_root_host(self.store.root())?;
         // RefCell scopes the sequential stop/start closures without exposing host state to IPC.
         let host = std::cell::RefCell::new(self);
-        apply_transaction(
+        let result = apply_transaction(
             &store,
             candidate,
             &devices,
             || host.borrow_mut().stop(),
-            |active| host.borrow_mut().start(active),
-        )
+            |active| {
+                // A persisted explicit desktop request is the only permission
+                // to release an earlier game-only restriction in this process.
+                if active.capture_mode == CaptureMode::Desktop && !store.desktop_capture_blocked().map_err(|e| e.to_string())? {
+                    host.borrow_mut().desktop_capture_blocked = false;
+                }
+                host.borrow_mut().start(active)
+            },
+        );
+        if let Err(error) = &result {
+            if game_requested { let _ = host.borrow_mut().stop(); }
+            if host.borrow().engine.is_none() { host.borrow_mut().blocked(error); }
+        }
+        result
     }
 }
 
@@ -398,6 +465,11 @@ pub async fn list_audio_endpoints(state: tauri::State<'_, HostState>) -> Result<
         Ok(native::catalogs::load(host.executable()?)?.audio)
     })
     .await
+}
+
+#[tauri::command]
+pub async fn list_game_windows(state: tauri::State<'_, HostState>) -> Result<Vec<GameWindowChoice>> {
+    dispatch(&state, |host| Ok(native::catalogs::load(host.executable()?)?.game_windows)).await
 }
 
 /// None cancels the active sample; a new endpoint replaces/cancels the previous sample.
@@ -901,6 +973,8 @@ mod clips_tests {
         let store = ConfigStore::from_root_host(&temp.path().canonicalize().unwrap()).unwrap();
         let directory = store.root().join("disconnected-drive");
         let active = ActiveConfig {
+            capture_mode: CaptureMode::Desktop,
+            game_executable: String::new(),
             onboarding_completed: true,
             monitor_id: "monitor-1".into(),
             system_audio: AudioSelection::Disabled,
@@ -909,6 +983,7 @@ mod clips_tests {
             height: 1080,
             fps: 60,
             bitrate: 30_000_000,
+            rate_control: RateControl::Vbr, cqp: 23, recording_priority: false,
             replay_seconds: 30,
             replay_memory_limit_mb: 0,
             replay_mode: ReplayMode::Ram,

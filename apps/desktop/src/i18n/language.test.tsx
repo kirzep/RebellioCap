@@ -8,6 +8,8 @@ import coreCatalog from './core.en.json';
 import editorCatalog from './editor.en.json';
 import nativeCatalog from './native.en.json';
 import settingsCatalog from './settings.en.json';
+import helpCatalog from './help.en.json';
+import { settingsHelp } from './settingsHelp';
 import { applyLanguageSettings, disposeLanguageInitialization, getLanguageSnapshot, initializeLanguage,
   languageForLocale, setLanguagePreference, t, type LanguageSettings as Settings } from './index';
 
@@ -26,13 +28,17 @@ describe('language selection', () => {
   });
   it('keeps shared translations consistent and distinguishes editor actions from dialog actions', () => {
     const seen = new Map<string, string>();
-    for (const catalog of [coreCatalog, editorCatalog, nativeCatalog, settingsCatalog]) {
+    for (const catalog of [coreCatalog, editorCatalog, nativeCatalog, settingsCatalog, helpCatalog]) {
       for (const [source, translated] of Object.entries(catalog)) {
         if (seen.has(source)) expect(translated, source).toBe(seen.get(source));
         seen.set(source, translated);
       }
     }
     applyLanguageSettings({ preference: 'en', language: 'en' });
+    for (const help of Object.values(settingsHelp)) {
+      expect(t(help.text), help.label).not.toMatch(/[А-Яа-яЁё]/);
+      expect(t('Подсказка: {0}', t(help.label)), help.label).not.toMatch(/[А-Яа-яЁё]/);
+    }
     expect(t('Отменить')).toBe('Cancel');
     expect(t('Повторить')).toBe('Retry');
     expect(t('Отменить действие')).toBe('Undo');

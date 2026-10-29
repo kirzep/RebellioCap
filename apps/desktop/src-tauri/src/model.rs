@@ -88,6 +88,14 @@ pub struct DeviceInventory {
     pub microphone_ids: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GameWindowChoice {
+    pub executable: String,
+    pub title: String,
+    pub process_id: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EngineLifecycle {

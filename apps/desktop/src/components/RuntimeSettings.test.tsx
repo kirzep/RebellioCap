@@ -61,6 +61,35 @@ function createSnapshot(overrides: Partial<EngineSnapshot> = {}): EngineSnapshot
 }
 
 describe('RuntimeSettings', () => {
+  // Retained with the temporarily disabled game-only controls.
+  it.skip('requires an explicit game selection and preserves a stopped game after refreshing the catalog', async () => {
+    const executable = 'C:\\Games\\Example\\game.exe';
+    const listGameWindows = vi.fn().mockResolvedValue([{ executable, title: 'Example Game', process_id: 42 }]);
+    const bridge = { ...hostBridge, listGameWindows };
+    const onApply = vi.fn().mockResolvedValue(undefined);
+    const { unmount } = render(<RuntimeSettings hostBridge={bridge} activeConfig={createActiveConfig()} snapshot={createSnapshot()} onApply={onApply} />);
+    fireEvent.change((await screen.findByLabelText('Область захвата')).parentElement!.querySelector('select')!, { target: { value: 'game' } });
+    const picker = await screen.findByLabelText('Игра');
+    const nativePicker = picker.parentElement!.querySelector('select')!;
+    expect(nativePicker).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    expect(onApply).not.toHaveBeenCalled();
+    expect((await screen.findAllByText('Выберите игру из списка.')).length).toBeGreaterThan(0);
+    await waitFor(() => expect([...nativePicker.options].some(option => option.value === executable)).toBe(true));
+    fireEvent.change(nativePicker, { target: { value: executable } });
+    listGameWindows.mockResolvedValue([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить список игр' }));
+    await waitFor(() => expect(picker).toHaveTextContent('Ожидание игры'));
+    expect(nativePicker).toHaveValue(executable);
+    fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ capture_mode: 'game', game_executable: executable })));
+    const activeConfig = onApply.mock.calls[0][0];
+    unmount();
+    render(<RuntimeSettings hostBridge={bridge} activeConfig={activeConfig} snapshot={createSnapshot()} onApply={onApply} />);
+    expect(await screen.findByLabelText('Область захвата')).toHaveTextContent('Только игра');
+    expect((await screen.findByLabelText('Игра')).parentElement!.querySelector('select')).toHaveValue(executable);
+    expect(screen.getByText(/Другие окна не попадают в видео/)).toBeInTheDocument();
+  });
   it('applies direct output and restores the saved checkbox state', async () => {
     const onApply = vi.fn().mockResolvedValue(undefined);
     const props = { hostBridge, activeConfig: createActiveConfig(), snapshot: createSnapshot({ lifecycle: 'stopped', replayActive: false }), onApply, initialSection: 'replay' as const };
@@ -86,6 +115,7 @@ describe('RuntimeSettings', () => {
   it('keeps unsaved edits when the sidebar changes the settings section', async () => {
     const props = { hostBridge, activeConfig:createActiveConfig(), snapshot:createSnapshot(), onApply:vi.fn(), sidebarNavigation:true };
     const { rerender } = render(<RuntimeSettings {...props} initialSection="video" />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Свой размер' }));
     const width = await screen.findByTestId('video-width-input');
     fireEvent.change(width, {target:{value:'1600'}});
     rerender(<RuntimeSettings {...props} initialSection="audio" />);
@@ -176,6 +206,35 @@ describe('RuntimeSettings', () => {
   });
 });
 
+
+it('applies CQP quality and recording priority independently and restores them', async () => {
+  const onApply = vi.fn().mockResolvedValue(undefined);
+  const { unmount } = render(<RuntimeSettings hostBridge={hostBridge} activeConfig={createActiveConfig()} snapshot={createSnapshot()} onApply={onApply} />);
+  const mode = await screen.findByLabelText('Режим сжатия');
+  fireEvent.change(mode.parentElement!.querySelector('select')!, { target: { value: 'cqp' } });
+  fireEvent.change(screen.getByLabelText('Уровень CQP'), { target: { value: '20' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /Приоритет записи/ }));
+  expect(screen.queryByTestId('video-bitrate-input')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTestId('apply-settings-button'));
+  await waitFor(() => expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ rate_control: 'cqp', cqp: 20, recording_priority: true })));
+  const applied=onApply.mock.calls[0][0]; unmount();
+  render(<RuntimeSettings hostBridge={hostBridge} activeConfig={applied} snapshot={createSnapshot()} onApply={vi.fn()} />);
+  expect(screen.getByLabelText('Уровень CQP')).toHaveValue(20);
+  expect(screen.getByRole('checkbox', { name: /Приоритет записи/ })).toBeChecked();
+});
+
+it('offers only full-screen capture even for a saved game profile', async () => {
+  const onApply = vi.fn().mockResolvedValue(undefined);
+  const activeConfig = { ...createActiveConfig(), capture_mode: 'game' as const, game_executable: 'C:\\Games\\game.exe' };
+  render(<RuntimeSettings hostBridge={hostBridge} activeConfig={activeConfig} snapshot={createSnapshot()} onApply={onApply} />);
+  expect(screen.queryByLabelText('Область захвата')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Игра')).not.toBeInTheDocument();
+  expect(await screen.findByTestId('video-monitor-select')).toBeInTheDocument();
+  fireEvent.change(screen.getByTestId('video-bitrate-input'), { target: { value: '18' } });
+  fireEvent.blur(screen.getByTestId('video-bitrate-input'));
+  fireEvent.click(screen.getByTestId('apply-settings-button'));
+  await waitFor(() => expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ capture_mode: 'desktop' })));
+});
 
 it('applies a manual Replay budget and preserves it on unrelated edits', async () => {
   const onApply = vi.fn().mockResolvedValue(undefined);

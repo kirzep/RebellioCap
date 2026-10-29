@@ -21,8 +21,11 @@ struct Catalog {
     monitors: Vec<MonitorChoice>,
     system_audio: Vec<Endpoint>,
     microphones: Vec<Endpoint>,
+    #[serde(default, rename = "game_windows")]
+    game_windows: Vec<GameWindowChoice>,
 }
 pub struct Catalogs {
+    pub game_windows: Vec<GameWindowChoice>,
     pub monitors: Vec<MonitorChoice>,
     pub audio: AudioCatalog,
 }
@@ -79,6 +82,7 @@ pub fn load(executable: &Path) -> Result<Catalogs> {
             .collect()
     }
     Ok(Catalogs {
+        game_windows: result.game_windows,
         monitors: result.monitors,
         audio: AudioCatalog {
             system_audio: choices(result.system_audio),

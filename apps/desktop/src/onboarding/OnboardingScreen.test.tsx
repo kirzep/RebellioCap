@@ -13,6 +13,7 @@ function createMockHost(): HostBridge {
       draft: {},
     }),
     runSystemCheck: vi.fn().mockResolvedValue({ passed: true, stages: [], diagnostics_path: 'C:/diag.json' }),
+    listGameWindows: async () => [],
     listMonitors: vi.fn().mockResolvedValue([
       { id: 'mon-0', name: 'Primary Display', width: 1920, height: 1080, primary: true },
     ]),

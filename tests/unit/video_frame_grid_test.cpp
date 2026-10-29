@@ -54,3 +54,9 @@ TEST_CASE("video frame grid does not invent slots before its QPC origin") {
   CHECK(grid.at_or_before(5'000) == 5'000);
   CHECK(grid.at_or_before(5'100) == grid.at_or_before(5'900));
 }
+TEST_CASE("acquisition may finish within the following slot without rewriting presentation time") {
+  rebelliocap::VideoFrameGrid grid(100'000,60,10'000'000);
+  CHECK(grid.after_acquisition(grid.at(3),grid.at(3)+2'000)==grid.at(3));
+  CHECK(grid.after_acquisition(grid.at(3),grid.at(4)+2'000)==grid.at(3));
+  CHECK(grid.after_acquisition(grid.at(3),grid.at(5)+2'000)==grid.at(5));
+}

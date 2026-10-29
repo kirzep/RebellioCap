@@ -43,6 +43,8 @@ add_library(rebelliocap_core STATIC
   src/capture/d3d11_device.cpp
   src/capture/dxgi_capture_source.cpp
   src/capture/monitor_catalog.cpp
+  src/capture/game_window_catalog.cpp
+  src/capture/wgc_capture_source.cpp
   src/core/diagnostic_writer.cpp
   src/core/qpc_clock.cpp
   src/core/pipeline_telemetry.cpp
@@ -63,6 +65,7 @@ add_library(rebelliocap_core STATIC
   src/video/d3d11_nv12_converter.cpp
   src/video/nvenc_api.cpp
   src/video/nvenc_encoder.cpp)
+target_sources(rebelliocap_core PRIVATE src/video/async_video_encoder.cpp)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/contracts/recording-settings.v1.json")
 file(READ "${PROJECT_SOURCE_DIR}/contracts/recording-settings.v1.json" RECORDING_CONTRACT_JSON)
 configure_file(src/config/recording_contract_json.h.in generated/config/recording_contract_json.h @ONLY)
@@ -87,6 +90,7 @@ target_link_libraries(rebelliocap_core PUBLIC
   avrt
   advapi32
   user32)
+target_link_libraries(rebelliocap_core PUBLIC windowsapp runtimeobject dwmapi)
 rebelliocap_enable_warnings(rebelliocap_core)
 
 add_library(rebelliocap_engine INTERFACE)

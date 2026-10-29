@@ -50,6 +50,8 @@ Error engine_error(std::string code, std::string message) {
 }
 
 Result<void> validate_config(const EngineConfig& config, QpcTicks frequency) {
+  if(config.capture_mode==CaptureMode::Game && !config.game_executable.is_absolute())
+    return Result<void>::failure(engine_error("engine.game_required", "Game capture requires an explicit executable path."));
   if (frequency <= 0 || config.fps == 0 || config.gop_seconds == 0 ||
       config.replay_capacity <= std::chrono::seconds::zero() ||
       config.clip_duration <= std::chrono::seconds::zero() ||
@@ -386,8 +388,11 @@ struct RecorderEngine::Impl {
       ++video_ticks;
       ++frame;
       const auto completed_at = dependencies.clock->now();
+      // A slot remains usable until its following boundary. Slightly late
+      // acquisition can catch up on the current slot; rounding up here used
+      // to discard a whole frame for even a sub-frame overrun.
       while (!stop.stop_requested() &&
-             presentation.at(frame) < completed_at) {
+             presentation.at(frame + 1) <= completed_at) {
         ++missed_video_deadlines;
         ++frame;
       }
@@ -1021,8 +1026,7 @@ EngineMetrics RecorderEngine::metrics() const {
               ? state.config.pipeline_telemetry->snapshot() : PipelineTelemetrySnapshot{},
           .continuous_queue = state.continuous ? state.continuous->queue_metrics() : ContinuousQueueMetrics{},
           .qpc_frequency = state.dependencies.clock->frequency(),
-          .video_pipeline = state.config.pipeline_telemetry && state.config.pipeline_telemetry->enabled()
-              ? state.dependencies.video->metrics() : NvencRuntimeMetrics{}};
+          .video_pipeline = state.dependencies.video ? state.dependencies.video->metrics() : NvencRuntimeMetrics{}};
 }
 
 std::vector<EngineSaveCompletion> RecorderEngine::take_hotkey_save_completions() {

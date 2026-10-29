@@ -325,6 +325,53 @@ TEST_CASE("host configuration rejects missing pinned IDs and unbounded test dura
   }
 }
 
+TEST_CASE("game capture is explicit and never inferred from a missing monitor") {
+  using nlohmann::json;
+  auto config=json::parse(R"({"protocolVersion":1,"monitorId":"1:0","systemAudioEnabled":false,"systemAudioId":"","microphoneEnabled":false,"microphoneId":"","width":1920,"height":1080,"fps":60,"bitrate":30000000,"replaySeconds":30,"clipSeconds":30,"container":"mp4","outputDirectory":"C:\\clips","saveReplayHotkey":"F8","toggleRecordingHotkey":"Ctrl+Shift+R","continuousRecordingEnabled":false})");
+  const auto legacy=decode_host_configuration(config.dump(),false);
+  REQUIRE(legacy.is_success());
+  CHECK(legacy.value().engine.capture_mode==CaptureMode::Desktop);
+  config["captureMode"]="game";
+  config["gameExecutable"]="C:/Games/DBD/game.exe";
+  const auto game=decode_host_configuration(config.dump(),false);
+  REQUIRE(game.is_success());
+  CHECK(game.value().engine.capture_mode==CaptureMode::Game);
+  CHECK(game.value().engine.game_executable==L"C:/Games/DBD/game.exe");
+  auto stale=config; stale["monitorId"]="";
+  REQUIRE(decode_host_configuration(stale.dump(),false).is_success());
+  stale["captureMode"]="desktop";
+  REQUIRE_FALSE(decode_host_configuration(stale.dump(),false).is_success());
+  for(const auto mode:{json("auto"),json(1),json(nullptr)}) {
+    auto invalid=config; invalid["captureMode"]=mode;
+    REQUIRE_FALSE(decode_host_configuration(invalid.dump(),false).is_success());
+  }
+  for(const auto path:{json(""),json("game.exe"),json("C:/Games/game.txt"),json(1),json(std::string("C:/bad\0/game.exe",16))}) {
+    auto invalid=config; invalid["gameExecutable"]=path;
+    REQUIRE_FALSE(decode_host_configuration(invalid.dump(),false).is_success());
+  }
+}
+
+TEST_CASE("recording quality and GPU priority are explicit validated product settings") {
+  using nlohmann::json;
+  auto config=json::parse(R"({"protocolVersion":1,"monitorId":"1:0","systemAudioEnabled":false,"systemAudioId":"","microphoneEnabled":false,"microphoneId":"","width":1920,"height":1080,"fps":60,"bitrate":12000000,"replaySeconds":30,"clipSeconds":30,"container":"mp4","outputDirectory":"C:\\clips","saveReplayHotkey":"F8","toggleRecordingHotkey":"Ctrl+Shift+R","continuousRecordingEnabled":false})");
+  config["rateControl"]="cqp"; config["cqp"]=23; config["recordingPriority"]=true;
+  auto decoded=decode_host_configuration(config.dump(),false);
+  REQUIRE(decoded.is_success());
+  CHECK(decoded.value().engine.nvenc_config.constant_qp);
+  CHECK(decoded.value().engine.nvenc_config.qp_i==23);
+  CHECK(decoded.value().engine.nvenc_config.qp_p==23);
+  CHECK(decoded.value().engine.nvenc_config.qp_b==23);
+  for(const auto qp:{0,51}) { auto candidate=config; candidate["cqp"]=qp; REQUIRE(decode_host_configuration(candidate.dump(),false).is_success()); }
+  for(const auto qp:{json(-1),json(52),json(23.5),json("23"),json(nullptr)}) {
+    auto candidate=config; candidate["cqp"]=qp; REQUIRE_FALSE(decode_host_configuration(candidate.dump(),false).is_success());
+  }
+  for(const auto mode:{json("auto"),json(1),json(nullptr)}) {
+    auto candidate=config; candidate["rateControl"]=mode; REQUIRE_FALSE(decode_host_configuration(candidate.dump(),false).is_success());
+  }
+  auto wrong=config; wrong["recordingPriority"]="true";
+  REQUIRE_FALSE(decode_host_configuration(wrong.dump(),false).is_success());
+}
+
 TEST_CASE("native recording bitrate agrees with desktop limits") {
   const std::string config=R"({"protocolVersion":1,"monitorId":"1:0","systemAudioEnabled":false,"systemAudioId":"","microphoneEnabled":false,"microphoneId":"","width":1920,"height":1080,"fps":60,"bitrate":30000000,"replaySeconds":30,"clipSeconds":30,"container":"mp4","outputDirectory":"C:\\clips","saveReplayHotkey":"Alt+F10","toggleRecordingHotkey":"Ctrl+Shift+R","continuousRecordingEnabled":false})";
   for (const auto bitrate : {999999U, 200000001U}) {

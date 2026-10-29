@@ -42,7 +42,12 @@ pub fn check_output(path: &Path, required_bytes: u64) -> Result<()> {
     Ok(())
 }
 pub fn estimate_bytes(draft: &OnboardingDraft) -> u64 {
-    u64::from(draft.bitrate.unwrap_or(30_000_000)) / 8
+    // Planning allowance only: CQP has no bitrate/file-size guarantee. Replay
+    // remains bounded by the existing shared packet-memory budget.
+    let bitrate=if draft.rate_control == Some(crate::config::RateControl::Cqp) {
+        draft.bitrate.unwrap_or(30_000_000).max(60_000_000)
+    } else { draft.bitrate.unwrap_or(30_000_000) };
+    u64::from(bitrate) / 8
         * u64::from(draft.replay_seconds.unwrap_or(30))
         * 2
         + 256 * 1024 * 1024

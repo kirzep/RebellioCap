@@ -33,7 +33,7 @@ it('updates editor labels live while preserving project names and written text',
  expect(screen.getByRole('group',{name:'Переместить текст'})).toBeInTheDocument();
 });
 
-it('localizes export, timeline menus and restore-safe canonical status messages',()=>{
+it('localizes export, timeline menus and restore-safe canonical status messages',async()=>{
  render(<ClipEditor onClose={vi.fn()}/>);
  fireEvent.click(screen.getByRole('button',{name:'Add text'}));
  fireEvent.contextMenu(document.querySelector('.ed-item')!,{clientX:20,clientY:20});
@@ -46,6 +46,13 @@ it('localizes export, timeline menus and restore-safe canonical status messages'
  expect(dialog).toHaveTextContent('Bitrate, Mbps');
  expect(dialog).toHaveTextContent('Free · 20 MB');
  expect(dialog).toHaveTextContent('Render and save');
+ expect(screen.getByRole('combobox',{name:'Compression method'})).toHaveTextContent('Smart');
+ fireEvent.keyDown(screen.getByRole('combobox',{name:'Compression method'}),{key:'ArrowDown'});
+ fireEvent.click(await screen.findByRole('option',{name:'Fit to size — thorough compression'}));
+ expect(screen.getByRole('combobox',{name:'Compression method'})).toHaveTextContent('Fit to size');
+ fireEvent.keyDown(screen.getByRole('combobox',{name:'Quality priority'}),{key:'ArrowDown'});
+ fireEvent.click(await screen.findByRole('option',{name:'Keep resolution and FPS'}));
+ expect(screen.getByRole('combobox',{name:'Quality priority'})).toHaveTextContent('Keep resolution and FPS');
  expect(dialog.textContent).not.toMatch(/[А-Яа-яЁё]/);
  expect(t('Автокопия недоступна: storage failure. Сохраните проект в .rebcap.')).toBe('Autosave unavailable: storage failure. Save your project as .rebcap.');
 });

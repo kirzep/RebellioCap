@@ -1,3 +1,4 @@
+import { SettingsHelp } from '../../components/SettingsHelp';
 import { t, useTranslation } from '../../i18n';
 import { Button } from '../../components/Primitives';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -220,7 +221,7 @@ export function HotkeysStep({
         <div className={styles.hotkeyRow}>
           <div>
             <span className={styles.fieldLabel}>
-              {formatReplaySaveLabel(draft.replay_seconds ?? 30)}
+              {formatReplaySaveLabel(draft.replay_seconds ?? 30)}<SettingsHelp topic="replayHotkey" />
             </span>
             <kbd className={styles.hotkeyValue} data-testid="hotkey-replay-display">
               {recordingTarget === 'replay' ? t('Ожидание сочетания…') : formatHotkey(saveReplay)}
@@ -256,7 +257,7 @@ export function HotkeysStep({
 
         <div className={styles.hotkeyRow}>
           <div>
-            <span className={styles.fieldLabel}>{t("Начать / остановить запись")}</span>
+            <span className={styles.fieldLabel}>{t("Начать / остановить запись")}<SettingsHelp topic="recordingHotkey" /></span>
             <kbd className={styles.hotkeyValue} data-testid="hotkey-recording-display">
               {recordingTarget === 'recording' ? t('Ожидание сочетания…') : formatHotkey(toggleRecording)}
             </kbd>
@@ -321,26 +322,29 @@ export function HotkeysStep({
         <p className={styles.fieldHint} aria-live="polite">{captureNotice}</p>
       )}
 
-      <label className={styles.checkboxRow}>
-        <Checkbox
-          checked={draft.continuous_recording_enabled ?? true}
-          disabled={Boolean(recordingTarget) || capturePreparing}
-          aria-invalid={Boolean(continuousValidation)}
-          aria-describedby={
-            continuousValidation ? 'continuous-recording-enabled-error' : undefined
-          }
-          onCheckedChange={(checked) => onChange({ continuous_recording_enabled: checked === true })}
-          data-testid="continuous-recording-checkbox"
-        />
-        <span>
-          <strong>{t("Разрешить обычную запись")}</strong>
-          <small>
-            {draft.continuous_recording_enabled === false
-              ? t('Команда обычной записи будет недоступна. Сочетание сохранится на будущее.')
-              : t('Сочетание запускает и останавливает отдельную непрерывную запись.')}
-          </small>
-        </span>
-      </label>
+      <div className={styles.checkboxRow}>
+        <label className="flex flex-1 cursor-pointer items-start gap-3">
+          <Checkbox
+            checked={draft.continuous_recording_enabled ?? true}
+            disabled={Boolean(recordingTarget) || capturePreparing}
+            aria-invalid={Boolean(continuousValidation)}
+            aria-describedby={
+              continuousValidation ? 'continuous-recording-enabled-error' : undefined
+            }
+            onCheckedChange={(checked) => onChange({ continuous_recording_enabled: checked === true })}
+            data-testid="continuous-recording-checkbox"
+          />
+          <span>
+            <strong>{t("Разрешить обычную запись")}</strong>
+            <small>
+              {draft.continuous_recording_enabled === false
+                ? t('Команда обычной записи будет недоступна. Сочетание сохранится на будущее.')
+                : t('Сочетание запускает и останавливает отдельную непрерывную запись.')}
+            </small>
+          </span>
+        </label>
+        <SettingsHelp topic="continuous" />
+      </div>
       {continuousValidation && (
         <p id="continuous-recording-enabled-error" className={styles.fieldError} role="alert">
           {t(continuousValidation.message)}

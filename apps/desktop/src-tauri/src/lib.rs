@@ -129,6 +129,7 @@ pub fn run() {
             commands::get_onboarding_state,
             commands::run_system_check,
             commands::list_monitors,
+            commands::list_game_windows,
             commands::list_audio_endpoints,
             commands::measure_audio_level,
             commands::read_audio_peak,

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <string_view>
 
 #include <nlohmann/json.hpp>
 
@@ -19,7 +20,7 @@
 // production pipeline against an independently updating desktop window instead
 // of treating packet count as proof of capture cadence. Requires an interactive
 // desktop, NVENC, and a display/stimulus that can sustain at least 60 Hz.
-int main() {
+int main(int argc, char** argv) {
   using namespace rebelliocap;
   using namespace std::chrono;
   const ComApartment apartment;
@@ -31,6 +32,7 @@ int main() {
     if (candidate.primary) monitor = candidate;
   }
   EngineConfig config;
+  config.recording_priority=argc>1 && std::string_view(argv[1])=="--recording-priority";
   config.monitor = monitor.id;
   config.system_audio_enabled = false;
   config.microphone_enabled = false;
@@ -116,6 +118,9 @@ int main() {
     if (pts != expected) ++off_grid;
   }
   std::cout << nlohmann::json{
+      {"recording_priority_requested",metrics.recording_priority_requested},
+      {"recording_priority_applied",metrics.recording_priority_applied},
+      {"recording_gpu_priority",metrics.recording_gpu_priority},
       {"seconds", seconds}, {"ticks", ticks},
       {"stimulus_fps", present_count / seconds},
       {"fresh_image_fps", metrics.new_image_ticks / seconds},

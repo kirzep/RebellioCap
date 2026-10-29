@@ -29,6 +29,7 @@ class ConvertedVideoFrame {
 
  private:
   friend struct NvencShutdownTestAccess;
+  friend struct AsyncVideoEncoderTestAccess;
   friend class D3d11Nv12Converter;
 
   ConvertedVideoFrame(Microsoft::WRL::ComPtr<ID3D11Texture2D> texture,

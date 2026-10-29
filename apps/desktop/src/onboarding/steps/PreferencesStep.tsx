@@ -201,7 +201,7 @@ export function PreferencesStep({
             draft.width,
             draft.height,
             draft.fps,
-            draft.bitrate
+            draft.bitrate, draft.rate_control, draft.cqp
           ),
         },
       ],

@@ -4,6 +4,7 @@ import {NativeSelect,NativeSelectOption} from './ui/native-select';
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Volume2 } from 'lucide-react';
+import { SettingsHelp } from './SettingsHelp';
 import { defaultOverlayDisplay, type OverlayDisplay } from './OverlayEditor';
 import { OverlayConstructor } from './OverlayConstructor';
 import { defaultOverlayLayout } from './overlayLayout';
@@ -90,19 +91,25 @@ export function NotificationSettingsPanel() {
   return <section className="space-y-5 rounded-2xl border p-5" aria-labelledby="notification-settings-title">
     <div><h3 id="notification-settings-title" className="font-semibold">{t("Уведомления")}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{t("Короткий сигнал при записи и сохранении повтора. Настройки сохраняются сразу.")}</p></div>
-    <label className="flex items-center gap-3">
+    <div className="flex items-center gap-1">
+    <label className="flex cursor-pointer items-center gap-3">
       <input type="checkbox" aria-label={t("Оверлей уведомлений")} checked={settings.overlayEnabled} disabled={busy}
         onChange={event => void save({ ...settings, overlayEnabled: event.target.checked })} />
       <span className="font-medium">{t("Оверлей уведомлений")}</span>
     </label>
+    <SettingsHelp topic="overlay" />
+    </div>
     <button type="button" className="rounded-lg border px-4 py-2 text-sm" disabled={busy} onClick={() => void openEditor()}>{t('Настроить оверлей')}</button>
     <p className="text-sm text-muted-foreground">{t('Расположите статус записи, статус повтора и сообщения в полноэкранном конструкторе.')}</p>
     {editorOpen && <OverlayConstructor display={display} layout={settings.layout ?? defaultOverlayLayout} onCommit={commitLayout} onClose={closeEditor}/>}
-    <label className="flex items-center gap-3">
+    <div className="flex items-center gap-1">
+    <label className="flex cursor-pointer items-center gap-3">
       <input type="checkbox" aria-label={t("Звук уведомлений")} checked={settings.soundEnabled} disabled={busy}
         onChange={event => void save({ ...settings, soundEnabled: event.target.checked })} />
       <span className="font-medium">{t("Звук уведомлений")}</span>
     </label>
+    <SettingsHelp topic="notificationSound" />
+    </div>
     <div className="flex flex-wrap items-end gap-4">
       <label className="flex min-w-40 flex-col gap-2 text-sm">{t("Сигнал")}<NativeSelect aria-label={t("Сигнал уведомления")} className="rounded-lg border bg-background p-2" value={settings.sound} disabled={busy}
           onChange={event => void save({ ...settings, sound: event.target.value as NotificationSettings['sound'] })}>

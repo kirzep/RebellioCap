@@ -381,7 +381,7 @@ EngineConfig config() {
 
 }  // namespace
 
-TEST_CASE("optional diagnostics collect the hardware snapshot with the engine QPC frequency") {
+TEST_CASE("capture status remains available without optional timing diagnostics") {
   class MetricProbe final : public IEngineVideoPipeline {
    public:
     Result<std::vector<EncodedPacket>> tick(QpcTicks, bool) override { return Result<std::vector<EncodedPacket>>::success({}); }
@@ -390,6 +390,7 @@ TEST_CASE("optional diagnostics collect the hardware snapshot with the engine QP
       ++reads;
       NvencRuntimeMetrics value{};
       value.submitted_frames=42;
+      value.capture_waiting_for_game=true;
       value.accepted_config.width=1920;
       return value;
     }
@@ -401,8 +402,9 @@ TEST_CASE("optional diagnostics collect the hardware snapshot with the engine QP
                          .muxer=std::make_shared<BlockingMuxer>()});
   auto settings=config();
   REQUIRE(engine.start(settings).is_success());
-  REQUIRE(engine.metrics().video_pipeline.submitted_frames==0);
-  REQUIRE(video->reads.load()==0);
+  REQUIRE(engine.metrics().video_pipeline.capture_waiting_for_game);
+  REQUIRE(engine.metrics().video_pipeline.submitted_frames==42);
+  REQUIRE(video->reads.load()>0);
   REQUIRE(engine.stop().is_success());
   settings.pipeline_telemetry=std::make_shared<PipelineTelemetry>();
   settings.pipeline_telemetry->configure(true);
@@ -969,6 +971,33 @@ TEST_CASE("recording stop hotkey leaves the shared dispatcher free to snapshot r
   REQUIRE_FALSE(captured.packets.empty());
   REQUIRE(captured.packets.front().dts <= 60'000);
   REQUIRE(engine.metrics().completed_saves == 1);
+}
+
+TEST_CASE("a small capture overrun keeps the current presentation slot available") {
+  class OneSlowCapture final : public IEngineVideoPipeline {
+   public:
+    explicit OneSlowCapture(std::shared_ptr<VirtualEngineClock> clock):clock_(std::move(clock)) {}
+    Result<std::vector<EncodedPacket>> tick(QpcTicks pts, bool keyframe) override {
+      if(first_) { first_=false; clock_->elapse(1'100); }
+      return frames.tick(pts,keyframe);
+    }
+    Result<std::vector<EncodedPacket>> flush() override { return frames.flush(); }
+    FakeVideoEncoder frames;
+   private:
+    std::shared_ptr<VirtualEngineClock> clock_;
+    bool first_{true};
+  };
+  auto clock=std::make_shared<VirtualEngineClock>(60'000);
+  auto video=std::make_shared<OneSlowCapture>(clock);
+  RecorderEngine engine({.clock=clock,.video=video,.hotkey=std::make_shared<FakeHotkeySource>(),.muxer=std::make_shared<BlockingMuxer>()});
+  REQUIRE(engine.start(config()).is_success());
+  clock->advance_through(3'000);
+  REQUIRE(video->frames.wait_for_frames(3,5s));
+  REQUIRE(engine.stop().is_success());
+  const auto pts=video->frames.timestamps();
+  REQUIRE(pts.size()>=3);
+  CHECK(pts[0]==0); CHECK(pts[1]==1'000); CHECK(pts[2]==2'000);
+  CHECK(engine.metrics().missed_video_deadlines==0);
 }
 
 TEST_CASE("scheduler counts and skips video deadlines missed by a slow pipeline") {

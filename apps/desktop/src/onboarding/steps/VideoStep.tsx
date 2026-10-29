@@ -1,3 +1,4 @@
+import { SettingsHelp, SettingsLabel } from '../../components/SettingsHelp';
 import { t, useTranslation } from '../../i18n';
 import { Field, FieldGroup, FieldSet, FieldLegend, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
@@ -13,6 +14,9 @@ import { formatVideoMode, friendlyMonitorName } from '../../config/format';
 import type { MonitorChoice, OnboardingDraft } from '../../config/model';
 import type { ValidationError } from '../../config/validation';
 import styles from './steps.module.css';
+import { VideoEncodingSettings } from './VideoEncodingSettings';
+// Temporarily disabled at user request; keep the component for later.
+// import { GameCaptureSettings } from './GameCaptureSettings';
 
 export interface VideoStepProps {
   draft: OnboardingDraft;
@@ -25,7 +29,11 @@ export interface VideoStepProps {
 }
 
 type CatalogState = 'loading' | 'ready' | 'empty' | 'error';
-type QualityMode = 'balanced' | 'native' | 'manual';
+type SizeMode = 'native' | 'fullhd' | 'custom';
+type SizeSelection = Pick<OnboardingDraft, 'width' | 'height'> & {
+  mode: SizeMode;
+  monitorId: OnboardingDraft['monitor_id'];
+};
 
 function evenDimension(value: number): number {
   return Math.max(64, Math.floor(value / 2) * 2);
@@ -57,15 +65,15 @@ export function VideoStep({
   guided = false,
 }: VideoStepProps) {
   useTranslation();
+  // const gameMode = draft.capture_mode === 'game';
+  const gameMode = false;
   const [monitors, setMonitors] = useState<MonitorChoice[]>(() => monitorCatalogCache.get(hostBridge) ?? []);
   const [catalogState, setCatalogState] = useState<CatalogState>(() =>
     monitorCatalogCache.get(hostBridge)?.length ? 'ready' : 'loading');
   const [catalogError, setCatalogError] = useState<AppError | null>(null);
   const [diagnosticsError, setDiagnosticsError] = useState<AppError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  const [quality, setQuality] = useState<QualityMode>(() =>
-    draft.width != null && draft.height != null ? 'manual' : 'balanced'
-  );
+  const [sizeSelection, setSizeSelection] = useState<SizeSelection | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(
     !guided && draft.width != null && draft.height != null
   );
@@ -117,12 +125,6 @@ export function VideoStep({
 
         if (initialMonitor) {
           const initialVideo = balancedVideoForMonitor(initialMonitor);
-          if (guided && draft.width != null && draft.height != null) {
-            const balanced = draft.width === initialVideo.width && draft.height === initialVideo.height &&
-              draft.fps === initialVideo.fps && draft.bitrate === initialVideo.bitrate;
-            const native = draft.width === initialMonitor.width && draft.height === initialMonitor.height;
-            setQuality(balanced ? 'balanced' : native ? 'native' : 'manual');
-          }
           if (!draft.monitor_id) patch.monitor_id = initialMonitor.id;
           if (draft.width == null) patch.width = initialVideo.width;
           if (draft.height == null) patch.height = initialVideo.height;
@@ -189,12 +191,12 @@ export function VideoStep({
   const bitrateValidation = errors.find((error) => error.field === 'bitrate');
 
   useEffect(() => {
-    onCatalogBusyChange?.(catalogState === 'loading');
+    onCatalogBusyChange?.(!gameMode && catalogState === 'loading');
     return () => onCatalogBusyChange?.(false);
-  }, [catalogState, onCatalogBusyChange]);
+  }, [catalogState, gameMode, onCatalogBusyChange]);
 
   useEffect(() => {
-    const issue =
+    const issue = gameMode ? null :
       catalogState === 'empty'
         ? t('Не найден доступный экран.')
         : catalogState === 'error'
@@ -209,29 +211,29 @@ export function VideoStep({
     catalogState,
     onAvailabilityIssueChange,
     selectedMonitorMissing,
+    gameMode,
   ]);
 
-  function selectQuality(nextQuality: QualityMode) {
-    setQuality(nextQuality);
-    if (nextQuality === 'manual') {
-      setAdvancedOpen(true);
+  // Retain explicit choices only while they match the draft. Infer restored
+  // selections from dimensions, independently of FPS and encoding settings.
+  const inferredSizeMode: SizeMode = selectedMonitor &&
+    draft.width === evenDimension(selectedMonitor.width) && draft.height === evenDimension(selectedMonitor.height)
+      ? 'native'
+      : draft.width === 1920 && draft.height === 1080 ? 'fullhd' : 'custom';
+  const selectionMatchesDraft = sizeSelection && sizeSelection.width === draft.width &&
+    sizeSelection.height === draft.height && sizeSelection.monitorId === draft.monitor_id;
+  const sizeMode: SizeMode = widthValidation || heightValidation ? 'custom' :
+    selectionMatchesDraft ? sizeSelection.mode : inferredSizeMode;
+
+  function selectSize(mode: SizeMode) {
+    if (mode === 'custom') {
+      setSizeSelection({ mode, width: draft.width, height: draft.height, monitorId: draft.monitor_id });
       return;
     }
-    if (!selectedMonitor) return;
-
-    if (nextQuality === 'balanced') setCustomFps(false);
-
-    onChange(
-      nextQuality === 'balanced'
-        ? balancedVideoForMonitor(selectedMonitor)
-        : nativeSize(selectedMonitor)
-    );
-  }
-
-  function updateManual(patch: Partial<OnboardingDraft>) {
-    setQuality('manual');
-    setAdvancedOpen(true);
-    onChange(patch);
+    if (mode === 'native' && !selectedMonitor) return;
+    const size = mode === 'native' ? nativeSize(selectedMonitor!) : { width: 1920, height: 1080 };
+    setSizeSelection({ mode, ...size, monitorId: draft.monitor_id });
+    onChange(size);
   }
 
   function updateInteger(
@@ -241,9 +243,11 @@ export function VideoStep({
     setIntegerInputs((current) => ({ ...current, [field]: input }));
     const normalized = input.trim();
     const value = /^\d+$/.test(normalized) ? Number(normalized) : null;
-    if (field === 'width') updateManual({ width: value });
-    if (field === 'height') updateManual({ height: value });
-    if (field === 'fps') updateManual({ fps: value });
+    if (field !== 'fps') {
+      setSizeSelection({ mode: 'custom', width: draft.width, height: draft.height,
+        [field]: value, monitorId: draft.monitor_id });
+    }
+    onChange({ [field]: value });
   }
 
   async function handleOpenDiagnostics() {
@@ -270,7 +274,6 @@ export function VideoStep({
       ? draft.width / draft.height
       : null;
   const stretchesImage =
-    quality === 'manual' &&
     sourceRatio != null &&
     outputRatio != null &&
     Math.abs(sourceRatio - outputRatio) / sourceRatio > 0.015;
@@ -280,13 +283,25 @@ export function VideoStep({
       <div className={styles.stepIntro}>
         <h2 className={styles.title}>{guided ? t('Что будем записывать?') : t('Экран')}</h2>
         <p className={styles.copy}>
-          {guided ? t('Выберите экран и качество. Остальное мы уже настроили.') : t('Записывается всё содержимое выбранного экрана.')}
+          {gameMode ? t('Записывается только выбранная игра.') : guided ? t('Выберите экран и размер видео. Остальное мы уже настроили.') : t('Записывается всё содержимое выбранного экрана.')}
         </p>
       </div>
 
       <FieldGroup className={styles.formStack}>
+        {/* Game-only capture is temporarily disabled; retain these controls.
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="video-monitor" className={styles.fieldLabel}>{t("Экран")}</FieldLabel>
+          <FieldLabel htmlFor="video-capture-mode" className={styles.fieldLabel}>{t('Область захвата')}</FieldLabel>
+          <NativeSelect id="video-capture-mode" value={draft.capture_mode ?? 'desktop'} className="w-full"
+            onChange={(event) => onChange({ capture_mode: event.target.value === 'game' ? 'game' : 'desktop' })}>
+            <NativeSelectOption value="desktop">{t('Весь экран')}</NativeSelectOption>
+            <NativeSelectOption value="game">{t('Только игра')}</NativeSelectOption>
+          </NativeSelect>
+        </Field>
+        {gameMode && <GameCaptureSettings draft={draft} hostBridge={hostBridge} onChange={onChange} errors={errors} />}
+        */}
+        {!gameMode &&
+        <Field className={styles.fieldPlain}>
+          <SettingsLabel topic="monitor" htmlFor="video-monitor" className={styles.fieldLabel}>{t("Экран")}</SettingsLabel>
           <NativeSelect
             id="video-monitor"
             className="w-full"
@@ -297,13 +312,9 @@ export function VideoStep({
               onChange={(event) => {
                 const monitor = monitors.find((item) => item.id === event.target.value);
                 if (!monitor) return;
-                if (quality === 'balanced') setCustomFps(false);
-                const size =
-                quality === 'balanced'
-                  ? balancedVideoForMonitor(monitor)
-                  : quality === 'native'
-                    ? nativeSize(monitor)
-                    : {};
+                const size = sizeMode === 'native' ? nativeSize(monitor) : {};
+                setSizeSelection({ mode: sizeMode, width: draft.width, height: draft.height,
+                  ...size, monitorId: monitor.id });
               onChange({ monitor_id: monitor.id, ...size });
             }}
             data-testid="video-monitor-select"
@@ -381,55 +392,35 @@ export function VideoStep({
             <p className={styles.inlineWarning} role="alert">
               {t("Этот экран сейчас недоступен. Выберите устройство из списка.")}</p>
           )}
-        </Field>
+        </Field>}
 
         <FieldSet className={styles.fieldset}>
-          <FieldLegend className={styles.fieldLabel}>{t("Качество записи")}</FieldLegend>
+          <FieldLegend className={styles.fieldLabel}>{t("Размер видео")}<SettingsHelp topic="videoSize" /></FieldLegend>
           <p className={styles.fieldHint}>
             {t("Запись сохраняется в SDR. HDR и преобразование HDR в SDR пока не поддерживаются;\n            для корректных цветов отключите HDR в настройках экрана Windows перед записью.")}</p>
-          <ToggleGroup type="single" value={quality} variant="outline" spacing={2} className="flex w-full flex-wrap"
+          <ToggleGroup type="single" value={sizeMode} variant="outline" spacing={2} className="flex w-full flex-wrap"
             onValueChange={(value) => {
-              if (value === 'balanced' || value === 'native' || value === 'manual') selectQuality(value);
-            }} aria-label={t("Качество записи")}>
+              if (value === 'native' || value === 'fullhd' || value === 'custom') selectSize(value);
+            }} aria-label={t("Размер видео")}>
             {([
-              ['balanced', t('Сбалансированное')],
               ['native', t('Как у экрана')],
-              ['manual', t('Вручную')],
+              ['fullhd', '1920×1080'],
+              ['custom', t('Свой размер')],
             ] as const).map(([value, label]) => (
               <ToggleGroupItem
                 key={value}
                 value={value}
+                disabled={value === 'native' && !selectedMonitor}
                 className="min-h-11 h-auto flex-1 px-3 py-2 whitespace-normal"
               >
                 {t(label)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </FieldSet>
-
-        <div className={styles.resultRow} aria-live="polite">
-          <div>
-            <span className={styles.eyebrow}>{t("Итог записи")}</span>
-            <strong className={styles.resultValue}>
-              {formatVideoMode(draft.width, draft.height, draft.fps, draft.bitrate)}
-            </strong>
-          </div>
-          <Button
-            type="button"
-            variant="tertiary" size="compact"
-            aria-expanded={advancedOpen}
-            aria-controls="video-advanced-settings"
-            onClick={() => setAdvancedOpen((value) => !value)}
-          >
-            {advancedOpen ? t('Скрыть параметры') : t('Дополнительные параметры')}
-          </Button>
-        </div>
-
-        {advancedOpen && (
-          <div id="video-advanced-settings" className={styles.advancedPanel}>
+          {sizeMode === 'custom' && (
             <div className={styles.inputGrid}>
-              <FieldLabel className={styles.inputLabel} htmlFor="video-width">
-                {t("Ширина")}<Input
+              <div className={styles.inputLabel}>
+                <SettingsLabel topic="width" htmlFor="video-width">{t("Ширина")}</SettingsLabel><Input
                   id="video-width"
                   type="text"
                   inputMode="numeric"
@@ -447,9 +438,9 @@ export function VideoStep({
                     {t(widthValidation.message)}
                   </span>
                 )}
-              </FieldLabel>
-              <FieldLabel className={styles.inputLabel} htmlFor="video-height">
-                {t("Высота")}<Input
+              </div>
+              <div className={styles.inputLabel}>
+                <SettingsLabel topic="height" htmlFor="video-height">{t("Высота")}</SettingsLabel><Input
                   id="video-height"
                   type="text"
                   inputMode="numeric"
@@ -467,9 +458,41 @@ export function VideoStep({
                     {t(heightValidation.message)}
                   </span>
                 )}
-              </FieldLabel>
-              <FieldLabel className={styles.inputLabel} htmlFor="video-fps">
-                {t("Частота кадров")}<NativeSelect
+              </div>
+            </div>
+          )}
+          {sizeMode === 'custom' && <p className={styles.fieldHint}>{t('Ширина и высота — чётные числа от 64 до 16384.')}</p>}
+          {stretchesImage && (
+            <p className={styles.inlineWarning} role="status">
+              {t("Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.")}</p>
+          )}
+        </FieldSet>
+
+        <VideoEncodingSettings draft={draft} onChange={onChange} errors={errors} />
+
+        <div className={styles.resultRow} aria-live="polite">
+          <div>
+            <span className={styles.eyebrow}>{t("Итог записи")}</span>
+            <strong className={styles.resultValue}>
+              {formatVideoMode(draft.width, draft.height, draft.fps, draft.bitrate, draft.rate_control, draft.cqp)}
+            </strong>
+          </div>
+          <Button
+            type="button"
+            variant="tertiary" size="compact"
+            aria-expanded={advancedOpen}
+            aria-controls="video-advanced-settings"
+            onClick={() => setAdvancedOpen((value) => !value)}
+          >
+            {advancedOpen ? t('Скрыть параметры') : t('Дополнительные параметры')}
+          </Button>
+        </div>
+
+        {advancedOpen && (
+          <div id="video-advanced-settings" className={styles.advancedPanel}>
+            <div className={styles.inputGrid}>
+              <div className={styles.inputLabel}>
+                <SettingsLabel topic="fps" htmlFor="video-fps">{t("Частота кадров")}</SettingsLabel><NativeSelect
                   id="video-fps"
                   className="w-full"
                   value={fpsSelectValue}
@@ -481,7 +504,7 @@ export function VideoStep({
                       return;
                     }
                     setCustomFps(false);
-                    updateManual({ fps: Number(event.target.value) });
+                    onChange({ fps: Number(event.target.value) });
                   }}
                   data-testid="video-fps-select"
                 >
@@ -495,9 +518,9 @@ export function VideoStep({
                     {t(fpsValidation.message)}
                   </span>
                 )}
-              </FieldLabel>
-              <FieldLabel className={styles.inputLabel} htmlFor="video-bitrate">
-                {t("Битрейт, Мбит/с")}<Input
+              </div>
+              {draft.rate_control!=='cqp' && <div className={styles.inputLabel}>
+                <SettingsLabel topic="bitrate" htmlFor="video-bitrate">{t("Битрейт, Мбит/с")}</SettingsLabel><Input
                   id="video-bitrate"
                   type="text"
                   inputMode="decimal"
@@ -512,7 +535,7 @@ export function VideoStep({
                     const isDecimal = /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized);
                     const megabits = normalized === '' || !isDecimal ? null : Number(normalized);
                     setBitrateInput(nextValue);
-                    updateManual({
+                    onChange({
                       bitrate:
                         megabits !== null && Number.isFinite(megabits)
                           ? Math.round(megabits * 1_000_000)
@@ -531,12 +554,13 @@ export function VideoStep({
                     {t(bitrateValidation.message)}
                   </span>
                 )}
-              </FieldLabel>
+              </div>
+              }
             </div>
 
             {fpsSelectValue === 'custom' && (
-              <FieldLabel className={styles.inputLabel} htmlFor="video-custom-fps">
-                {t("FPS вручную")}<Input
+              <div className={styles.inputLabel}>
+                <SettingsLabel topic="customFps" htmlFor="video-custom-fps">{t("FPS вручную")}</SettingsLabel><Input
                   id="video-custom-fps"
                   type="text"
                   inputMode="numeric"
@@ -554,16 +578,13 @@ export function VideoStep({
                     {t(fpsValidation.message)}
                   </span>
                 )}
-              </FieldLabel>
+              </div>
             )}
 
             <div className={styles.videoHint}>
               <p id="video-bitrate-hint" className={styles.fieldHint}>
-                {t("Размеры — чётные числа от 64 до 16384, FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.")}</p>
-              {stretchesImage && (
-                <p className={styles.inlineWarning} role="status">
-                  {t("Пропорции отличаются от выбранного экрана. Изображение будет растянуто до указанного размера.")}</p>
-              )}
+                {t("FPS — от 1 до 240, битрейт — от 1 до 200 Мбит/с.")}</p>
+
             </div>
           </div>
         )}

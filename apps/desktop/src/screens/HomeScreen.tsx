@@ -123,12 +123,15 @@ function activeConfigFingerprint(config: ActiveConfig): string {
   return JSON.stringify([
     config.onboarding_completed,
     config.monitor_id,
+    config.capture_mode ?? 'desktop',
+    config.game_executable ?? '',
     audioValue(config.system_audio),
     audioValue(config.microphone),
     config.width,
     config.height,
     config.fps,
     config.bitrate,
+    config.rate_control ?? 'vbr', config.cqp ?? 23, config.recording_priority ?? false,
     config.replay_seconds,
     config.replay_memory_limit_mb ?? 0,
     config.replay_mode,
@@ -982,7 +985,7 @@ export function HomeScreen({
                             activeConfig.width,
                             activeConfig.height,
                             activeConfig.fps,
-                            activeConfig.bitrate
+                              activeConfig.bitrate, activeConfig.rate_control, activeConfig.cqp
                           )}
                         </small>
                       </dd>
@@ -1008,7 +1011,7 @@ export function HomeScreen({
                       <dt>{t("Файл")}</dt>
                       <dd>
                         <span>H.264 · {formatContainer(activeConfig.container)}</span>
-                        <small>{formatBitrate(activeConfig.bitrate)}</small>
+                        <small>{activeConfig.rate_control==='cqp' ? `CQP ${activeConfig.cqp??23}` : formatBitrate(activeConfig.bitrate)}</small>
                       </dd>
                     </div>
                   </dl>

@@ -25,6 +25,9 @@ export interface OnboardingMachine {
 }
 
 const FIELD_STEP: Record<string, number> = {
+  capture_mode: 1,
+  rate_control: 1, cqp: 1, recording_priority: 1,
+  game_executable: 1,
   monitor_id: 1,
   width: 1,
   height: 1,
@@ -59,6 +62,8 @@ export function createOnboardingMachine(
     draft: {
       ...createDraftDefaults(),
       ...Object.fromEntries(Object.entries(initialDraft).filter(([, value]) => value != null)),
+      // Game-only controls are paused; resume setup with full-screen capture.
+      capture_mode: 'desktop',
     },
     lastCompletedStep: Math.max(0, Math.min(6, initialLastCompletedStep)),
     isSaving: false,

@@ -10,6 +10,7 @@ function createMockHost(checkResult: SystemCheckResult): HostBridge {
     bootstrapApp: vi.fn(),
     getOnboardingState: vi.fn(),
     runSystemCheck: vi.fn().mockResolvedValue(checkResult),
+    listGameWindows: async () => [],
     listMonitors: vi.fn(),
     listAudioEndpoints: vi.fn(),
     measureAudioLevel: vi.fn(),

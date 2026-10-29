@@ -1,6 +1,7 @@
 #include "capture/d3d11_device.h"
 
 #include <dxgi1_2.h>
+#include <d3d10.h>
 
 #include <array>
 #include <string>
@@ -18,7 +19,7 @@ Error hresult_error(std::string code, std::string message, HRESULT result) {
 
 }  // namespace
 
-Result<D3d11Device> create_d3d11_device(LUID adapter_luid) {
+Result<D3d11Device> create_d3d11_device(LUID adapter_luid, bool recording_priority) {
   Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
   HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
   if (FAILED(result)) {
@@ -72,6 +73,17 @@ Result<D3d11Device> create_d3d11_device(LUID adapter_luid) {
         "d3d11.device_creation_failed", "Could not create the D3D11 capture device.", result));
   }
 
+  // NVENC's DirectX interop also touches the immediate context from its
+  // worker. Enable the runtime lock even though our conversion calls have
+  // a single owner; otherwise driver interop and Flush can deadlock.
+  Microsoft::WRL::ComPtr<ID3D10Multithread> multithread;
+  result=created.context_.As(&multithread);
+  if(FAILED(result)) return Result<D3d11Device>::failure(hresult_error(
+      "d3d11.multithread_unavailable", "The graphics context cannot protect encoder interop.", result));
+  multithread->SetMultithreadProtected(TRUE);
+  if(!multithread->GetMultithreadProtected()) return Result<D3d11Device>::failure(
+      hresult_error("d3d11.multithread_unavailable", "Graphics context protection was not enabled.", E_FAIL));
+
   Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device;
   result = created.device_.As(&dxgi_device);
   if (FAILED(result)) {
@@ -92,6 +104,9 @@ Result<D3d11Device> create_d3d11_device(LUID adapter_luid) {
   }
 
   created.adapter_luid_ = actual_description.AdapterLuid;
+  created.priority_=configure_recording_priority(recording_priority,
+      [&](int priority){return dxgi_device->SetGPUThreadPriority(priority);},
+      [&](int* priority){return dxgi_device->GetGPUThreadPriority(priority);});
   return Result<D3d11Device>::success(std::move(created));
 }
 

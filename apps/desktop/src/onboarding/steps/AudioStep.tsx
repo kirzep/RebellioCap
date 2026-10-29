@@ -1,3 +1,4 @@
+import { SettingsHelp } from '../../components/SettingsHelp';
 import { t, useTranslation } from '../../i18n';
 import { FieldGroup, FieldLabel } from '../../components/ui/field';
 import { NativeSelect, NativeSelectOption } from '../../components/ui/native-select';
@@ -355,7 +356,7 @@ export function AudioStep({
     return (
       <section className={styles.audioGroup} aria-labelledby={`${selectId}-title`}>
         <div>
-          <h3 id={`${selectId}-title`} className={styles.sectionTitle}>{title}</h3>
+          <h3 id={`${selectId}-title`} className={styles.sectionTitle}>{title}<SettingsHelp topic={source === 'system' ? 'systemAudio' : 'microphone'} /></h3>
           <p id={descriptionId} className={styles.fieldHint}>{description}</p>
         </div>
 

@@ -68,6 +68,32 @@ pub fn resolve_config_root(
 }
 
 impl ConfigStore {
+    /// A separate durable latch prevents recovery of an old desktop profile
+    /// when writing the new game profile fails or the primary needs recovery.
+    pub fn block_desktop_capture(&self) -> Result<()> {
+        let path = self.checked("capture-game-only")?;
+        let file = OpenOptions::new().write(true).create(true).truncate(true).open(path)?;
+        file.sync_all()?;
+        Ok(())
+    }
+
+    pub fn desktop_capture_blocked(&self) -> Result<bool> {
+        // Any unexpected entry also blocks capture; an invalid latch is not permission.
+        match fs::symlink_metadata(self.root.join("capture-game-only")) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn allow_desktop_capture(&self) -> Result<()> {
+        match fs::remove_file(self.checked("capture-game-only")?) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     /// Host transaction journal restoration / full settings commit. Never registered as IPC.
     pub fn replace_host_state(&self, state: &StoredState) -> Result<()> {
         let _lock = self.lock()?;

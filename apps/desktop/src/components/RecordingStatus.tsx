@@ -23,6 +23,12 @@ export function RecordingStatus({ snapshot, unavailable = false }: {
         {t("Replay: доступно {0} с. Буфер сокращён: лимит памяти.", Math.max(0, Math.floor(snapshot.metrics.replayRetainedSeconds ?? 0)))}
       </span>
     )}
+    {known && snapshot?.metrics.diagnostics?.capture_waiting_for_game === true && (
+      <span className={`${styles.item} ${styles.memory}`}>{t('Ожидание кадров игры')}</span>
+    )}
+    {known && snapshot?.metrics.diagnostics?.recording_priority_requested === true && snapshot.metrics.diagnostics.recording_priority_applied === false && (
+      <span className={`${styles.item} ${styles.memory}`}>{t('Повышенный приоритет записи не подтверждён')}</span>
+    )}
     {missingAudio !== 0 && <span className={`${styles.item} ${styles.memory}`} title={`${missingAudio === 3 ? t('Звук системы и микрофон недоступны') : missingAudio & 1 ? t('Звук системы недоступен') : t('Микрофон недоступен')}. ${t(' Запись продолжается с тишиной; подключение выбранного устройства будет восстановлено автоматически.')}`}>
       {missingAudio === 3 ? t('Звук системы и микрофон недоступны') : missingAudio & 1 ? t('Звук системы недоступен') : t('Микрофон недоступен')}.
       {t(' Запись продолжается с тишиной; подключение выбранного устройства будет восстановлено автоматически.')}

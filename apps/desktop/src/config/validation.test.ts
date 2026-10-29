@@ -8,6 +8,21 @@ import {
 } from './validation';
 
 describe('config validation', () => {
+  it('validates the CQP range including zero without requiring new fields in legacy profiles', () => {
+    const video={monitor_id:'monitor',width:1920,height:1080,fps:60,bitrate:12000000};
+    for(const cqp of [0,23,51]) expect(validateDraftStep(1,{...video,rate_control:'cqp',cqp})).toEqual([]);
+    for(const cqp of [-1,52,23.5,null]) expect(validateDraftStep(1,{...video,rate_control:'cqp',cqp}).some(error=>error.field==='cqp')).toBe(true);
+    expect(validateDraftStep(1,video)).toEqual([]);
+  });
+  it('requires a full explicit executable only in game mode', () => {
+    const video = { monitor_id: 'monitor', width: 1920, height: 1080, fps: 60, bitrate: 12_000_000 };
+    expect(validateDraftStep(1, { ...video, capture_mode: 'game' }).some(error => error.field === 'game_executable')).toBe(true);
+    expect(validateDraftStep(1, { ...video, monitor_id: '', capture_mode: 'game', game_executable: 'C:\\Games\\game.exe' })).toEqual([]);
+    for (const game_executable of ['game.exe', 'C:\\Games\\..\\game.exe', 'C:\\Games\\game.txt']) {
+      expect(validateDraftStep(1, { ...video, capture_mode: 'game', game_executable }).some(error => error.field === 'game_executable')).toBe(true);
+    }
+    expect(validateDraftStep(1, video)).toEqual([]);
+  });
   describe('isValidIdentity', () => {
     it('accepts valid ASCII/Unicode string within length', () => {
       expect(isValidIdentity('monitor-0')).toBe(true);

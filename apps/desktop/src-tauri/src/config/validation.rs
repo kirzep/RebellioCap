@@ -44,7 +44,18 @@ pub fn validate_draft(value: &OnboardingDraft) -> Result<()> {
 }
 
 fn validate_fields(value: &OnboardingDraft, check_available: bool) -> Result<()> {
-    if let Some(id) = &value.monitor_id {
+    if value.cqp.is_some_and(|value| value > 51) { return Err(ConfigError::Invalid("cqp")); }
+    if value.capture_mode == Some(super::CaptureMode::Game) {
+        let executable = value.game_executable.as_deref().unwrap_or_default();
+        let path = Path::new(executable);
+        if identity(executable).is_err() || !path.is_absolute()
+            || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+            || !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+        {
+            return Err(ConfigError::Invalid("game_executable"));
+        }
+    }
+    if let Some(id) = &value.monitor_id.as_ref().filter(|_| value.capture_mode != Some(super::CaptureMode::Game)) {
         identity(id)?;
     }
     for audio in [&value.system_audio, &value.microphone]
@@ -92,7 +103,7 @@ pub fn validate_active(value: &ActiveConfig, available: &DeviceInventory) -> Res
     if !value.onboarding_completed {
         return Err(ConfigError::Invalid("onboarding_completed"));
     }
-    if !available.monitor_ids.contains(&value.monitor_id) {
+    if value.capture_mode != super::CaptureMode::Game && !available.monitor_ids.contains(&value.monitor_id) {
         return Err(ConfigError::Invalid("monitor_unavailable"));
     }
     for (audio, ids, field) in [

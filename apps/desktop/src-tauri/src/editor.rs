@@ -1,4 +1,6 @@
 //! Local non-destructive editor. Encoding runs outside the recorder process.
+#[path = "editor_compression.rs"]
+mod compression;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
@@ -791,12 +793,13 @@ fn run_encode(
     graph: &str,
     plan: &Value,
     path: &Path,
-    encoder: &str,
+    encoder: compression::Profile,
     rate: u64,
     status: &Arc<Mutex<Value>>,
     cancel: &AtomicBool,
     attempt: usize,
 ) -> Result<()> {
+    if cancel.load(Ordering::Acquire) { return Err("Экспорт отменён".into()); }
     let job = crate::engine::supervisor::Job::new()?;
     let mut cmd = command(&engine.with_file_name("ffmpeg.exe"));
     cmd.creation_flags(0x08000000 | 0x00000004);
@@ -817,34 +820,8 @@ fn run_encode(
         "[outv]",
         "-map",
         "[outa]",
-        "-c:v",
-        if encoder == "h264_mf_sw" {
-            "h264_mf"
-        } else {
-            encoder
-        },
     ]);
-    if encoder == "h264_nvenc" {
-        cmd.args([
-            "-preset",
-            "p5",
-            "-rc",
-            "vbr",
-            "-b:v",
-            &rate.to_string(),
-            "-maxrate",
-            &(rate * 3 / 2).to_string(),
-            "-bufsize",
-            &(rate * 2).to_string(),
-        ]);
-    } else {
-        cmd.args([
-            "-hw_encoding",
-            if encoder == "h264_mf" { "1" } else { "0" },
-            "-b:v",
-            &rate.to_string(),
-        ]);
-    }
+    cmd.args(encoder.video_args(rate));
     cmd.args([
         "-c:a",
         "aac",
@@ -899,7 +876,8 @@ fn run_encode(
                 .and_then(|s| s.parse::<f64>().ok())
             {
                 if let Ok(mut s) = state.lock() {
-                    *s = json!({"state":"running","progress":(v/1e6/duration).clamp(0.,0.99),"attempt":attempt});
+                    *s = json!({"state":"running","progress":(v/1e6/duration).clamp(0.,0.99),"attempt":attempt,
+                        "phase":if encoder==compression::Profile::Quality {"quality"}else{"budget"}});
                 }
             }
         }
@@ -935,22 +913,7 @@ pub async fn editor_export(
     if total < 0.05 {
         return Err("Шкала монтажа пуста".into());
     }
-    for key in ["width", "height"] {
-        let v = number(&plan, key, 0.);
-        if !(16. ..=7680.).contains(&v) || v % 2. != 0. {
-            return Err("Некорректное разрешение экспорта".into());
-        }
-    }
-    if !(1. ..=240.).contains(&number(&plan, "fps", 0.))
-        || !(64000. ..=200_000_000.).contains(&number(&plan, "bitrate", 0.))
-    {
-        return Err("Некорректные параметры экспорта".into());
-    }
-    let limit_mb = number(&plan, "discordLimitMb", 20.);
-    if plan["discord"] == true && ![20., 50., 500.].contains(&limit_mb) {
-        return Err("Некорректный лимит Discord".into());
-    }
-    let limit_bytes = limit_mb as u64 * 1_000_000;
+    compression::validate_plan(&plan,total)?;
     let (engine, _) = crate::commands::editor_paths(&state, None).await?;
     let app2 = app.clone();
     let path =
@@ -1007,49 +970,26 @@ pub async fn editor_export(
             }
             let mut plan = plan;
             plan["duration"] = json!(total);
-            let (args, graph) = filter_graph(&project, &plan, &raster_paths)?;
-            let mut rate = number(&plan, "bitrate", 5_000_000.) as u64;
-            let discord = plan["discord"] == true;
             let output = temp.path().join("render.mp4");
-            for attempt in 1..=3 {
-                let mut last = String::new();
-                let mut encoded = false;
-                for encoder in ["h264_nvenc", "h264_mf", "h264_mf_sw"] {
-                    match run_encode(
-                        &engine, &args, &graph, &plan, &output, encoder, rate, &status, &cancel,
-                        attempt,
-                    ) {
-                        Ok(()) => {
-                            encoded = true;
-                            break;
-                        }
-                        Err(e) => {
-                            last = e;
-                            if cancel.load(Ordering::Acquire) {
-                                return Err(last);
-                            }
-                        }
-                    }
-                }
-                if !encoded {
-                    return Err(format!("Кодирование H.264 недоступно: {last}"));
-                }
-                let size = std::fs::metadata(&output).map_err(|e| e.to_string())?.len();
-                if !discord || size < limit_bytes {
-                    let mut target =
-                        tempfile::NamedTempFile::new_in(path.parent().ok_or("Некорректная папка")?)
-                            .map_err(|e| e.to_string())?;
-                    let mut source = std::fs::File::open(&output).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut source, &mut target).map_err(|e| e.to_string())?;
-                    target.as_file().sync_all().map_err(|e| e.to_string())?;
-                    target.persist(&path).map_err(|e| e.to_string())?;
-                    *status.lock().unwrap() =
-                        json!({"state":"done","progress":1,"path":path,"bytes":size});
-                    return Ok(());
-                }
-                rate = ((rate as f64 * limit_bytes as f64 * 0.925 / size as f64 * 0.92) as u64).max(64000);
-            }
-            Err(format!("Не удалось уложиться в {limit_mb} МБ. Сократите монтаж или снизьте разрешение."))
+            let encoded=compression::encode_to_limit(&plan,total,&cancel,|candidate,encoder,rate,attempt| {
+                let (args,graph)=filter_graph(&project,candidate,&raster_paths)?;
+                run_encode(&engine,&args,&graph,candidate,&output,encoder,rate,&status,&cancel,attempt)?;
+                Ok(std::fs::metadata(&output).map_err(|e|e.to_string())?.len())
+            })?;
+            if cancel.load(Ordering::Acquire) {return Err("Экспорт отменён".into())}
+            let mut target =
+                tempfile::NamedTempFile::new_in(path.parent().ok_or("Некорректная папка")?)
+                    .map_err(|e| e.to_string())?;
+            let mut source = std::fs::File::open(&output).map_err(|e| e.to_string())?;
+            std::io::copy(&mut source, &mut target).map_err(|e| e.to_string())?;
+            target.as_file().sync_all().map_err(|e| e.to_string())?;
+            if cancel.load(Ordering::Acquire) {return Err("Экспорт отменён".into())}
+            target.persist(&path).map_err(|e| e.to_string())?;
+            *status.lock().unwrap() =
+                json!({"state":"done","progress":1,"path":path,"bytes":encoded.bytes,
+                    "width":encoded.plan["width"],"height":encoded.plan["height"],"fps":encoded.plan["fps"],
+                    "encoder":encoded.profile.name(),"qualityTrial":encoded.profile==compression::Profile::Quality});
+            Ok(())
         })();
         if let Err(error) = result {
             if let Ok(mut s) = status.lock() {
@@ -1473,7 +1413,7 @@ mod tests {
             "color=s=640x360:d=100,format=nv12[outv];anullsrc,atrim=duration=100[outa]",
             &json!({"duration":100}),
             &dir.path().join("out.mp4"),
-            "h264_mf_sw",
+            compression::Profile::MfSoftware,
             500_000,
             &status,
             &cancel,
@@ -1569,7 +1509,7 @@ mod tests {
             &graph,
             &plan,
             &output,
-            "h264_mf_sw",
+            compression::Profile::MfSoftware,
             700_000,
             &status,
             &cancel,

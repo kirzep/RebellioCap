@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { DeveloperLogsPanel } from './DeveloperMode';
 import { RecordingNameSettings } from '../naming/NamingSettings';
 import { ErrorNotice } from './Primitives';
+import { SettingsHelp } from './SettingsHelp';
 
 export function ApplicationSettings() {
   useTranslation();
@@ -36,12 +37,15 @@ export function ApplicationSettings() {
   return <div className="space-y-6">
     <div><h2 className="text-xl font-semibold">{t("Приложение")}</h2>
       <p className="mt-2 text-muted-foreground">{t("Крестик сворачивает RebellioCap в трей. Replay, запись и горячие клавиши продолжают работать.")}</p></div>
-    <label className="flex items-center gap-3 rounded-2xl border p-5">
+    <div className="flex items-start gap-3 rounded-2xl border p-5">
+    <label className="flex flex-1 cursor-pointer items-center gap-3">
       <input type="checkbox" checked={enabled} disabled={busy || !native}
         onChange={event => void change(event.target.checked)} aria-label={t("Запускать с Windows")} />
       <span><span className="block font-medium">{t("Запускать с Windows")}</span>
         <span className="block text-sm text-muted-foreground">{t("При входе в Windows приложение запускается в трее. Изменение сохраняется сразу.")}</span></span>
     </label>
+    <SettingsHelp topic="autostart" />
+    </div>
     <p className="text-sm text-muted-foreground">{t("Нажмите на значок в трее, чтобы вернуть окно. В меню по правой кнопке мыши доступны быстрые действия и «Выйти».")}</p>
     {!native && <p role="status">{t("Автозапуск доступен в установленном приложении Windows.")}</p>}
     <RecordingNameSettings />

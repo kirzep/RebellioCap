@@ -36,6 +36,8 @@ extern "C" {
 #include "capture/d3d11_device.h"
 #include "capture/dxgi_capture_source.h"
 #include "capture/recovering_capture_source.h"
+#include "capture/game_window_catalog.h"
+#include "capture/wgc_capture_source.h"
 #include "engine/game_category.h"
 #include "capture/monitor_catalog.h"
 #include "cli/arguments.h"
@@ -52,6 +54,7 @@ extern "C" {
 #include "video/d3d11_nv12_converter.h"
 #include "video/nvenc_api.h"
 #include "video/nvenc_encoder.h"
+#include "video/async_video_encoder.h"
 
 namespace rebelliocap {
 namespace {
@@ -107,6 +110,9 @@ struct HardwareVideoOptions {
   std::shared_ptr<PipelineTelemetry> telemetry;
   bool prefer_duplicate_output1{false};
   bool direct_nv12_cache{false};
+  CaptureMode capture_mode{CaptureMode::Desktop};
+  std::filesystem::path game_executable;
+  bool recording_priority{false};
 };
 
 class HardwareVideoSession final : public IEngineVideoPipeline {
@@ -117,15 +123,30 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       HardwareVideoOptions options = {}) {
     if (options.encoder.slot_count < 6 || options.encoder.slot_count > 12) return Result<std::shared_ptr<HardwareVideoSession>>::failure(
         pipeline_error("nvenc.invalid_slot_count", "NVENC slot count must be between 6 and 12."));
-    auto device_result = create_d3d11_device(monitor.id.adapter_luid);
+    auto device_result = create_d3d11_device(monitor.id.adapter_luid,options.recording_priority);
     if (!device_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(device_result.error());
     auto device = std::move(device_result).value();
-    auto capture_result = DxgiCaptureSource::create(device, monitor.id, clock, options.prefer_duplicate_output1);
-    if (!capture_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(capture_result.error());
-    auto capture = std::move(capture_result).value();
-    const auto mode = capture->description().ModeDesc;
+    std::unique_ptr<DxgiCaptureSource> capture;
+    std::unique_ptr<WgcCaptureSource> game_capture;
+    DXGI_MODE_DESC mode{};
+    mode.Width=arguments.width; mode.Height=arguments.height;
+    auto rotation=DXGI_MODE_ROTATION_IDENTITY;
+    // Game-only backend paused at user request. Keep it available for restoration.
+#if 0
+    if(options.capture_mode==CaptureMode::Game) {
+      auto source=WgcCaptureSource::create(device,options.game_executable,clock);
+      if(!source.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(source.error());
+      game_capture=std::move(source).value();
+    } else
+#endif
+    {
+      auto source=DxgiCaptureSource::create(device,monitor.id,clock,options.prefer_duplicate_output1);
+      if(!source.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(source.error());
+      capture=std::move(source).value();
+      mode=capture->description().ModeDesc; rotation=capture->description().Rotation;
+    }
     D3d11Nv12ConverterConfig converter_config{mode.Width, mode.Height, arguments.width,
-                                               arguments.height, options.encoder.slot_count + 2U, capture->description().Rotation, options.direct_nv12_cache};
+                                               arguments.height, options.encoder.slot_count + 2U, rotation, options.direct_nv12_cache};
     auto converter_result = D3d11Nv12Converter::create(
         device.device(), device.context(), converter_config);
     if (!converter_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(converter_result.error());
@@ -135,6 +156,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     encoder_config.telemetry = options.telemetry;
     auto encoder_result = NvencEncoder::create(device.device(), encoder_config, clock);
     if (!encoder_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(encoder_result.error());
+    auto worker_result=AsyncVideoEncoder::create(std::move(encoder_result).value(),2);
+    if(!worker_result.is_success()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(worker_result.error());
 
     D3D11_TEXTURE2D_DESC cache_description{};
     cache_description.Width = mode.Width;
@@ -153,7 +176,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     }
     auto result = std::shared_ptr<HardwareVideoSession>(new HardwareVideoSession(
         std::move(device), std::move(capture), std::move(converter_result).value(),
-        std::move(encoder_result).value(), std::move(cache), mode.Width, mode.Height, arguments.fps, monitor, clock, options));
+        std::move(worker_result).value(), std::move(cache), mode.Width, mode.Height, arguments.fps, monitor, clock, options, std::move(game_capture)));
     return Result<std::shared_ptr<HardwareVideoSession>>::success(std::move(result));
   }
 
@@ -172,10 +195,11 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       // above 60 Hz, encoding only 30 fresh images into a 60 FPS stream. Allow
       // a bounded wait for that copy, still reusing the cache on a static screen.
       // Reserve at least half the frame interval for conversion and encoding.
+      if(game_capture_) return game_capture_->next_frame(0ms);
       return capture_->next_frame(have_frame_ ? capture_wait_ : 100ms);
     }();
     if (!acquired.is_success()) return Result<std::vector<EncodedPacket>>::failure(acquired.error());
-    if (capture_->suspended()) {
+    if (capture_ && capture_->suspended()) {
       ++no_image_ticks_;
       if (have_frame_) converter_->discard_cached_image();
       have_frame_ = false;
@@ -192,9 +216,9 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         capture_diagnostics_.texture_format = static_cast<std::uint32_t>(actual.Format);
         capture_diagnostics_.texture_format_available = true;
       }
-      // First-frame waits and recovery may span several presentation slots.
-      // Retain elapsed time, then quantize on the session's shared QPC grid.
-      pts = (std::max)(pts, frame.captured_at);
+      // Short acquisition latency must not rewrite the fixed output clock.
+      // Larger first-frame/recovery waits retain elapsed time on the grid.
+      pts = presentation_grid_->after_acquisition(pts, frame.captured_at);
       if (frame.width != input_width_ || frame.height != input_height_ ||
           frame.rotation != converter_->config().rotation) {
         auto rebuilt = rebuild_input(frame.width, frame.height, frame.rotation);
@@ -240,6 +264,9 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       return converter_->convert_cached(cached, content_revision_);
     }();
     if (!converted.is_success()) return Result<std::vector<EncodedPacket>>::failure(converted.error());
+    // Submit conversion/copy commands before another thread hands this texture
+    // to NVENC. Flush submits GPU work; it does not wait for GPU completion.
+    device_.context()->Flush();
     auto encoded = encoder_->encode(std::move(converted).value(), pts, pending_keyframe_);
     if (!encoded.is_success()) return encoded;
     last_presentation_ = pts;
@@ -253,8 +280,16 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   const StreamDescriptor& descriptor() const noexcept { return encoder_->descriptor(); }
   NvencRuntimeMetrics metrics() const {
     auto result=encoder_->metrics();
+    const auto& priority=device_.recording_priority();
+    result.recording_priority_requested=priority.requested; result.recording_priority_applied=priority.applied;
+    result.recording_gpu_priority=priority.effective; result.recording_priority_hresult=priority.hresult;
     result.capture_session=capture_diagnostics_;
-    result.capture_session.available=!capture_->recovering()&&!capture_->suspended();
+    result.capture_waiting_for_game=game_capture_ && game_capture_->waiting_for_game();
+    result.capture_session.game_window=game_capture_!=nullptr;
+    result.capture_session.available=game_capture_ ? !result.capture_waiting_for_game : !capture_->recovering()&&!capture_->suspended();
+    const auto queue=encoder_->queue_metrics();
+    result.encoder_queue_depth=queue.queue_depth; result.encoder_queue_capacity=queue.queue_capacity;
+    result.encoder_queue_dropped_frames=queue.dropped_frames;
     result.new_image_ticks=new_image_ticks_; result.repeated_image_ticks=repeated_image_ticks_; result.no_image_ticks=no_image_ticks_;
     result.converter_cache_hits=converter_->metrics().cached_conversions;
     result.converter_pool_capacity=converter_->config().output_pool_size;
@@ -299,17 +334,26 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
 
   HardwareVideoSession(D3d11Device device, std::unique_ptr<DxgiCaptureSource> capture,
                         std::unique_ptr<D3d11Nv12Converter> converter,
-                        std::unique_ptr<NvencEncoder> encoder,
+                        std::unique_ptr<AsyncVideoEncoder> encoder,
                         Microsoft::WRL::ComPtr<ID3D11Texture2D> cache,
                         std::uint32_t width, std::uint32_t height, std::uint32_t fps,
-                        const MonitorInfo& monitor, QpcClock& clock, HardwareVideoOptions options = {})
+                        const MonitorInfo& monitor, QpcClock& clock, HardwareVideoOptions options,
+                        std::unique_ptr<WgcCaptureSource> game_capture)
       : device_(std::move(device)),
+        game_capture_(std::move(game_capture)),
         converter_(std::move(converter)), encoder_(std::move(encoder)),
         cache_(std::move(cache)), input_width_(width), input_height_(height),
         cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)),
         fps_(fps), frequency_(clock.frequency()),
         capture_wait_(std::chrono::milliseconds(
             (std::max)(1U, (std::min)(8U, 500U / fps)))) {
+    if(game_capture_) {
+      capture_diagnostics_.game_window=true;
+      const auto luid=device_.adapter_luid();
+      capture_diagnostics_.adapter_luid_low=luid.LowPart;
+      capture_diagnostics_.adapter_luid_high=luid.HighPart;
+      return;
+    }
     update_capture_diagnostics(*capture);
     const auto modern = options_.prefer_duplicate_output1;
     capture_ = std::make_unique<RecoveringCaptureSource>(std::move(capture),
@@ -341,8 +385,9 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
 
   D3d11Device device_;
   std::unique_ptr<RecoveringCaptureSource> capture_;
+  std::unique_ptr<WgcCaptureSource> game_capture_;
   std::unique_ptr<D3d11Nv12Converter> converter_;
-  std::unique_ptr<NvencEncoder> encoder_;
+  std::unique_ptr<AsyncVideoEncoder> encoder_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> cache_;
   std::uint32_t input_width_;
   std::uint32_t input_height_;
@@ -404,6 +449,10 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
       accumulated_.driver_timestamp_digest ^= current.driver_timestamp_digest;
       accumulated_.p50_latency_us = current.p50_latency_us;
       accumulated_.accepted_config=current.accepted_config;
+      accumulated_.recording_priority_requested=current.recording_priority_requested;
+      accumulated_.recording_priority_applied=current.recording_priority_applied;
+      accumulated_.recording_gpu_priority=current.recording_gpu_priority;
+      accumulated_.recording_priority_hresult=current.recording_priority_hresult;
       accumulated_.max_in_flight_frames=(std::max)(accumulated_.max_in_flight_frames,current.max_in_flight_frames);
       accumulated_.new_image_ticks+=current.new_image_ticks; accumulated_.repeated_image_ticks+=current.repeated_image_ticks;
       accumulated_.no_image_ticks+=current.no_image_ticks; accumulated_.converter_cache_hits+=current.converter_cache_hits;
@@ -440,6 +489,10 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
     if (!session_) {
       result.direct_nv12_cache=accumulated_.direct_nv12_cache;
       result.accepted_config=accumulated_.accepted_config;
+      result.recording_priority_requested=accumulated_.recording_priority_requested;
+      result.recording_priority_applied=accumulated_.recording_priority_applied;
+      result.recording_gpu_priority=accumulated_.recording_gpu_priority;
+      result.recording_priority_hresult=accumulated_.recording_priority_hresult;
       result.p50_latency_us = accumulated_.p50_latency_us;
       result.p95_latency_us = accumulated_.p95_latency_us;
     }
@@ -1009,12 +1062,39 @@ CliExitCode run_recording(const CliArguments& arguments, DiagnosticWriter& write
 
 }  // namespace
 
-Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineConfig& config) {
+Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineConfig& requested_config) {
+  auto config=requested_config;
+  // Temporarily use full-screen capture even for a previously saved game profile.
+  config.capture_mode=CaptureMode::Desktop;
   if (config.continuous_avio_buffer_bytes == 0 || config.continuous_avio_buffer_bytes > 1024 * 1024)
     return Result<RecorderEngineDependencies>::failure(pipeline_error("mux.invalid_avio_buffer", "AVIO experiment buffer must be between 1 byte and 1 MiB."));
   auto monitors=enumerate_monitors();
   if(!monitors.is_success()) return Result<RecorderEngineDependencies>::failure(monitors.error());
   auto monitor=select_monitor(config.monitor,monitors.value());
+  if(!monitor.is_success() && requested_config.capture_mode==CaptureMode::Game)
+    monitor=primary_monitor(monitors.value());
+#if 0 // Game-only adapter selection is paused; full-screen uses the chosen display.
+  if(config.capture_mode==CaptureMode::Game) {
+    // WGC is window-bound. A stale/removed display must not select a desktop
+    // source or prevent a saved game target from starting on the NVENC adapter.
+    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+    MonitorInfo encoding_adapter{};
+    bool found=false;
+    if(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+      for(UINT index=0;;++index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if(FAILED(factory->EnumAdapters1(index,&adapter))) break;
+        DXGI_ADAPTER_DESC1 description{};
+        if(SUCCEEDED(adapter->GetDesc1(&description)) && description.VendorId==0x10de && !(description.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)) {
+          encoding_adapter.id.adapter_luid=description.AdapterLuid;
+          found=true; break;
+        }
+      }
+    }
+    if(!found) return Result<RecorderEngineDependencies>::failure(pipeline_error("nvenc.adapter_unavailable","No NVIDIA encoding adapter is available."));
+    monitor=Result<MonitorInfo>::success(std::move(encoding_adapter));
+  }
+#endif
   if(!monitor.is_success()) return Result<RecorderEngineDependencies>::failure(monitor.error());
   auto check=[](bool enabled,const std::wstring& id, bool system)->Result<void> {
     if(!enabled) return Result<void>::success();
@@ -1031,7 +1111,7 @@ Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineC
   arguments.width=config.width; arguments.height=config.height;
   arguments.fps=config.fps; arguments.bitrate=config.bitrate;
   auto video=HardwareVideoPipeline::create(monitor.value(),arguments,clock_,
-      HardwareVideoOptions{config.nvenc_config, config.pipeline_telemetry, config.prefer_duplicate_output1, config.direct_nv12_cache});
+      HardwareVideoOptions{config.nvenc_config, config.pipeline_telemetry, config.prefer_duplicate_output1, config.direct_nv12_cache, config.capture_mode, config.game_executable, config.recording_priority});
   if(!video.is_success()) return Result<RecorderEngineDependencies>::failure(video.error());
   auto timer=WaitableTimerEngineClock::create();
   if(!timer.is_success()) return Result<RecorderEngineDependencies>::failure(timer.error());
@@ -1045,8 +1125,16 @@ Result<RecorderEngineDependencies> HardwarePipelineFactory::create(const EngineC
   return Result<RecorderEngineDependencies>::success({.clock=timer.value(),.video=video.value(),
     .audio=std::move(audio),.hotkey=std::make_shared<RawInputHotkey>(),.muxer=std::make_shared<FfmpegClipMuxer>(),
     .continuous_muxer=std::make_shared<FfmpegContinuousMuxer>(config.continuous_avio_buffer_bytes, config.pipeline_telemetry),.stream_descriptors=std::move(descriptors),
-    .capture_category=[categories] { return categories->foreground_folder(); },
-    .cache_category_icon=[categories](const std::filesystem::path& category) { categories->cache_folder_icon(category); }});
+    .capture_category=[categories,mode=config.capture_mode,executable=config.game_executable] {
+      if(mode==CaptureMode::Desktop) return categories->foreground_folder();
+      auto name=categories->category_for_executable(executable);
+      if(name.empty() || name==L"Desktop") name=executable.stem().native();
+      return std::filesystem::path(sanitize_category_name(std::move(name)));
+    },
+    .cache_category_icon=[categories,mode=config.capture_mode,executable=config.game_executable,root=config.output_directory](const std::filesystem::path& category) {
+      if(mode==CaptureMode::Game) static_cast<void>(cache_game_icon(executable,root/category));
+      else categories->cache_folder_icon(category);
+    }});
 }
 Result<nlohmann::json> HardwarePipelineFactory::catalog() {
   auto monitors=enumerate_monitors();
@@ -1056,7 +1144,13 @@ Result<nlohmann::json> HardwarePipelineFactory::catalog() {
   auto microphones=enumerate_microphones();
   if(!microphones.is_success()) return Result<nlohmann::json>::failure(microphones.error());
   nlohmann::json result{{"protocolVersion",1},{"type","catalog"},{"monitors",nlohmann::json::array()},
-    {"systemAudio",nlohmann::json::array()},{"microphones",nlohmann::json::array()}};
+    {"systemAudio",nlohmann::json::array()},{"microphones",nlohmann::json::array()},{"game_windows",nlohmann::json::array()}};
+#if 0 // Game-only picker/catalog is temporarily paused along with its source.
+  auto games=enumerate_game_windows();
+  if(!games.is_success()) return Result<nlohmann::json>::failure(games.error());
+  for(const auto& game:games.value()) result["game_windows"].push_back({
+    {"executable",utf8(game.executable.native())},{"title",game.title},{"process_id",game.process_id}});
+#endif
   for(const auto& monitor:monitors.value()) result["monitors"].push_back({
     {"id",monitor_id_text(monitor.id)},{"legacyId",std::to_string(monitor_id_value(monitor.id))+":"+std::to_string(monitor.id.output_index)},
     {"name",utf8(monitor.name)},{"primary",monitor.primary},

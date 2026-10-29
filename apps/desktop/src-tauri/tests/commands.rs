@@ -73,6 +73,78 @@ fn failed_settings_start_restores_and_restarts_last_good() {
 }
 
 #[test]
+fn failed_game_start_keeps_game_selection_and_never_restarts_desktop() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = ConfigStore::at(tmp.path().into()).unwrap();
+    let old = support::draft(tmp.path()).to_active().unwrap();
+    store.replace_host_state(&StoredState {
+        active: Some(old.clone()), draft: old.as_draft(),
+        onboarding: OnboardingProgress { completed: true, last_completed_step: 6 },
+        ..Default::default()
+    }).unwrap();
+    let mut json = serde_json::to_value(old).unwrap();
+    json["capture_mode"] = "game".into();
+    json["game_executable"] = "C:\\Games\\game.exe".into();
+    let candidate: ActiveConfig = serde_json::from_value(json).expect("game config supported");
+    let mut starts = Vec::new();
+    assert!(apply_transaction(&store, candidate.clone(), &support::devices(), || Ok(()), |c| {
+        starts.push(serde_json::to_value(c).unwrap()["capture_mode"].clone());
+        Err("game unavailable".into())
+    }).is_err());
+    assert_eq!(starts, [serde_json::json!("game")]);
+    assert_eq!(store.load().unwrap().active.unwrap(), candidate, "a later restart must also remain game-only");
+    assert!(store.desktop_capture_blocked().unwrap());
+}
+
+#[test]
+fn game_request_persists_privacy_intent_even_when_old_engine_stop_fails() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = ConfigStore::at(tmp.path().into()).unwrap();
+    let old = support::draft(tmp.path()).to_active().unwrap();
+    store.replace_host_state(&StoredState {
+        active: Some(old.clone()), draft: old.as_draft(),
+        onboarding: OnboardingProgress { completed: true, last_completed_step: 6 }, ..Default::default()
+    }).unwrap();
+    let mut candidate = old;
+    candidate.capture_mode = CaptureMode::Game;
+    candidate.game_executable = "C:\\Games\\game.exe".into();
+    let mut started = false;
+    assert!(apply_transaction(&store, candidate.clone(), &support::devices(),
+        || Err("engine stop failed".into()), |_| { started = true; Ok(()) }).is_err());
+    assert!(!started);
+    assert!(store.desktop_capture_blocked().unwrap());
+    assert_eq!(store.load().unwrap().active.unwrap(), candidate);
+}
+
+#[test]
+fn locked_config_game_switch_stops_and_blocks_desktop_on_next_launch() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let store = ConfigStore::at(tmp.path().into()).unwrap();
+    let old = support::draft(tmp.path()).to_active().unwrap();
+    store.replace_host_state(&StoredState {
+        active: Some(old.clone()), draft: old.as_draft(),
+        onboarding: OnboardingProgress { completed: true, last_completed_step: 6 }, ..Default::default()
+    }).unwrap();
+    let held = std::fs::OpenOptions::new().read(true).share_mode(1).open(tmp.path().join("config.json")).unwrap();
+    let mut candidate = old.clone();
+    candidate.capture_mode = CaptureMode::Game;
+    candidate.game_executable = "C:\\Games\\game.exe".into();
+    let mut stopped = false;
+    let mut started = false;
+    assert!(apply_transaction(&store, candidate, &support::devices(),
+        || { stopped = true; Ok(()) }, |_| { started = true; Ok(()) }).is_err());
+    assert!(stopped);
+    assert!(!started);
+    drop(held);
+    let reloaded = ConfigStore::at(tmp.path().into()).unwrap();
+    assert!(reloaded.desktop_capture_blocked().unwrap(), "old desktop profile must never auto-start after persistence failure");
+    assert_eq!(reloaded.load().unwrap().active.unwrap(), old);
+    apply_transaction(&reloaded, old, &support::devices(), || Ok(()), |_| Ok(())).unwrap();
+    assert!(!reloaded.desktop_capture_blocked().unwrap(), "an explicit desktop switch releases the guard");
+}
+
+#[test]
 fn open_path_requires_exact_host_allowlist_and_canonical_existing_file() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("RebellioCap-test.mp4");
@@ -94,7 +166,9 @@ fn native_config_pins_explicit_audio_and_builds_hotkeys_without_renderer_argumen
     assert_eq!(value["monitorId"], "monitor-1");
     assert_eq!(value["replayMemoryLimitMb"], 0);
     assert_eq!(value["saveWithoutGameFolders"], false);
-    assert_eq!(value.as_object().unwrap().len(), 19);
+    assert_eq!(value["captureMode"], "desktop");
+    assert_eq!(value["gameExecutable"], "");
+    assert_eq!(value.as_object().unwrap().len(), 24);
     let mut direct = c;
     direct.save_without_game_folders = true;
     let value = rebelliocap_desktop::native::recording_test::engine_config(&direct, None).unwrap();

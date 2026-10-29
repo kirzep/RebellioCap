@@ -34,6 +34,15 @@ class VideoFrameGrid {
     return at(index_at(time));
   }
 
+  [[nodiscard]] QpcTicks after_acquisition(QpcTicks scheduled, QpcTicks acquired) const noexcept {
+    const auto nominal=index_at(scheduled);
+    const auto actual=index_at(acquired);
+    // Keep the output clock through a short acquisition overrun. Advancing for
+    // one-slot lateness would duplicate the next timestamp and drop a frame.
+    // Larger stalls retain elapsed time instead of compressing audio/video.
+    return at(actual > nominal + 1 ? actual : nominal);
+  }
+
  private:
   QpcTicks origin_;
   std::uint32_t fps_;

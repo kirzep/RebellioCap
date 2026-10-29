@@ -74,6 +74,7 @@ function createFakeHost(options: {
     bootstrapApp: async () => bootstrapData,
     getOnboardingState: async () => defaultState,
     runSystemCheck: async () => ({ stages: [], passed: true, diagnostics_path: null }),
+    listGameWindows: async () => [],
     listMonitors: async () => [],
     listAudioEndpoints: async () => ({ system_audio: [], microphones: [] }),
     measureAudioLevel: async () => ({ samples: [], cancelled: false }),

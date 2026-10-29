@@ -73,6 +73,7 @@ function createTestHost(initialSnap: EngineSnapshot): TestHost {
     bootstrapApp: vi.fn(),
     getOnboardingState: vi.fn().mockResolvedValue(createStoredState()),
     runSystemCheck: vi.fn(),
+    listGameWindows: async () => [],
     listMonitors: vi.fn().mockResolvedValue([{id:'mon-0',name:'Экран',width:1920,height:1080,primary:true}]),
     listAudioEndpoints: vi.fn().mockResolvedValue({system_audio:[{id:'sys-0',name:'Система',available:true}],microphones:[{id:'mic-0',name:'Микрофон',available:true}]}),
     measureAudioLevel: vi.fn().mockResolvedValue({peak:0}),
@@ -307,6 +308,25 @@ it('rejects settings success when the persisted memory limit differs from the ca
   await waitFor(() => expect(host.applyRuntimeSettings).toHaveBeenCalled());
   expect(await screen.findByText(/не удалось подтвердить сохранённую конфигурацию/, {selector:"p"})).toBeInTheDocument();
   expect(screen.queryByText('Настройки применены. Replay включён с новой конфигурацией.')).not.toBeInTheDocument();
+});
+
+// Retained while game-only capture is temporarily disabled.
+it.skip('rejects settings success when the persisted game target differs from the candidate', async () => {
+  const host = createTestHost(createSnapshot());
+  const state = createStoredState();
+  state.active!.capture_mode = 'game';
+  state.active!.game_executable = 'C:\\Games\\old.exe';
+  host.getOnboardingState = vi.fn().mockResolvedValue(state);
+  host.listGameWindows = vi.fn().mockResolvedValue([{ executable: 'C:\\Games\\new.exe', title: 'New game', process_id: 17 }]);
+  render(<HomeScreen host={host} initialState={state} initialSnapshot={createSnapshot()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
+  const picker = await screen.findByLabelText('Игра');
+  const select = picker.parentElement!.querySelector('select')!;
+  await waitFor(() => expect([...select.options].some(option => option.value === 'C:\\Games\\new.exe')).toBe(true));
+  fireEvent.change(select, { target: { value: 'C:\\Games\\new.exe' } });
+  fireEvent.click(screen.getByTestId('apply-settings-button'));
+  await waitFor(() => expect(host.applyRuntimeSettings).toHaveBeenCalled());
+  expect(await screen.findByText(/не удалось подтвердить сохранённую конфигурацию/, { selector: 'p' })).toBeInTheDocument();
 });
 
 

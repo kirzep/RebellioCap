@@ -4,6 +4,8 @@ use std::{fs, path::Path};
 
 fn draft(path: &Path) -> OnboardingDraft {
     OnboardingDraft {
+        capture_mode: None,
+        game_executable: None,
         monitor_id: Some("monitor-stable-1".into()),
         system_audio: Some(AudioSelection::Endpoint("render-stable-1".into())),
         microphone: Some(AudioSelection::Disabled),
@@ -11,6 +13,7 @@ fn draft(path: &Path) -> OnboardingDraft {
         height: Some(1080),
         fps: Some(60),
         bitrate: Some(30_000_000),
+        rate_control: None, cqp: None, recording_priority: None,
         replay_seconds: Some(30),
         replay_memory_limit_mb: None,
         replay_mode: Some(ReplayMode::Ram),
@@ -44,6 +47,33 @@ fn devices() -> DeviceInventory {
         monitor_ids: vec!["monitor-stable-1".into()],
         system_audio_ids: vec!["render-stable-1".into()],
         microphone_ids: vec![],
+    }
+}
+
+#[test]
+fn game_capture_is_explicit_and_legacy_desktop_fingerprints_stay_valid() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = draft(directory.path());
+    let mut json = serde_json::to_value(&original).unwrap();
+    json["capture_mode"] = "desktop".into();
+    json["game_executable"] = "".into();
+    let desktop: OnboardingDraft = serde_json::from_value(json.clone()).expect("capture settings are supported");
+    assert_eq!(desktop.fingerprint().unwrap(), original.fingerprint().unwrap());
+    json["capture_mode"] = "game".into();
+    let missing: OnboardingDraft = serde_json::from_value(json.clone()).unwrap();
+    assert!(validate_draft(&missing).is_err());
+    json["game_executable"] = "C:\\Games\\Example\\game.exe".into();
+    let game: OnboardingDraft = serde_json::from_value(json.clone()).unwrap();
+    assert!(validate_draft(&game).is_ok(), "the selected game need not currently exist or run");
+    assert_ne!(game.fingerprint().unwrap(), original.fingerprint().unwrap());
+    let active = game.to_active().unwrap();
+    assert_eq!(serde_json::to_value(active.as_draft()).unwrap()["game_executable"], json["game_executable"]);
+    let no_monitors = DeviceInventory { monitor_ids: vec![], ..devices() };
+    assert!(validate_active(&active, &no_monitors).is_ok(), "game capture does not require the saved desktop monitor");
+    for invalid in ["game.exe", "C:\\Games\\..\\game.exe", "C:\\Games\\game.txt"] {
+        json["game_executable"] = invalid.into();
+        let invalid: OnboardingDraft = serde_json::from_value(json.clone()).unwrap();
+        assert!(validate_draft(&invalid).is_err());
     }
 }
 
@@ -785,4 +815,22 @@ fn config_monitor_identity_migrates_only_exact_unique_current_legacy_address() {
     assert_eq!(store.load().unwrap().active.unwrap().monitor_id, "monitor-path:00610062");
     available.monitor_ids = vec!["monitor-path:00610062".into()];
     validate_active(store.load().unwrap().active.as_ref().unwrap(), &available).unwrap();
+}
+#[test]
+fn recording_quality_defaults_preserve_evidence_and_new_fields_roundtrip() {
+    let tmp=tempfile::tempdir().unwrap();
+    let draft=draft(tmp.path());
+    let fingerprint=draft.fingerprint().unwrap();
+    let mut value=serde_json::to_value(&draft).unwrap();
+    value["rate_control"]="vbr".into(); value["cqp"]=23.into(); value["recording_priority"]=false.into();
+    let explicit:OnboardingDraft=serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(explicit.fingerprint().unwrap(),fingerprint);
+    value["rate_control"]="cqp".into(); value["cqp"]=20.into(); value["recording_priority"]=true.into();
+    let configured:OnboardingDraft=serde_json::from_value(value).unwrap();
+    assert_ne!(configured.fingerprint().unwrap(),fingerprint);
+    let active=configured.to_active().unwrap();
+    let stored=serde_json::to_value(&active).unwrap();
+    assert_eq!(stored["rate_control"],"cqp"); assert_eq!(stored["cqp"],20); assert_eq!(stored["recording_priority"],true);
+    let native=rebelliocap_desktop::native::recording_test::engine_config(&active,None).unwrap();
+    assert_eq!(native["rateControl"],"cqp"); assert_eq!(native["cqp"],20); assert_eq!(native["recordingPriority"],true);
 }

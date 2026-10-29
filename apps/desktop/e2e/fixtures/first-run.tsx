@@ -36,6 +36,7 @@ const host: HostBridge = {
   runSystemCheck: async () => ({ passed: true, diagnostics_path: null,
     stages: [{ id: 'native_hardware_and_runtime', passed: true, message: '' }] }),
   listMonitors: async () => [{ id: 'mon-0', name: 'Test monitor', width: 1920, height: 1080, primary: true }],
+  listGameWindows: async () => structuredClone((window as any).firstRunGameWindows),
   listAudioEndpoints: async () => ({ system_audio: [], microphones: [] }),
   measureAudioLevel: async () => ({ samples: [], cancelled: true }),
   chooseOutputDirectory: async () => 'C:/Clips',
@@ -70,6 +71,7 @@ const host: HostBridge = {
   applyRuntimeSettings: async candidate => { state.active = structuredClone(candidate); persist(); snapshot.revision++; return structuredClone(snapshot); },
   openDiagnostics: unsupported, openTestClip: unsupported,
 };
-Object.assign(window, { firstRunState: state, firstRunSnapshot: snapshot });
+Object.assign(window, { firstRunState: state, firstRunSnapshot: snapshot,
+  firstRunGameWindows: [{ executable: 'C:\\Games\\Example\\game.exe', title: 'Example Game', process_id: 42 }] });
 await (await import('../../src/i18n')).initializeLanguage();
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App hostBridge={host} /></React.StrictMode>);

@@ -17,8 +17,12 @@
 
 namespace rebelliocap {
 
+enum class CaptureMode { Desktop, Game };
+
 struct EngineConfig {
   MonitorId monitor{};
+  CaptureMode capture_mode{CaptureMode::Desktop};
+  std::filesystem::path game_executable;
   std::wstring system_audio_id;
   std::wstring microphone_id;
   bool microphone_enabled{true};
@@ -29,6 +33,7 @@ struct EngineConfig {
   std::uint32_t bitrate{30'000'000};
   std::uint32_t gop_seconds{2};
   NvencConfig nvenc_config;
+  bool recording_priority{false};
   bool prefer_duplicate_output1{false};
   bool direct_nv12_cache{false};
   std::size_t continuous_avio_buffer_bytes{32 * 1024};

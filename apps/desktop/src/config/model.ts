@@ -5,6 +5,8 @@ export type AudioSelection =
 export type ReplayMode = 'ram' | 'disk';
 
 export type Container = 'mp4' | 'mkv';
+export type CaptureMode = 'desktop' | 'game';
+export type RateControl = 'vbr' | 'cqp';
 
 export interface Hotkey {
   key: number;
@@ -34,6 +36,8 @@ export interface OnboardingProgress {
 }
 
 export interface OnboardingDraft {
+  capture_mode?: CaptureMode | null;
+  game_executable?: string | null;
   monitor_id?: string | null;
   system_audio?: AudioSelection | null;
   microphone?: AudioSelection | null;
@@ -41,6 +45,9 @@ export interface OnboardingDraft {
   height?: number | null;
   fps?: number | null;
   bitrate?: number | null;
+  rate_control?: RateControl | null;
+  cqp?: number | null;
+  recording_priority?: boolean | null;
   replay_seconds?: number | null;
   replay_memory_limit_mb?: number | null;
   replay_mode?: ReplayMode | null;
@@ -54,6 +61,8 @@ export interface OnboardingDraft {
 }
 
 export interface ActiveConfig {
+  capture_mode?: CaptureMode;
+  game_executable?: string;
   onboarding_completed: boolean;
   monitor_id: string;
   system_audio: AudioSelection;
@@ -62,6 +71,9 @@ export interface ActiveConfig {
   height: number;
   fps: number;
   bitrate: number;
+  rate_control?: RateControl;
+  cqp?: number;
+  recording_priority?: boolean;
   replay_seconds: number;
   replay_memory_limit_mb?: number;
   replay_mode: ReplayMode;
@@ -143,6 +155,12 @@ export interface MonitorChoice {
   width: number;
   height: number;
   primary: boolean;
+}
+
+export interface GameWindowChoice {
+  executable: string;
+  title: string;
+  process_id: number;
 }
 
 export interface AudioChoice {

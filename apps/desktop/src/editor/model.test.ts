@@ -2,6 +2,22 @@ import { describe,it,expect } from 'vitest';
 import {duplicate,snapDelta,reorderTrack,addAsset,emptyProject,split,remove,changeGroup,changeSource,exportPlan,length} from './model';
 const fixture=()=>addAsset(emptyProject(),{id:'a',path:'a.mp4',name:'a',kind:'video',duration:30,width:1920,height:1080,audio:[1,2]});
 describe('non-destructive editor',()=>{
+ it('retains requested geometry for a smart quality trial before the budget fallback',()=>{
+  const p=fixture();p.items=p.items.map(i=>({...i,duration:90}));
+  const plan=exportPlan(p,1920,1080,60,20,true,'auto');
+  expect(plan).toMatchObject({compression:'smart',requestedWidth:1920,requestedHeight:1080,requestedFps:60});
+  expect(plan.width*plan.height*plan.fps).toBeLessThan(1920*1080*60);
+ });
+ it('preserves resolution and FPS at any feasible size budget when explicitly requested',()=>{
+  const p=fixture();p.items=p.items.map(i=>({...i,duration:120}));
+  const plan=exportPlan(p,1920,1080,60,20,true,'preserve',20,'size');
+  expect(plan).toMatchObject({width:1920,height:1080,fps:60,compression:'size'});
+  expect((plan.bitrate+128000)*120/8+65536).toBeLessThan(20_000_000);
+ });
+ it('rejects unknown compression modes and priorities',()=>{
+  expect(()=>exportPlan(fixture(),1920,1080,60,12,true,'typo')).toThrow();
+  expect(()=>exportPlan(fixture(),1920,1080,60,12,true,'auto',20,'typo')).toThrow();
+ });
  it('budgets every Discord tier and rejects unsupported limits',()=>{const p=fixture();p.items=p.items.map(i=>({...i,duration:120}));const rates=[20,50,500].map(limit=>{const plan=exportPlan(p,1920,1080,60,12,true,'auto',limit);expect((plan.bitrate+128000)*120/8+65536).toBeLessThan(limit*1e6);expect(plan.discordLimitMb).toBe(limit);return plan.bitrate;});expect(rates[1]).toBeGreaterThan(rates[0]);expect(rates[2]).toBeGreaterThan(rates[1]);expect(()=>exportPlan(p,1920,1080,60,12,true,'auto',30)).toThrow();});
  it('duplicates linked media into a new independent group with matching offsets',()=>{const p=fixture(),q=duplicate(p,p.items[0].id);expect(q.items).toHaveLength(6);expect(q.items.slice(3).every(i=>i.start===30&&i.link===q.items[3].link&&i.link!==p.items[0].link)).toBe(true);expect(new Set(q.items.map(i=>i.id)).size).toBe(6);});
  it('snaps either clip edge only to neighbors on the same track',()=>{let p=fixture();p=split(p,p.items[0].id,10);const id=p.items[0].id;expect(snapDelta(p,id,'move',.1,.2).delta).toBeCloseTo(0);expect(snapDelta(p,id,'move',.1,.2).at).toBe(10);expect(snapDelta(p,id,'right',-.1,.2).delta).toBeCloseTo(0);expect(snapDelta(p,id,'move',2,.2)).toEqual({delta:2,at:undefined});expect(snapDelta(p,p.items.find(i=>i.kind==='audio')!.id,'move',.1,.2)).toEqual({delta:.1});});

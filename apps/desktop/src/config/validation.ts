@@ -77,7 +77,22 @@ export function validateDraftStep(
   switch (step) {
     case 1: {
       // Video
-      if (!isValidIdentity(draft.monitor_id)) {
+      if (draft.rate_control != null && !['vbr', 'cqp'].includes(draft.rate_control)) {
+        errors.push({ field: 'rate_control', code: 'invalid', message: 'Выберите режим сжатия.' });
+      }
+      if (draft.cqp !== undefined && (draft.cqp === null || !Number.isInteger(draft.cqp) || draft.cqp < 0 || draft.cqp > 51)) {
+        errors.push({ field: 'cqp', code: 'invalid', message: 'Уровень CQP должен быть целым числом от 0 до 51.' });
+      }
+      if (draft.recording_priority != null && typeof draft.recording_priority !== 'boolean') {
+        errors.push({ field: 'recording_priority', code: 'invalid', message: 'Выберите приоритет записи.' });
+      }
+      if (draft.capture_mode != null && !['desktop', 'game'].includes(draft.capture_mode)) {
+        errors.push({ field: 'capture_mode', code: 'invalid', message: 'Выберите область захвата.' });
+      }
+      if (draft.capture_mode === 'game' && (!isValidOutputPath(draft.game_executable) || !/\.exe$/i.test(draft.game_executable ?? ''))) {
+        errors.push({ field: 'game_executable', code: 'required', message: 'Выберите игру из списка.' });
+      }
+      if (draft.capture_mode !== 'game' && !isValidIdentity(draft.monitor_id)) {
         errors.push({ field: 'monitor_id', code: 'required', message: 'Выберите монитор' });
       }
       if (

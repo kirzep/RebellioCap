@@ -48,6 +48,8 @@ struct NvencCapabilities {
 // These are the exact values accepted by nvEncInitializeEncoder. They are not
 // queried back after initialization; stream behavior is verified from output.
 struct NvencAcceptedConfig {
+  bool constant_qp{false};
+  std::uint32_t qp_i{0}, qp_p{0}, qp_b{0};
   std::uint32_t preset_number{0};
   std::uint32_t multipass{0};
   std::uint32_t rate_control{0};
@@ -69,6 +71,7 @@ struct NvencAcceptedConfig {
 
 struct CaptureSessionDiagnostics {
   bool available{false};
+  bool game_window{false};
   bool duplicate_output1{false};
   bool texture_format_available{false};
   std::uint32_t texture_format{0};
@@ -78,7 +81,12 @@ struct CaptureSessionDiagnostics {
 };
 
 struct NvencRuntimeMetrics {
+  bool recording_priority_requested{false}, recording_priority_applied{false};
+  int recording_gpu_priority{0};
+  std::optional<long> recording_priority_hresult;
   CaptureSessionDiagnostics capture_session;
+  bool capture_waiting_for_game{false};
+  std::uint64_t encoder_queue_depth{0}, encoder_queue_capacity{0}, encoder_queue_dropped_frames{0};
   NvencAcceptedConfig accepted_config;
   std::uint64_t new_image_ticks{0}, repeated_image_ticks{0}, no_image_ticks{0};
   std::uint64_t converter_cache_hits{0}, converter_pool_capacity{0};

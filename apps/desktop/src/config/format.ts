@@ -90,11 +90,17 @@ export function formatVideoMode(
   width?: number | null,
   height?: number | null,
   fps?: number | null,
-  bitrate?: number | null
+  bitrate?: number | null,
+  rateControl?: 'vbr' | 'cqp' | null,
+  cqp?: number | null
 ): string {
   const resolution = formatResolution(width, height);
   const frameRate = fps == null ? t('частота не задана') : t("{0} кадров/с", fps);
-  return `${resolution} · ${frameRate} · ${formatBitrate(bitrate)}`;
+  return `${resolution} · ${frameRate} · ${formatRecordingQuality(bitrate, rateControl, cqp)}`;
+}
+
+export function formatRecordingQuality(bitrate?: number | null, mode?: 'vbr' | 'cqp' | null, cqp?: number | null): string {
+  return mode==='cqp' ? `CQP ${cqp??23}` : formatBitrate(bitrate);
 }
 
 export function formatContainer(container?: Container | null): string {

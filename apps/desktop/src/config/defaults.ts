@@ -6,6 +6,9 @@ export const DEFAULT_TOGGLE_RECORDING_HOTKEY: Hotkey = { ...recordingContract.de
 
 export function createDraftDefaults(): OnboardingDraft {
   return {
+    capture_mode: 'desktop',
+    rate_control: 'vbr', cqp: 23, recording_priority: false,
+    game_executable: '',
     microphone: 'disabled',
     replay_seconds: 30,
     replay_memory_limit_mb: 0,

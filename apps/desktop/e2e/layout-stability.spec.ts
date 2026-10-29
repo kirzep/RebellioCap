@@ -55,6 +55,7 @@ test('settings actions stay at the bottom right without a divider while scrollin
   expect(await position()).toBe(baseline);
   await page.getByRole('main').evaluate(element => { element.scrollTop = element.scrollHeight; });
   expect(await position()).toBe(baseline);
+  await settings.getByRole('radio', { name: 'Свой размер', exact: true }).click();
   await settings.getByLabel('Ширина', { exact: true }).fill('1280');
   await settings.getByLabel('Ширина', { exact: true }).blur();
   await expect(apply).toBeEnabled();

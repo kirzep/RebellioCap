@@ -65,6 +65,7 @@ fn snapshots_accept_optional_pipeline_diagnostics_but_keep_metrics_strict() {
     let mut event = serde_json::json!({"protocolVersion":1,"type":"snapshot","snapshot":snapshot});
     assert!(decode_event(&serde_json::to_vec(&event).unwrap()).is_ok());
     event["snapshot"]["metrics"]["diagnostics"] = serde_json::json!({
+        "capture_waiting_for_game": true,
         "capture_session":{"available":true,"api":"DuplicateOutput1","texture_format":87},
         "pipeline_telemetry":{"enabled":true,"stages":{"video_tick_cpu":{"p99_us":639}}}
     });

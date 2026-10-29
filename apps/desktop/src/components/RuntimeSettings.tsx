@@ -34,6 +34,9 @@ const sections: readonly { id: RuntimeSettingsSection; label: string }[] = [
 ];
 
 const validationFieldSelectors: Record<string, string> = {
+  capture_mode: '#video-capture-mode',
+  rate_control: '#video-rate-control', cqp: '#video-cqp', recording_priority: '#video-recording-priority',
+  game_executable: '#video-game',
   monitor_id: '#video-monitor',
   width: '#video-width',
   height: '#video-height',
@@ -78,6 +81,9 @@ interface HotkeyPrompt {
 
 function activeAsDraft(active: ActiveConfig): OnboardingDraft {
   return {
+    // capture_mode: active.capture_mode ?? 'desktop', // Game mode paused.
+    capture_mode: 'desktop',
+    game_executable: active.game_executable ?? '',
     monitor_id: active.monitor_id,
     system_audio:
       typeof active.system_audio === 'object' ? { ...active.system_audio } : active.system_audio,
@@ -87,6 +93,7 @@ function activeAsDraft(active: ActiveConfig): OnboardingDraft {
     height: active.height,
     fps: active.fps,
     bitrate: active.bitrate,
+    rate_control: active.rate_control ?? 'vbr', cqp: active.cqp ?? 23, recording_priority: active.recording_priority ?? false,
     replay_seconds: active.replay_seconds,
     replay_memory_limit_mb: active.replay_memory_limit_mb ?? 0,
     replay_mode: active.replay_mode,
@@ -108,13 +115,16 @@ function required<T>(value: T | null | undefined, field: string): T {
 function draftAsActive(draft: OnboardingDraft): ActiveConfig {
   return {
     onboarding_completed: true,
-    monitor_id: required(draft.monitor_id, 'monitor_id'),
+    monitor_id: draft.capture_mode === 'game' ? draft.monitor_id ?? '' : required(draft.monitor_id, 'monitor_id'),
+    capture_mode: draft.capture_mode ?? 'desktop',
+    game_executable: draft.game_executable ?? '',
     system_audio: required(draft.system_audio, 'system_audio'),
     microphone: required(draft.microphone, 'microphone'),
     width: required(draft.width, 'width'),
     height: required(draft.height, 'height'),
     fps: required(draft.fps, 'fps'),
     bitrate: required(draft.bitrate, 'bitrate'),
+    rate_control: draft.rate_control ?? 'vbr', cqp: draft.cqp ?? 23, recording_priority: draft.recording_priority ?? false,
     replay_seconds: required(draft.replay_seconds, 'replay_seconds'),
     replay_memory_limit_mb: draft.replay_memory_limit_mb ?? 0,
     replay_mode: required(draft.replay_mode, 'replay_mode'),
@@ -367,7 +377,7 @@ export function RuntimeSettings({
         hostBridge.listAudioEndpoints(),
       ]);
 
-      if (monitorResult.status === 'rejected') {
+      if (monitorResult.status === 'rejected' && candidate.capture_mode !== 'game') {
         setSection('video');
         setOperationErrorTitle('Не удалось проверить доступные экраны');
         setApplyError(normalizeError(monitorResult.reason));
@@ -376,8 +386,8 @@ export function RuntimeSettings({
 
       const deviceErrors: ValidationError[] = [];
       if (
-        !candidate.monitor_id ||
-        !monitorResult.value.some((monitor) => monitor.id === candidate.monitor_id)
+        candidate.capture_mode !== 'game' && (!candidate.monitor_id ||
+        (monitorResult.status === 'fulfilled' && !monitorResult.value.some((monitor) => monitor.id === candidate.monitor_id)))
       ) {
         deviceErrors.push({
           field: 'monitor_id',
@@ -684,7 +694,7 @@ export function RuntimeSettings({
                 activeConfig.width,
                 activeConfig.height,
                 activeConfig.fps,
-                activeConfig.bitrate
+                activeConfig.bitrate, activeConfig.rate_control, activeConfig.cqp
               )}; {describeConfirmedEngine(snapshot)}.
             </p>
           </ErrorNotice>

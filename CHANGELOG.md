@@ -2,6 +2,18 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## Unreleased — recording and export updates
+
+- Add VBR/CQP recording controls and optional GPU recording priority.
+- Add source-resolution, 1080p, and custom video-size choices with contextual settings help in English and Russian.
+- Add Smart, Fit to size, and Fast export modes, preserving the 20 / 50 / 500 MB targets and checking the actual file size before saving.
+- Add an export priority that keeps the selected resolution and FPS.
+- Refine recording frame scheduling and add bounded asynchronous encoding.
+- Keep display capture as the active backend; game-window capture remains disabled.
+- Refresh the English and Russian README with current functionality and real Windows screenshots of gameplay recordings, the editor, export, and recording settings.
+
+This entry describes source changes. No new installer version is published by a branch push alone.
+
 ## 0.1.21
 
 ### Fixed

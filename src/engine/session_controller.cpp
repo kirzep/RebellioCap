@@ -43,6 +43,8 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
       "pipelineTelemetryEnabled","traceTelemetryEnabled","duplicateOutput1Enabled","continuousAvioBufferBytes","directNv12CacheEnabled"};
     std::size_t extras=0;
     for (const auto* key : experiment_keys) if (value.contains(key)) ++extras;
+    for (const auto* key : {"captureMode", "gameExecutable"}) if (value.contains(key)) ++extras;
+    for (const auto* key : {"rateControl", "cqp", "recordingPriority"}) if (value.contains(key)) ++extras;
     if(duplicate || !value.is_object() || value.size()!=(test?19U:17U)+(value.contains("replayMemoryLimitMb")?1U:0U)+(value.contains("saveWithoutGameFolders")?1U:0U)+extras)
       throw std::runtime_error("Configuration fields are missing, duplicated, or unrecognized");
     if(!value.at("protocolVersion").is_number_unsigned() || value.at("protocolVersion")!=1)
@@ -55,6 +57,14 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
     };
     HostConfiguration result;
     auto& c=result.engine;
+    const auto capture_mode=value.value("captureMode",std::string("desktop"));
+    if(capture_mode!="desktop" && capture_mode!="game") throw std::runtime_error("Unsupported capture mode");
+    c.capture_mode=capture_mode=="game"?CaptureMode::Game:CaptureMode::Desktop;
+    c.game_executable=wide(value.value("gameExecutable",std::string{}));
+    auto extension=c.game_executable.extension().native();
+    for(auto& character:extension) character=static_cast<wchar_t>(towlower(character));
+    if(c.capture_mode==CaptureMode::Game && (!c.game_executable.is_absolute() || extension!=L".exe"))
+      throw std::runtime_error("Game capture requires an absolute executable path");
     c.system_audio_enabled=value.at("systemAudioEnabled").get<bool>();
     c.microphone_enabled=value.at("microphoneEnabled").get<bool>();
     c.system_audio_id=wide(value.at("systemAudioId").get<std::string>());
@@ -96,8 +106,8 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
     auto monitor=wide(value.at("monitorId").get<std::string>());
     const std::array<std::wstring_view,5> args{L"capture",L"--monitor",monitor,L"--output",L"unused"};
     auto parsed=parse_arguments(args);
-    if(!parsed.is_success()) return Result<HostConfiguration>::failure(parsed.error());
-    c.monitor=*parsed.value().monitor;
+    if(!parsed.is_success() && c.capture_mode==CaptureMode::Desktop) return Result<HostConfiguration>::failure(parsed.error());
+    if(parsed.is_success()) c.monitor=*parsed.value().monitor;
     // Internal experiment fields are optional; desktop settings keep their
     // existing schema and defaults until real A/B evidence selects profiles.
     if(value.contains("nvencPreset")) c.nvenc_config.preset=number("nvencPreset",2,5);
@@ -109,6 +119,17 @@ Result<HostConfiguration> decode_host_configuration(std::string_view text, bool 
     if(value.contains("nvencQpP")) c.nvenc_config.qp_p=number("nvencQpP",0,51);
     if(value.contains("nvencQpB")) c.nvenc_config.qp_b=number("nvencQpB",0,51);
     if(value.contains("nvencTargetQuality")) c.nvenc_config.target_quality=number("nvencTargetQuality",0,51);
+    const auto rate_control=value.value("rateControl",std::string("vbr"));
+    if(rate_control!="vbr" && rate_control!="cqp") throw std::runtime_error("Unsupported rate control mode");
+    const auto cqp=value.contains("cqp")?number("cqp",0,51):23U;
+    c.recording_priority=value.value("recordingPriority",false);
+    if(value.contains("rateControl")) {
+      c.nvenc_config.constant_qp=rate_control=="cqp";
+      if(c.nvenc_config.constant_qp) {
+        c.nvenc_config.qp_i=c.nvenc_config.qp_p=c.nvenc_config.qp_b=cqp;
+        c.nvenc_config.target_quality=0;
+      }
+    }
     if(value.contains("duplicateOutput1Enabled")) c.prefer_duplicate_output1=value.at("duplicateOutput1Enabled").get<bool>();
     if(value.contains("directNv12CacheEnabled")) c.direct_nv12_cache=value.at("directNv12CacheEnabled").get<bool>();
     if(value.contains("continuousAvioBufferBytes")) c.continuous_avio_buffer_bytes=number("continuousAvioBufferBytes",4096,1024*1024);
@@ -200,6 +221,7 @@ Result<void> SessionController::handle(const SessionRequest& request) {
 void SessionController::poll(bool publish_snapshot) {
   auto metrics=engine_.metrics();
   if(started_ && metrics.pipeline_errors>0) { static_cast<void>(stop()); return; }
+  if(metrics.video_pipeline.capture_waiting_for_game!=snapshot_.metrics.video_pipeline.capture_waiting_for_game) publish_snapshot=true;
   if(metrics.continuous_recording_active!=snapshot_.continuous_recording_active ||
      metrics.audio_unavailable_sources!=snapshot_.metrics.audio_unavailable_sources ||
      metrics.replay_memory_limited!=snapshot_.metrics.replay_memory_limited ||

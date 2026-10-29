@@ -1,3 +1,4 @@
+import { SettingsHelp, SettingsLabel } from '../../components/SettingsHelp';
 import { t, useTranslation } from '../../i18n';
 import { Field, FieldGroup, FieldSet, FieldLegend, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
@@ -70,7 +71,7 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
   const memoryValidation = errors.find(error => error.field === 'replay_memory_limit_mb');
   const manualMemory = draft.replay_memory_limit_mb !== undefined && draft.replay_memory_limit_mb !== 0;
   const container: Container | null | undefined = draft.container;
-  const estimateMb = estimateReplayMegabytes(draft.bitrate, replaySeconds);
+  const estimateMb = draft.rate_control==='cqp' ? null : estimateReplayMegabytes(draft.bitrate, replaySeconds);
   const durationValidation = errors.find((error) => error.field === 'replay_seconds');
   const replayModeValidation = errors.find((error) => error.field === 'replay_mode');
   const directoryValidation = errors.find((error) => error.field === 'output_directory');
@@ -96,7 +97,7 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
 
       <FieldGroup className={styles.formStack}>
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="replay-duration-preset" className={styles.fieldLabel}>{t("Длительность Replay")}</FieldLabel>
+          <SettingsLabel topic="duration" htmlFor="replay-duration-preset" className={styles.fieldLabel}>{t("Длительность Replay")}</SettingsLabel>
           <NativeSelect
             id="replay-duration-preset"
             className="w-full"
@@ -159,7 +160,7 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
           )}
           <p id="replay-duration-hint" className={styles.fieldHint}>
             {durationPreset === 'custom' ? t('От 1 секунды до 60 минут. ') : ''}
-            {estimateMb != null ? t("Примерно {0} МБ видеобуфера в памяти, плюс звук.", estimateMb) : t('Буфер хранится в оперативной памяти.')}
+            {draft.rate_control==='cqp' ? t('В режиме CQP расход памяти зависит от сцены. Лимит памяти Replay сохраняется; доступная длина повтора может сокращаться.') : estimateMb != null ? t("Примерно {0} МБ видеобуфера в памяти, плюс звук.", estimateMb) : t('Буфер хранится в оперативной памяти.')}
           </p>
           {durationValidation && (
             <p id="replay-duration-error" className={styles.fieldError} role="alert">
@@ -169,18 +170,18 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
         </Field>
 
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="replay-memory-mode" className={styles.fieldLabel}>{t("Лимит памяти Replay")}</FieldLabel>
+          <SettingsLabel topic="memory" htmlFor="replay-memory-mode" className={styles.fieldLabel}>{t("Лимит памяти Replay")}</SettingsLabel>
           <NativeSelect id="replay-memory-mode" value={manualMemory ? 'manual' : 'auto'}
             onChange={event => onChange({ replay_memory_limit_mb: event.target.value === 'auto' ? 0 : 1024 })}>
             <NativeSelectOption value="auto">{t("Авто")}</NativeSelectOption>
             <NativeSelectOption value="manual">{t("Задать вручную")}</NativeSelectOption>
           </NativeSelect>
-          {manualMemory && <FieldLabel htmlFor="replay-memory-limit" className={styles.inputLabel}>
-            {t("Лимит, МиБ")}<Input id="replay-memory-limit" type="text" inputMode="numeric"
+          {manualMemory && <div className={styles.inputLabel}>
+            <SettingsLabel topic="memoryUnits" htmlFor="replay-memory-limit">{t("Лимит, МиБ")}</SettingsLabel><Input id="replay-memory-limit" type="text" inputMode="numeric"
               value={memoryInput} onFocus={() => setMemoryEditing(true)} onBlur={() => setMemoryEditing(false)}
               aria-invalid={Boolean(memoryValidation)} aria-describedby={memoryValidation ? "replay-memory-hint replay-memory-error" : "replay-memory-hint"}
               onChange={event => { setMemoryInput(event.target.value); const value = event.target.value.trim(); onChange({ replay_memory_limit_mb: /^\d+$/.test(value) && Number(value) > 0 ? Number(value) : null }); }} />
-          </FieldLabel>}
+          </div>}
           <p id="replay-memory-hint" className={styles.fieldHint}>
             {manualMemory ? t('От 64 до 8192 МиБ. При запуске лимит должен помещаться в половину свободной RAM и четверть общей RAM.') : t('Авто рассчитывает лимит по доступной RAM, максимум 1024 МиБ.')}
             {' '}{t("Это верхняя граница памяти для буфера и сохраняемых данных; память заранее не резервируется.")}{memoryBudgetBytes != null && memoryBudgetBytes > 0 && t(' Новое значение вступит в силу после применения настроек.')}
@@ -214,7 +215,7 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
           </div>
         )}
         <Field className={styles.fieldPlain}>
-          <FieldLabel htmlFor="output-directory" className={styles.fieldLabel}>{t("Папка клипов")}</FieldLabel>
+          <SettingsLabel topic="folder" htmlFor="output-directory" className={styles.fieldLabel}>{t("Папка клипов")}</SettingsLabel>
           <div className={styles.pathRow}>
             <Input
               id="output-directory"
@@ -264,17 +265,20 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
           )}
         </Field>
 
-        <label className={styles.checkboxRow}>
-          <Checkbox
-            checked={draft.save_without_game_folders ?? false}
-            onCheckedChange={(checked) => onChange({ save_without_game_folders: checked === true })}
-            data-testid="save-without-game-folders-checkbox"
-          />
-          <span>
-            <strong>{t("Сохранять записи без подпапок для игр")}</strong>
-            <small>{t("Клипы и обычные записи сохраняются прямо в выбранную папку.")}</small>
-          </span>
-        </label>
+        <div className={styles.checkboxRow}>
+          <label className="flex flex-1 cursor-pointer items-start gap-3">
+            <Checkbox
+              checked={draft.save_without_game_folders ?? false}
+              onCheckedChange={(checked) => onChange({ save_without_game_folders: checked === true })}
+              data-testid="save-without-game-folders-checkbox"
+            />
+            <span>
+              <strong>{t("Сохранять записи без подпапок для игр")}</strong>
+              <small>{t("Клипы и обычные записи сохраняются прямо в выбранную папку.")}</small>
+            </span>
+          </label>
+          <SettingsHelp topic="gameFolders" />
+        </div>
 
         <FieldSet
           className={styles.fieldset}
@@ -285,7 +289,7 @@ export function ReplayStep({ draft, hostBridge, onChange, errors = [], memoryBud
               : 'recording-container-hint'
           }
         >
-          <FieldLegend className={styles.fieldLabel}>{t("Формат файла")}</FieldLegend>
+          <FieldLegend className={styles.fieldLabel}>{t("Формат файла")}<SettingsHelp topic="container" /></FieldLegend>
           <RadioGroup value={container ?? ''} onValueChange={(value) => {
             if (value === 'mp4' || value === 'mkv') onChange({ container: value });
           }} className={styles.radioRow} aria-label={t("Формат файла")}>

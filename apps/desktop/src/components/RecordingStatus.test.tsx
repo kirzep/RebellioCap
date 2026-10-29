@@ -20,6 +20,24 @@ function snapshot(): EngineSnapshot {
 }
 
 describe('Replay memory pressure', () => {
+  it('reports a rejected GPU priority request while recording stays available', () => {
+    const state=snapshot();
+    state.metrics.diagnostics={ recording_priority_requested:true, recording_priority_applied:false };
+    const { rerender }=render(<RecordingStatus snapshot={state} />);
+    expect(screen.getByText('Повышенный приоритет записи не подтверждён')).toBeInTheDocument();
+    state.metrics.diagnostics.recording_priority_applied=true;
+    rerender(<RecordingStatus snapshot={{...state, revision:2}} />);
+    expect(screen.queryByText('Повышенный приоритет записи не подтверждён')).not.toBeInTheDocument();
+  });
+  it('shows waiting for game frames independently of recording service errors', () => {
+    const state = snapshot();
+    state.metrics.diagnostics = { capture_waiting_for_game: true };
+    const { rerender } = render(<RecordingStatus snapshot={state} />);
+    expect(screen.getByText('Ожидание кадров игры')).toBeInTheDocument();
+    state.metrics.diagnostics.capture_waiting_for_game = false;
+    rerender(<RecordingStatus snapshot={{ ...state, revision: 2 }} />);
+    expect(screen.queryByText('Ожидание кадров игры')).not.toBeInTheDocument();
+  });
   it('names the unavailable endpoint while recording continues and clears after recovery', () => {
     const state = snapshot();
     Object.assign(state.metrics, { audioUnavailableSources: 2 });
