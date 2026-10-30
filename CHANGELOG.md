@@ -2,6 +2,12 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## Unreleased — documentation screenshots
+
+- Replace the README screenshots with ten PNG captures supplied by the repository owner, using the English interface in the English README and the Russian interface in the Russian README.
+- Add folder-view examples alongside the clip library, editor, and recording settings.
+- Remove the outdated export-dialog image while keeping the export documentation.
+
 ## Unreleased — recording and export updates
 
 - Add VBR/CQP recording controls and optional GPU recording priority.
@@ -10,7 +16,7 @@ This file describes public source changes. Tags, dates, binary artifacts, and co
 - Add an export priority that keeps the selected resolution and FPS.
 - Refine recording frame scheduling and add bounded asynchronous encoding.
 - Keep display capture as the active backend; game-window capture remains disabled.
-- Refresh the English and Russian README with current functionality and real Windows screenshots of gameplay recordings, the editor, export, and recording settings.
+- Refresh the English and Russian README with current functionality and real Windows screenshots of gameplay recordings, the editor, and recording settings.
 
 This entry describes source changes. No new installer version is published by a branch push alone.
 

@@ -1,21 +1,25 @@
-# Screenshot provenance
+# README screenshots
 
-The screenshots used in the English and Russian README were captured on **29 October 2026** from the **running Windows desktop application**, using its English interface and the repository owner's actual gameplay recordings. The application was running as a local Tauri development build with its native host and media tools; browser fixtures were not used.
+The repository owner supplied these ten PNG screenshots on **30 October 2026**. They show the running Windows application with the owner's actual gameplay recordings. The English README uses the English interface; the Russian README uses the Russian interface.
 
-| File | What it shows |
-| --- | --- |
-| [overview.jpg](overview.jpg) | Recording overview with Replay enabled, the owner's configured 500-second replay duration, session-recording controls, and recent gameplay recordings. |
-| [clips.jpg](clips.jpg) | The real local library, including Dead by Daylight and Deadlock recordings, their existing names, dates, sizes, and generated thumbnails. |
-| [editor.jpg](editor.jpg) | A real Dead by Daylight recording opened in the timeline editor, with video, system-audio, microphone, and mixed tracks. The edit was shortened to 30 seconds and the preview positioned at 12 seconds using the editor's controls. |
-| [export.jpg](export.jpg) | The export controls for that edit, with Smart compression and a 20 MB file-size target enabled. Opening these controls does not demonstrate a completed export. |
-| [recording-settings.jpg](recording-settings.jpg) | The running application's display/video settings, including its recording-quality controls. |
+| View | English | Russian |
+| --- | --- | --- |
+| Recording overview | [overview.en.png](overview.en.png) | [overview.ru.png](overview.ru.png) |
+| All clips | [clips.en.png](clips.en.png) | [clips.ru.png](clips.ru.png) |
+| Recording folders | [folders.en.png](folders.en.png) | [folders.ru.png](folders.ru.png) |
+| Clip editor | [editor.en.png](editor.en.png) | [editor.ru.png](editor.ru.png) |
+| Recording settings | [recording-settings.en.png](recording-settings.en.png) | [recording-settings.ru.png](recording-settings.ru.png) |
 
-## Capture and scope
+## Image files
 
-Images are **1920 × 1032 JPEG** captures of the application window. The surrounding desktop, taskbar, unrelated windows, and transient tool windows are excluded by selecting the native application's screenshot region. The original JPEG capture bytes were saved without additional recompression. The screenshots have not been retouched, composited, or generated. No gameplay footage was substituted with a still-image video, and no clip names, counts, dates, or sizes were invented.
+The supplied files are **1280 pixels wide** and **685–687 pixels high**. They are copied unchanged: no resizing, recompression, retouching, compositing, or image generation was applied. No clip names, dates, counts, or sizes were invented. These images replace the previous JPEG screenshots.
 
-The editor changes affect a local montage and its autosave, not the original recording. The screenshots show the application's actual controls and real local media; they are not a performance benchmark or certification of all supported devices, capture settings, recovery cases, or export profiles. The configured replay duration does not establish how much footage is currently retained under the memory limit.
+The overview shows Replay enabled with a configured duration of 500 seconds; this does not establish how much footage is retained under the memory limit. The library contains 24 files. The folder view shows Dead by Daylight, Deadlock, and Desktop folders, along with the recording-folder path displayed by the application.
 
-The first-run browser-fixture image `onboarding.png` is retained as a historical documentation asset. It is **not used by either current README** and is not part of this native screenshot set.
+The editor shows a real Dead by Daylight source with a 30-second montage at its starting position and separate microphone, system-audio, and mixed tracks. The settings show CQP level 23 and recording priority enabled. These screenshots illustrate the interface and local media; they are not a performance benchmark or verification of every recording or export profile.
 
-Gameplay imagery illustrates the application. Game assets and trademarks belong to their respective owners; no project license is granted over them, and no affiliation with the publishers is implied. Original recordings and private capture notes are not included in these documentation images.
+No replacement export-dialog screenshot was supplied, so both READMEs retain their export descriptions without the previous export image.
+
+The first-run browser-fixture image `onboarding.png` is retained as a historical documentation asset. It is not used by either current README and is not part of this screenshot set.
+
+Gameplay imagery illustrates the application. Game assets and trademarks belong to their respective owners; no project license is granted over them, and no affiliation with the publishers is implied. Original gameplay recordings are not bundled with these documentation images.

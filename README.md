@@ -21,9 +21,9 @@ Gameplay recording, instant replay, and a built-in clip editor for Windows and N
 
 </div>
 
-<img src="docs/screenshots/overview.jpg" width="1120" alt="RebellioCap running on Windows in English, with instant replay enabled and real gameplay recordings">
+<img src="docs/screenshots/overview.en.png" width="1120" alt="RebellioCap running on Windows in English, with instant replay enabled and real gameplay recordings">
 
-*Actual Windows application with the owner's gameplay recordings. Screenshots use the English interface; English and Russian are supported. [Screenshot details](docs/screenshots/README.md).*
+*Screenshots provided by the repository owner, showing the Windows application in English with their gameplay recordings. The [Russian README](README.ru.md) includes screenshots of the Russian interface. [Screenshot details](docs/screenshots/README.md).*
 
 ## Save what just happened
 
@@ -50,19 +50,27 @@ Capture records the **whole selected display**, including other visible windows 
 
 ### Find your recording
 
-<img src="docs/screenshots/clips.jpg" width="1120" alt="RebellioCap clip library with real Dead by Daylight and Deadlock recordings, thumbnails, search, and folder views">
+<img src="docs/screenshots/clips.en.png" width="1120" alt="RebellioCap clip library in English with real Dead by Daylight and Deadlock recordings, thumbnails, and search">
 
 Browse your recordings, preview a moment, select its audio tracks, and choose **Edit clip** from its menu.
 
+<details>
+<summary><strong>Browse by folder</strong> — keep game recordings together</summary>
+
+<br>
+<img src="docs/screenshots/folders.en.png" width="1120" alt="RebellioCap folder view in English with Dead by Daylight, Deadlock, and Desktop recording folders">
+
+Switch to **By folder** to browse recordings grouped into game and desktop folders.
+
+</details>
+
 ### Make the cut
 
-<img src="docs/screenshots/editor.jpg" width="1120" alt="RebellioCap timeline editor with a real gameplay recording and separate video and audio tracks">
+<img src="docs/screenshots/editor.en.png" width="1120" alt="RebellioCap timeline editor in English with a real gameplay preview and separate audio tracks">
 
 Work on a timeline with linked video and audio, snapping, ripple deletion, and direct preview positioning and resizing. Add text or image layers, change the composition for horizontal, vertical, or square video, and save a project to continue later. Source files are preserved.
 
 ### Fit the upload limit
-
-<img src="docs/screenshots/export.jpg" width="1120" alt="RebellioCap export window showing compression methods and a Discord file-size target">
 
 - **Smart** first tries your chosen resolution and FPS with a quality target. If that output exceeds the selected limit or the profile is unavailable, it falls back to bitrate-budgeted encoding.
 - **Fit to size** starts directly with the bitrate budget and thorough encoding settings.
@@ -76,7 +84,7 @@ The thorough profile uses NVENC when supported, with basic NVENC and Windows Med
 <summary><strong>Recording settings</strong> — display, video size, FPS, VBR/CQP, and recording priority</summary>
 
 <br>
-<img src="docs/screenshots/recording-settings.jpg" width="1120" alt="RebellioCap recording settings in English with screen selection, video size, CQP level, and recording priority">
+<img src="docs/screenshots/recording-settings.en.png" width="1120" alt="RebellioCap recording settings in English with screen selection, video size, CQP level, and recording priority">
 
 VBR uses a configured bitrate. CQP uses a quantization level: lower values generally preserve more detail and produce larger files. CQP file sizes and replay-memory use depend on the scene. Settings include contextual help for these tradeoffs.
 
