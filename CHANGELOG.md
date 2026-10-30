@@ -2,23 +2,16 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
-## Unreleased — documentation screenshots
+## 0.1.22
 
-- Replace the README screenshots with ten PNG captures supplied by the repository owner, using the English interface in the English README and the Russian interface in the Russian README.
-- Add folder-view examples alongside the clip library, editor, and recording settings.
-- Remove the outdated export-dialog image while keeping the export documentation.
-
-## Unreleased — recording and export updates
-
-- Add VBR/CQP recording controls and optional GPU recording priority.
-- Add source-resolution, 1080p, and custom video-size choices with contextual settings help in English and Russian.
-- Add Smart, Fit to size, and Fast export modes, preserving the 20 / 50 / 500 MB targets and checking the actual file size before saving.
-- Add an export priority that keeps the selected resolution and FPS.
+- Add VBR/CQP recording controls and optional GPU recording priority, which can trade game FPS for smoother frame preparation under load.
+- Add source-resolution, 1080p, and custom video-size choices, with contextual help in English and Russian.
+- Add Smart, Fit to size, and Fast export modes with 20 / 50 / 500 MB targets and actual file-size checks before saving.
+- Add an export priority that keeps the selected resolution and FPS. Small size targets can still reduce visible detail.
 - Refine recording frame scheduling and add bounded asynchronous encoding.
-- Keep display capture as the active backend; game-window capture remains disabled.
-- Refresh the English and Russian README with current functionality and real Windows screenshots of gameplay recordings, the editor, and recording settings.
+- Refresh both READMEs with current functionality and ten owner-supplied English/Russian screenshots, including folder views.
 
-This entry describes source changes. No new installer version is published by a branch push alone.
+Display capture remains the active backend; game-window capture and per-application audio isolation remain disabled.
 
 ## 0.1.21
 
