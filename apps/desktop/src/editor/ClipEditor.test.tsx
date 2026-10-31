@@ -737,3 +737,14 @@ it('renders custom export FPS options and keeps transport paused during dropdown
  fireEvent.keyDown(format,{key:' ',code:'Space'});
  expect(screen.queryByRole('button',{name:'Пауза'})).not.toBeInTheDocument();
 });
+
+it('opens the saved render folder after native export completes', async () => {
+ await openEditor();
+ const original=vi.mocked(invoke).getMockImplementation()!;
+ vi.mocked(invoke).mockImplementation((command,args)=>command==='editor_export'?Promise.resolve(true) as never:command==='editor_status'?Promise.resolve({state:'done',path:'D:/Montage/final.mp4',bytes:1000}) as never:original(command,args));
+ fireEvent.click(screen.getByRole('button',{name:'Экспорт'}));
+ fireEvent.click(screen.getByRole('button',{name:'Рендерить и сохранить'}));
+ const button=await screen.findByRole('button',{name:'Открыть папку'});
+ fireEvent.click(button);
+ await waitFor(()=>expect(invoke).toHaveBeenCalledWith('open_saved_file_folder',{path:'D:/Montage/final.mp4'}));
+});

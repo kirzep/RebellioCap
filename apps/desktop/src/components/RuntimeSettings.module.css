@@ -61,7 +61,8 @@
   gap: var(--space-3);
   flex: 1;
   min-width: 0;
-  block-size: 60px;
+  min-block-size: 0;
+  max-block-size: min(35vh, 280px);
   overflow: auto;
   align-content: start;
   scrollbar-gutter: stable;
@@ -84,7 +85,7 @@
 
 @media (max-width: 699px) {
   .footer { align-items: stretch; flex-direction: column; gap: var(--space-2); }
-  .messages { flex: none; block-size: 40px; }
+  .messages { flex: none; min-block-size: 0; }
 }
 
 @media (max-width: 420px) {
@@ -94,3 +95,5 @@
     flex-direction: column;
   }
 }
+
+.messages:empty { display: none; }

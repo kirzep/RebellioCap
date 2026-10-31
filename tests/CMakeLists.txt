@@ -149,6 +149,8 @@ if(REBELLIOCAP_ENABLE_HARDWARE_TESTS)
     TIMEOUT 30)
   add_executable(rebelliocap_nvenc_encode_test
     hardware/nvenc_encode_test.cpp)
+  add_test(NAME nvenc_4k_initialization COMMAND rebelliocap_nvenc_encode_test --init-4k)
+  set_tests_properties(nvenc_4k_initialization PROPERTIES LABELS hardware SKIP_RETURN_CODE 77 TIMEOUT 30)
   target_link_libraries(rebelliocap_nvenc_encode_test PRIVATE
     rebelliocap_core
     psapi)

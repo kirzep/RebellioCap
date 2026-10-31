@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../i18n';
@@ -54,7 +55,7 @@ export function OverlayConstructor({ layout, display, onCommit, onClose, feedbac
   }}>
   <OverlayEditor layout={draft} display={display} disabled={busy} onSave={setDraft} fullscreen/>
   <div className="overlay-constructor__guidance">
-   {error ? <p role="alert">{t('Не удалось завершить настройку оверлея. Попробуйте ещё раз.')}</p> : null}
+   {error ? <ErrorNotice title={t('Конструктор оверлея')}>{t('Не удалось завершить настройку оверлея. Попробуйте ещё раз.')}</ErrorNotice> : null}
    {feedback ? <p role="status" className="overlay-constructor__result">{t(feedback === 'saved' ? 'Оверлей сохранён' : 'Изменения отменены')}</p> : <>
     <p>{t('Перетащите элементы на экране. Для точной настройки используйте стрелки на клавиатуре.')}</p>
     <p><kbd>Esc</kbd> {t('— выйти без сохранения')} <span>·</span> <kbd>Ctrl + Enter</kbd> {t('— сохранить и выйти')}</p>

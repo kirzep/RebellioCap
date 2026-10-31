@@ -278,7 +278,7 @@ export function ClipsScreen({ bridge, directory, compact = false, onShowAll, ref
       confirmLabel={editing?.action === 'delete' ? t('Удалить') : t('Сохранить')} destructive={editing?.action === 'delete'} busy={mutationBusy} busyLabel={editing?.action === 'delete' ? t('Удаляем…') : t('Сохраняем…')}
       onConfirm={() => void mutate()} onCancel={() => setDialogOpen(false)}>
       {editing?.action === 'rename' && <label className={styles.renameLabel}>{t("Название клипа")}<input className={styles.renameInput} value={newName} onChange={e => setNewName(e.target.value)} maxLength={180} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void mutate(); } }} /></label>}
-      {mutationError && <p role="alert" className={styles.mutationError}>{t(mutationError)}</p>}
+      {mutationError && <ErrorNotice title={t('Не удалось изменить клип')}>{t(mutationError)}</ErrorNotice>}
     </ConfirmDialog>
   </section>;
 }

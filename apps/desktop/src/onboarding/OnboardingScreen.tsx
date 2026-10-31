@@ -525,7 +525,7 @@ export function OnboardingScreen({
 
           {state.errors.length > 0 && validationGroups.some(([step]) => step !== state.step) && (
             <div ref={validationNoticeRef} className={styles.noticeRegion} tabIndex={-1}>
-              <ErrorNotice
+              <ErrorNotice inline
                 title={
                   validationGroups.some(([step]) => step !== state.step)
                     ? t('Есть несохранённые изменения на другом шаге')
@@ -561,7 +561,7 @@ export function OnboardingScreen({
 
           {state.step === 5 && summaryBlockingIssue && (
             <div className={styles.noticeRegion}>
-              <ErrorNotice
+              <ErrorNotice inline
                 title={t("Перед тестом нужно исправить устройство")}
                 tone="warning"
                 action={

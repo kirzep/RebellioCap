@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { useState } from 'react';
 import { NativeSelect } from './ui/native-select';
 import { setLanguagePreference, useLanguage, useTranslation, type LanguagePreference } from '../i18n';
@@ -37,8 +38,6 @@ export function LanguageSettings() {
     </NativeSelect>
     </div>
     {busy && <p role="status" className="sr-only">{t('Сохраняем язык…')}</p>}
-    {error && <p role="alert" className={styles.languageError} title={t('Не удалось сохранить язык. Попробуйте ещё раз.')}>
-      <span aria-hidden="true">!</span><span className={styles.languageErrorText}>{t('Не удалось сохранить язык. Попробуйте ещё раз.')}</span>
-    </p>}
+    {error && <ErrorNotice title={t('Язык интерфейса')}>{t('Не удалось сохранить язык. Попробуйте ещё раз.')}</ErrorNotice>}
   </div>;
 }

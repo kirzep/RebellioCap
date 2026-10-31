@@ -1,3 +1,4 @@
+import { ErrorCenterProvider } from './components/ErrorCenter';
 import React, { lazy, Suspense } from 'react';
 import { installBrowserUiPolicy } from './app/browserUiPolicy';
 import { installFrontendLogging } from './app/frontendLogging';
@@ -25,7 +26,7 @@ async function renderApplication() {
   await initializeLanguage();
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      {overlay ? <NotificationOverlay /> : overlayEditor ? <OverlayEditorWindow /> : <Suspense fallback={<p role="status">{t('Запускаем RebellioCap…')}</p>}><App /></Suspense>}
+      {overlay ? <NotificationOverlay /> : overlayEditor ? <ErrorCenterProvider><OverlayEditorWindow /></ErrorCenterProvider> : <Suspense fallback={<p role="status">{t('Запускаем RebellioCap…')}</p>}><App /></Suspense>}
     </React.StrictMode>
   );
 }

@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { t, useTranslation } from '../i18n';
@@ -34,7 +35,7 @@ export function OverlayEditorWindow() {
     return () => { disposed = true; };
   }, []);
 
-  if (error) return <p role="alert">{t('Не удалось загрузить настройки оверлея. Нажмите Esc, чтобы выйти.')}</p>;
+  if (error) return <ErrorNotice title={t('Конструктор оверлея')}>{t('Не удалось загрузить настройки оверлея. Нажмите Esc, чтобы выйти.')}</ErrorNotice>;
   if (!settings) return <p role="status">{t('Загружаем конструктор оверлея…')}</p>;
 
   return <OverlayConstructor

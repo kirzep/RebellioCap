@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -29,8 +30,9 @@ export function DeveloperBrand({ className }: { className?: string }) {
       style={{ padding: 0, border: 0, background: 'transparent', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
       <img src={logo} className={className} alt="" draggable={false} />
     </button>
-    {(notice || error) && <div role={error ? 'alert' : 'status'} className="pointer-events-none fixed bottom-6 right-6 z-50 rounded-xl border bg-card px-5 py-3 text-sm font-semibold shadow-lg">
-      {error ? t('Не удалось включить режим разработчика.') : t('Режим разработчика включен')}
+    {error && <ErrorNotice title={t('Не удалось включить режим разработчика.')}/>}
+    {notice && !error && <div role="status" className="pointer-events-none fixed bottom-6 right-6 z-50 rounded-xl border bg-card px-5 py-3 text-sm font-semibold shadow-lg">
+      {t('Режим разработчика включен')}
     </div>}
   </>;
 }
@@ -38,6 +40,7 @@ export function DeveloperLogsPanel() {
   useTranslation();
   const enabled = useSyncExternalStore(subscribe, () => developerEnabled);
   const [busy, setBusy] = useState(false);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -50,7 +53,7 @@ export function DeveloperLogsPanel() {
     setBusy(true); setMessage(null); setError(false);
     try {
       const path = await invoke<string | null>('export_application_logs');
-      if (path) setMessage(`Логи сохранены: ${path}`);
+      if (path) { setSavedPath(path); setMessage(`Логи сохранены: ${path}`); }
     } catch { setError(true); setMessage('Не удалось сохранить логи. Выберите другую папку и попробуйте ещё раз.'); }
     finally { setBusy(false); }
   }
@@ -61,6 +64,9 @@ export function DeveloperLogsPanel() {
     <button type="button" className="rounded-lg border px-4 py-2 text-sm font-medium" disabled={busy || !('__TAURI_INTERNALS__' in window)} onClick={() => void download()}>
       {busy ? t('Сохраняем…') : t('Скачать логи приложения')}
     </button>
-    {message && <p role={error ? 'alert' : 'status'} className="break-all text-sm">{t(message)}</p>}
+    {savedPath && <button type="button" className="rounded-lg border px-4 py-2 text-sm font-medium" onClick={() => {
+      void invoke('open_saved_file_folder', { path: savedPath }).catch(() => { setError(true); setMessage('Не удалось открыть папку.'); });
+    }}>{t('Открыть папку')}</button>}
+    {message && (error ? <ErrorNotice title={t('Логи приложения')}>{t(message)}</ErrorNotice> : <p role="status" className="break-all text-sm">{t(message)}</p>)}
   </section>;
 }

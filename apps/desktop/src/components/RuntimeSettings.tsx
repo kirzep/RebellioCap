@@ -672,14 +672,19 @@ export function RuntimeSettings({
       <WorkspaceActions><div className={styles.footer}>
       <div className={styles.messages}>
         {validationErrors.length > 0 && (
-          <ErrorNotice title={t("Проверьте настройки")} tone="warning">
+          <ErrorNotice inline title={t("Проверьте настройки")} tone="warning">
             {firstValidationMessage(validationErrors)}
           </ErrorNotice>
         )}
         {applyError && (
           <ErrorNotice
             title={t(operationErrorTitle)}
-            technicalDetails={t("Код: {0}\n{1}", applyError.code, applyError.technicalCause)}
+            technicalDetails={<>
+              {t("Код: {0}\n{1}", applyError.code, applyError.technicalCause)}{'\n\n'}
+              {t("Последний подтверждённый профиль:")}{' '}
+              {formatVideoMode(activeConfig.width, activeConfig.height, activeConfig.fps,
+                activeConfig.bitrate, activeConfig.rate_control, activeConfig.cqp)}; {describeConfirmedEngine(snapshot)}.
+            </>}
             action={
               isDirty && operationErrorTitle === 'Не удалось применить настройки' ? (
                 <Button variant="tertiary" size="compact" onClick={resetCandidate}>
@@ -688,15 +693,6 @@ export function RuntimeSettings({
             }
           >
             <p>{t(applyError.summary)} {' '}{t("Введённые значения сохранены в форме.")}</p>
-            <p>
-              {t("Последний подтверждённый профиль:")}{' '}
-              {formatVideoMode(
-                activeConfig.width,
-                activeConfig.height,
-                activeConfig.fps,
-                activeConfig.bitrate, activeConfig.rate_control, activeConfig.cqp
-              )}; {describeConfirmedEngine(snapshot)}.
-            </p>
           </ErrorNotice>
         )}
         {appliedMessage && <InlineStatus tone="success">{appliedMessage}</InlineStatus>}

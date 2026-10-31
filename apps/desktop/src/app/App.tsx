@@ -1,3 +1,4 @@
+import { ErrorCenterProvider } from '../components/ErrorCenter';
 import { t, useTranslation } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { requestNavigation } from '../editor/navigationGuard';
@@ -22,7 +23,10 @@ export interface AppProps {
   hostBridge?: HostBridge;
 }
 
-export function App({ hostBridge = defaultHost }: AppProps) {
+export function App(props: AppProps) {
+  return <ErrorCenterProvider><AppContent {...props}/></ErrorCenterProvider>;
+}
+function AppContent({ hostBridge = defaultHost }: AppProps) {
   useTranslation();
   const [route, setRoute] = useState<Route>({ kind: 'loading' });
   const [state, setState] = useState<StoredState | null>(null);
@@ -186,10 +190,9 @@ export function App({ hostBridge = defaultHost }: AppProps) {
 
   return (
     <div className="rebelliocap-app" data-testid="app-root" data-route={route.kind}>
-      {trayError && <div role="alert" className="fixed bottom-6 right-6 z-50 max-w-md">
-        <ErrorNotice title={t("Не удалось выполнить действие из трея")}>{t(trayError.summary)}</ErrorNotice>
-        <button type="button" onClick={() => setTrayError(null)}>{t("Закрыть сообщение")}</button>
-      </div>}
+      {trayError && <>
+        <ErrorNotice title={t("Не удалось выполнить действие из трея")} action={<button type="button" onClick={() => setTrayError(null)}>{t("Закрыть сообщение")}</button>}>{t(trayError.summary)}</ErrorNotice>
+      </>}
       {route.kind === 'loading' && <LoadingScreen />}
 
       {route.kind === 'start' && (

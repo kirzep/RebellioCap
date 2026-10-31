@@ -209,7 +209,7 @@ export function DiagnosticsPanel({
           </details>
 
           {lastError ? (
-            <ErrorNotice
+            <ErrorNotice inline
               title={t("Последняя ошибка службы")}
               tone="warning"
               technicalDetails={engineTechnicalDetails(snapshot)}

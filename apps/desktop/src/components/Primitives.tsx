@@ -1,3 +1,4 @@
+import { ErrorNotification, errorText } from './ErrorCenter';
 import { t, useTranslation } from '../i18n';
 import React, { useEffect, useId, useRef } from 'react';
 import { cn } from 'cn';
@@ -132,11 +133,12 @@ export interface ErrorNoticeProps extends Omit<React.HTMLAttributes<HTMLDivEleme
   action?: React.ReactNode;
   technicalDetails?: React.ReactNode;
   technicalLabel?: string;
+  inline?: boolean;
 }
 export function ErrorNotice({ title, children, tone = 'danger', action, technicalDetails,
-  technicalLabel = 'Технические подробности', className, ...props }: ErrorNoticeProps) {
+  technicalLabel = 'Технические подробности', inline = false, className, ...props }: ErrorNoticeProps) {
   useTranslation();
-  return (
+  const notice = (
     <Alert {...props} className={cn(styles.errorNotice, styles[`notice${tone[0].toUpperCase()}${tone.slice(1)}`], className)} variant={tone === 'danger' ? 'destructive' : 'default'}
       role={props.role ?? (tone === 'danger' ? 'alert' : 'status')}>
       <AlertTitle className="line-clamp-none">{translatedNode(title)}</AlertTitle>
@@ -150,6 +152,9 @@ export function ErrorNotice({ title, children, tone = 'danger', action, technica
       </AlertDescription>
     </Alert>
   );
+  return tone !== 'neutral' && !inline
+    ? <ErrorNotification fingerprint={errorText([title, children, technicalDetails])}>{notice}</ErrorNotification>
+    : notice;
 }
 
 export interface ConfirmDialogProps {

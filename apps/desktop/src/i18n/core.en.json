@@ -798,5 +798,19 @@
   " · Основной": " · Primary",
   "От 1 секунды до 60 минут. ": "From 1 second to 60 minutes. ",
   " Новое значение вступит в силу после применения настроек.": " The new value takes effect after applying settings.",
-  " Общий лимит буфера и сохраняемых данных определяется выбранной настройкой при запуске.": " The total buffer and save data limit is determined by the selected setting at startup."
+  " Общий лимит буфера и сохраняемых данных определяется выбранной настройкой при запуске.": " The total buffer and save data limit is determined by the selected setting at startup.",
+  "Открыть папку": "Open folder",
+  "Не удалось открыть папку.": "Could not open the folder.",
+  "Ошибки приложения": "Application errors",
+  "Закрыть ошибку": "Dismiss error",
+  "Список ошибок": "Error list",
+  "Ошибки: {0}": "Errors: {0}",
+  "Предыдущая ошибка": "Previous error",
+  "Следующая ошибка": "Next error",
+  "Не удалось выполнить действие с окном": "Could not complete the window action",
+  "Не удалось изменить клип": "Could not modify the clip",
+  "Восстановление проекта": "Project recovery",
+  "Логи приложения": "Application logs",
+  "Не удалось воспроизвести клип": "Could not play the clip",
+  "Имя записи": "Recording name"
 }

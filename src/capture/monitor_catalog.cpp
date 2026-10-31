@@ -69,6 +69,13 @@ std::wstring monitor_source_identity(std::span<const std::wstring> target_paths)
 }
 
 Result<std::vector<MonitorInfo>> enumerate_monitors() {
+  // DXGI desktop coordinates are virtualized for DPI-unaware CLI processes.
+  // Restore the caller context on every return, including failures.
+  struct DpiScope {
+    DPI_AWARENESS_CONTEXT previous = SetThreadDpiAwarenessContext(
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    ~DpiScope() { if (previous) SetThreadDpiAwarenessContext(previous); }
+  } dpi_scope;
   Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
   HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
   if (FAILED(result)) {

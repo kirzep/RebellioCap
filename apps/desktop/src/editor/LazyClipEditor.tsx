@@ -1,3 +1,4 @@
+import { ErrorNotice } from '../components/Primitives';
 import {useTranslation} from '../i18n';
 import { Component, lazy, Suspense, type ComponentProps, type ReactNode } from 'react';
 
@@ -14,10 +15,9 @@ class EditorLoadBoundary extends Component<{ children: ReactNode; onClose: () =>
 }
 function EditorLoadError({onClose}:{onClose:()=>void}) {
  const {t}=useTranslation();
- return <section role="alert">
-      <p>{t("Не удалось открыть редактор. Перезапустите приложение и попробуйте снова.")}</p>
-      <button type="button" onClick={onClose}>{t("Назад")}</button>
-    </section>;
+ return <ErrorNotice title={t('Редактор клипов')} action={<button type="button" onClick={onClose}>{t("Назад")}</button>}>
+      {t("Не удалось открыть редактор. Перезапустите приложение и попробуйте снова.")}
+    </ErrorNotice>;
 }
 
 /** Keep the editor, its styles and artwork out of the recording/overlay startup path. */

@@ -2,6 +2,15 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.24
+
+- Read physical monitor dimensions during first-run setup independently of Windows DPI scaling.
+- Open a temporary shared capture stream when checking microphone levels before recording.
+- Let NVENC validate 4K modes instead of rejecting them from a throughput estimate.
+- Show operational errors in a shared upper-right card with dismissal, details, recovery actions, duplicate grouping, and navigation between different errors. Keep field validation local.
+- Add folder-opening buttons after montage rendering and application log export.
+- Cover shared error handling, modal keyboard access, narrow-window layouts, and 4K encoder initialization with regression checks.
+
 ## 0.1.23
 
 - Show a Windows notification when closing the main window to explain that RebellioCap continues running in the system tray and how to open or quit it.

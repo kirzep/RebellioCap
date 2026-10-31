@@ -1154,3 +1154,14 @@ mod clips_tests {
         assert!(resolve_clip(&directory, "clip.mp4").is_ok());
     }
 }
+
+/// Open the parent of an existing saved file, never execute the file itself.
+#[tauri::command]
+pub async fn open_saved_file_folder(path: PathBuf) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = path.canonicalize().map_err(|e| e.to_string())?;
+        if !file.is_file() { return Err("folder.saved_file_required".into()); }
+        let parent = file.parent().ok_or("folder.parent_missing")?;
+        native::open_file(&crate::model::strip_verbatim_prefix(parent))
+    }).await.map_err(|e| e.to_string())?
+}

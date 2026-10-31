@@ -1,0 +1,39 @@
+.center {
+ position: fixed; inset: 52px 20px auto auto; margin: 0;
+ width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 72px);
+ padding: 0; border: 0; background: transparent; color: var(--text-primary);
+ overflow: visible; z-index: 1000; pointer-events: auto;
+}
+.center::backdrop { background: transparent; pointer-events: none; }
+.card { position: relative; border: 1px solid #57403e; border-radius: 14px;
+ background: #242123; box-shadow: 0 14px 40px #0005; overflow: auto;
+ max-height: calc(100dvh - 72px); overscroll-behavior: contain;
+ animation: arrive 160ms ease-out;
+}
+.close { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+ display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent;
+ color: var(--text-secondary); cursor: pointer; z-index: 1;
+}
+.close:hover { background: #ffffff0d; color: var(--text-primary); }
+.center button:focus-visible, .center summary:focus-visible { outline: 2px solid var(--accent, #9cc7ff); outline-offset: 2px; }
+.content { overflow-wrap: anywhere; }
+.content > [data-slot='alert'] { border: 0; border-radius: 0; background: transparent; margin: 0; padding: 18px 44px 18px 20px; }
+.content [data-slot='alert-title'] { color: #ffa59d; font-size: 14px; line-height: 1.4; margin-bottom: 6px; }
+.content [data-slot='alert-description'] { color: var(--text-primary); font-size: 13px; font-weight: 400; line-height: 1.6; gap: 12px; }
+.content p { margin: 0; }
+.content details { color: var(--text-secondary); }
+.content summary { cursor: pointer; font-size: 12px; }
+.content details[open] > :not(summary) { margin-top: 10px; }
+.queue { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid #ffffff0c;
+ color: var(--text-secondary); font-size: 12px;
+}
+.position { margin-left: auto; font-variant-numeric: tabular-nums; }
+.queue button { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #ffffff12;
+ border-radius: 6px; color: var(--text-primary); background: transparent; cursor: pointer;
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+@media (max-width: 699px) { .center { inset: 48px 12px auto auto; width: calc(100vw - 24px); } }
+@media (forced-colors: active) { .card { border-color: CanvasText; background: Canvas; } }
+
+.content h1 { margin: 0; font: inherit; }

@@ -77,10 +77,11 @@ impl Drop for Apartment {
 /// Caller must first resolve this exact endpoint ID from a fresh native catalog.
 pub fn measure_endpoint(id: &str, cancellation: &AtomicBool) -> Result<AudioMeasurement> {
     use windows::{
-        core::HSTRING,
+        core::{HSTRING, Interface},
         Win32::{
             Media::Audio::{
                 Endpoints::IAudioMeterInformation, IMMDeviceEnumerator, MMDeviceEnumerator,
+                IAudioClient, IMMEndpoint, eCapture, AUDCLNT_SHAREMODE_SHARED,
             },
             System::Com::*,
         },
@@ -97,6 +98,22 @@ pub fn measure_endpoint(id: &str, cancellation: &AtomicBool) -> Result<AudioMeas
         let meter: IAudioMeterInformation = device
             .Activate(CLSCTX_INPROC_SERVER, None)
             .map_err(|e| e.to_string())?;
+        // A capture endpoint meter may remain at zero until a client opens it.
+        // Keep a shared stream alive for the sample, without changing the saved config.
+        struct SampleStream(IAudioClient);
+        impl Drop for SampleStream {
+            fn drop(&mut self) { unsafe { let _ = self.0.Stop(); } }
+        }
+        let endpoint: IMMEndpoint = device.cast().map_err(|e| e.to_string())?;
+        let _stream = if endpoint.GetDataFlow().map_err(|e| e.to_string())? == eCapture {
+            let client: IAudioClient = device.Activate(CLSCTX_INPROC_SERVER, None).map_err(|e| e.to_string())?;
+            let format = client.GetMixFormat().map_err(|e| e.to_string())?;
+            let initialized = client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 10_000_000, 0, format, None);
+            CoTaskMemFree(Some(format.cast()));
+            initialized.map_err(|e| e.to_string())?;
+            client.Start().map_err(|e| e.to_string())?;
+            Some(SampleStream(client))
+        } else { None };
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(3) && !cancellation.load(Ordering::Acquire) {
             let level = meter.GetPeakValue().map_err(|e| e.to_string())?;

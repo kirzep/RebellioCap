@@ -276,7 +276,7 @@ std::uint64_t digest_timestamp(std::uint64_t digest,
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
   using namespace rebelliocap;
 
   auto api_result = NvencApi::load();
@@ -309,6 +309,21 @@ int main() {
     return fail("NVIDIA D3D11 device creation failed: " + device_result.error().code);
   }
   auto test_device = std::move(device_result).value();
+
+  if (argc == 2 && std::string(argv[1]) == "--init-4k") {
+    QpcClock clock;
+    NvencConfig config;
+    config.width = 3840;
+    config.height = 2160;
+    config.fps = 60;
+    auto encoder = NvencEncoder::create(test_device.device.Get(), config, clock);
+    if (!encoder.is_success()) return fail(encoder.error().code + ": " + encoder.error().message);
+    const auto accepted = encoder.value()->accepted_config();
+    if (accepted.width != 3840 || accepted.height != 2160 || accepted.fps != 60)
+      return fail("4K mode was silently downgraded");
+    std::cout << "PASS: NVENC accepted 3840x2160 @ 60 FPS\n";
+    return 0;
+  }
 
   auto input_result = make_bgra_frame(test_device.device.Get(), test_device.context.Get());
   if (!input_result.is_success()) {

@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { t, useTranslation } from '../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -65,7 +66,7 @@ export function WindowTitlebar({ children }: { children?: ReactNode }) {
       <div className={styles.dragRegion} aria-hidden="true" onMouseDown={(event) => {
         if (event.button === 0) void run(event.detail === 2 ? 'toggleMaximize' : 'startDragging');
       }} />
-      {error && <span className={styles.error} role="alert">{t(error)}</span>}
+      {error && <ErrorNotice title={t('Не удалось выполнить действие с окном')}>{t(error)}</ErrorNotice>}
       {native && <div className={styles.controls}>
         <Button variant="ghost" size="icon" className={styles.control} aria-label={t("Свернуть")} title={t("Свернуть")}
           onClick={() => void run('minimize')}><Minus aria-hidden="true" /></Button>

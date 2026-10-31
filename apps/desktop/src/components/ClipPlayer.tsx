@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { t, useTranslation } from '../i18n';
 
 function playbackErrorText(error: string): string {
@@ -241,7 +242,7 @@ export function ClipPlayer({ name, media, onClose, onRelease }: {
       </div>
       {media.tracks.map((track, index) => <audio key={track.path} ref={element => { if (element) { audio.current[index] = element; element.volume = volumes[index] / 100; } }} src={track.path} preload="auto"
         onError={() => { video.current?.pause(); setError(`Не удалось воспроизвести дорожку «${track.label}».`); }} />)}
-      {error && <p role="alert" className={styles.error}>{playbackErrorText(error)}</p>}
+      {error && <ErrorNotice title={t('Не удалось воспроизвести клип')}>{playbackErrorText(error)}</ErrorNotice>}
     </Dialog.Content></Dialog.Portal>
   </Dialog.Root>;
 }

@@ -1,3 +1,4 @@
+import { ErrorNotice } from '../components/Primitives';
 import { t, useTranslation } from '../i18n';
 import {NativeSelect,NativeSelectOption} from '../components/ui/native-select';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
@@ -32,6 +33,7 @@ export function RecordingNameSettings(){
   useTranslation();
  const [settings,setSettings]=useState(defaults),[parts,setParts]=useState<Part[]>(()=>defaults().presets[0].parts),[reset,setReset]=useState(0),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[newName,setNewName]=useState('');const [pendingPreset,setPendingPreset]=useState<string>();
  const native='__TAURI_INTERNALS__' in window;
+ const validationError=['Добавьте текст или готовый блок.','Укажите название пресета.'].includes(error);
  useEffect(()=>{let disposed=false;const load=(s:Settings)=>{if(disposed||!s?.presets?.length)return;const p=s.presets.find(p=>p.id===s.activeId);if(!p)return;setSettings(s);setParts(p.parts);setReset(v=>v+1);};if(native)void invoke<Settings>('get_recording_names').then(load).catch(e=>{if(!disposed)setError(String(e));});else{try{const saved=localStorage.getItem('rebcap.recordingNames');if(saved)load(JSON.parse(saved));}catch{/* Use default presets. */}}return()=>{disposed=true;};},[native]);
  async function save(next:Settings){setBusy(true);setError('');try{if(native)await invoke('set_recording_names',{settings:next});else localStorage.setItem('rebcap.recordingNames',JSON.stringify(next));setSettings(next);setParts(next.presets.find(p=>p.id===next.activeId)!.parts);setReset(v=>v+1);setDirty(false);setNotice('Пресет применяется к новым клипам и записям.');}catch(e){setError(String(e));}finally{setBusy(false);}}
  function apply(copy=false){if(!parts.length||!parts.some(p=>p.kind==='token'||p.value.trim())){setError('Добавьте текст или готовый блок.');return;}const current=settings.presets.find(p=>p.id===settings.activeId)!;const create=copy||['shadowplay','rebcap'].includes(current.id);const p={id:create?crypto.randomUUID():current.id,name:copy?newName.trim():create?t('Мой пресет'):current.name,parts};if(!p.name){setError('Укажите название пресета.');return;}void save({activeId:p.id,presets:create?[...settings.presets,p]:settings.presets.map(v=>v.id===p.id?p:v)}).then(()=>setNewName(''));}
@@ -42,7 +44,8 @@ export function RecordingNameSettings(){
  <p className="name-hint">{t("Данные меток фиксируются при сохранении момента или начале записи. Время — локальное, расширенное время включает сотые секунды. Расширение добавляется автоматически.")}</p>
  <div className="name-actions"><button className="name-primary" disabled={!dirty} onClick={()=>apply()}><Save size={14}/>{t("Применить имя")}</button>{!['shadowplay','rebcap'].includes(settings.activeId)&&<button onClick={()=>{const remaining=settings.presets.filter(p=>p.id!==settings.activeId);void save({activeId:remaining[0].id,presets:remaining});}} aria-label={t("Удалить пресет")}><Trash2 size={14}/></button>}</div>
  <div className="name-save-row"><input aria-label={t("Название нового пресета")} placeholder={t("Название нового пресета")} maxLength={64} value={newName} onChange={e=>setNewName(e.target.value)}/><button disabled={!newName.trim()||settings.presets.length>=32} onClick={()=>apply(true)}><Plus size={14}/>{t("Сохранить пресет")}</button></div></fieldset>
- {(error||notice)&&<p role={error?'alert':'status'} className={error?'name-error':'name-hint'}>{t(error||notice)}</p>}
+ {error&&(validationError?<p role="alert" className="name-error">{t(error)}</p>:<ErrorNotice title={t('Имя записи')}>{t(error)}</ErrorNotice>)}
+ {!error&&notice&&<p role="status" className="name-hint">{t(notice)}</p>}
  <Dialog open={!!pendingPreset} onOpenChange={open=>{if(!open)setPendingPreset(undefined);}}><DialogContent className="name-confirm"><DialogTitle>{t("Переключить пресет?")}</DialogTitle><DialogDescription>{t("Изменения текущего имени ещё не сохранены. Можно продолжить редактирование или перейти к другому пресету.")}</DialogDescription><div className="name-confirm-actions"><button onClick={()=>setPendingPreset(undefined)}>{t("Продолжить редактирование")}</button><button onClick={()=>{const id=pendingPreset!;setPendingPreset(undefined);void save({...settings,activeId:id});}}>{t("Переключить без сохранения")}</button></div></DialogContent></Dialog>
  </section>;
 }

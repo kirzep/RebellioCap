@@ -1,3 +1,4 @@
+import { ErrorNotice } from './Primitives';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { t, useTranslation } from '../i18n';
 import {NativeSelect,NativeSelectOption} from './ui/native-select';
@@ -134,6 +135,6 @@ export function NotificationSettingsPanel() {
         onBlur={() => { if (volumeDraft !== settings.volume) void save({ ...settings, volume: volumeDraft }); }} />
     </label>
     {!native && <p className="text-sm text-muted-foreground">{t("Предпросмотр звука. Сохранение доступно в приложении Windows.")}</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{t(error)}</p>}
+    {error && <ErrorNotice title={t('Оверлей и уведомления')}>{t(error)}</ErrorNotice>}
   </section>;
 }

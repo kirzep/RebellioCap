@@ -139,6 +139,7 @@ pub fn run() {
             commands::measure_audio_level,
             commands::read_audio_peak,
             commands::choose_output_directory,
+            commands::open_saved_file_folder,
             commands::save_onboarding_draft,
             commands::run_recording_test,
             commands::complete_onboarding,

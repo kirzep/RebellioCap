@@ -435,14 +435,14 @@ struct NvencEncoder::Impl {
         static_cast<std::uint64_t>((config.height + 15U) / 16U);
     const std::uint64_t requested_macroblocks_per_second =
         macroblocks_per_frame * config.fps;
+    // Throughput is a performance estimate, not a supported-mode boundary.
+    // Let nvEncInitializeEncoder validate the requested resolution and FPS.
     if (!capabilities.async_encode || capabilities.max_b_frames < config.b_frames ||
         (!config.constant_qp && (capabilities.rate_control_modes &
          static_cast<std::uint32_t>(NV_ENC_PARAMS_RC_VBR)) == 0) ||
         config.width < capabilities.min_width || config.width > capabilities.max_width ||
         config.height < capabilities.min_height ||
-        config.height > capabilities.max_height ||
-        requested_macroblocks_per_second >
-            capabilities.max_macroblocks_per_second) {
+        config.height > capabilities.max_height) {
       return Result<void>::failure(encoder_error(
           "nvenc.requested_config_unsupported",
           "NVENC rejected " + std::to_string(config.width) + "x" +

@@ -18,4 +18,6 @@ it('reveals log export only after the tenth logo click and reports the saved arc
   await screen.findByText('Режим разработчика включен');
   fireEvent.click(screen.getByRole('button', { name: 'Скачать логи приложения' }));
   await screen.findByText('Логи сохранены: D:\\Reports\\logs.zip');
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть папку' }));
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith('open_saved_file_folder', { path: 'D:\\Reports\\logs.zip' }));
 });
