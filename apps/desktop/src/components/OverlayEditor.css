@@ -26,3 +26,9 @@
 .overlay-constructor[data-feedback]::after { content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none; border: 3px solid #dbb568; box-shadow: inset 0 0 18px #dbb56833; }
 .overlay-constructor[data-feedback=saved]::after { border-color: #78d39a; box-shadow: inset 0 0 18px #78d39a33; }
 .overlay-constructor[data-feedback=saved] .overlay-constructor__result { color: #a4e9be; }
+
+.overlay-shortcut-cards { display:flex; justify-content:center; flex-wrap:wrap; gap:24px; margin:24px 0; }
+.overlay-shortcut-card { display:grid; gap:10px; align-content:start; }
+.overlay-constructor__guidance .overlay-shortcut-card > span { padding:0; color:#989b9e; font-size:11px; }
+.overlay-shortcut-card > div { display:flex; gap:5px; justify-content:center; }
+.overlay-constructor__guidance .overlay-shortcut-card kbd { display:grid; place-items:center; min-width:34px; height:36px; box-sizing:border-box; padding:0 9px; border:1px solid #ffffff22; border-bottom:3px solid #0b0c0d; border-radius:7px; background:linear-gradient(#343638,#27292b); box-shadow:inset 0 1px #ffffff10,0 2px 3px #0004; color:#e5e3df; font-family:var(--font-mono,monospace); font-size:12px; text-shadow:none; }

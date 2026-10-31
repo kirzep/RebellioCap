@@ -113,3 +113,8 @@ html.notification-surface, .notification-surface body, .notification-surface #ro
   to { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .overlay-editor-feedback { animation-duration: 1ms; } }
+
+.capture-save-spinner { position:absolute; left:20px; top:18px; width:28px; height:28px; box-sizing:border-box; border:2px solid #d8d5cd26; border-top-color:#d8d5cd; border-right-color:#d8d5cd88; border-radius:50%; animation:capture-save-spin 900ms linear infinite; }
+.capture-notification[data-tone=pending] .capture-notification__icon { opacity:1; mask-image:none; }
+@keyframes capture-save-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .capture-save-spinner { animation:none; border-style:dotted; } }

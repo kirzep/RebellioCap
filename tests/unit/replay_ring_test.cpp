@@ -665,3 +665,23 @@ TEST_CASE("retained duration saturates across the QPC range", "[replay-extrema]"
   append(ring, packet(StreamKind::Video, 1, 0, true));
   REQUIRE(ring.retained_duration() == std::numeric_limits<QpcTicks>::max());
 }
+
+TEST_CASE("saving resets replay and waits for a fresh keyframe", "[replay]") {
+  ReplayRing ring(100);
+  append(ring, packet(StreamKind::Video, 1, 0, true));
+  append(ring, packet(StreamKind::Video, 1, 5));
+  auto saved = ring.snapshot(5, 100);
+  REQUIRE(saved.is_success());
+  ring.clear_after_save(6);
+  REQUIRE(ring.bytes() == 0);
+  REQUIRE_FALSE(ring.snapshot(5, 100).is_success());
+  append(ring, packet(StreamKind::Video, 1, 6));
+  append(ring, packet(StreamKind::SystemAudio, 1, 7));
+  REQUIRE(ring.bytes() == 0);
+  append(ring, packet(StreamKind::Video, 1, 8, true));
+  append(ring, packet(StreamKind::Video, 1, 9));
+  auto next = ring.snapshot(9, 100);
+  REQUIRE(next.is_success());
+  REQUIRE(next.value().actual_start == 8);
+  REQUIRE(saved.value().actual_start == 0);
+}

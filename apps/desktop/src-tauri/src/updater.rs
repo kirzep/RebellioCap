@@ -24,6 +24,7 @@ impl Drop for OperationLease<'_> {
 pub struct UpdateState {
     gate: OperationGate,
     checked: Mutex<Option<Option<Update>>>,
+    checked_at: Mutex<Option<Instant>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -67,9 +68,13 @@ pub async fn check_for_update(window: tauri::WebviewWindow, app: tauri::AppHandl
     main_only(&window)?;
     if cfg!(debug_assertions) { return Ok(None); }
     let _lease = state.gate.acquire()?;
-    if let Some(cached) = state.checked.lock().map_err(|_| "updater.lock_poisoned")?.as_ref() {
-        return Ok(cached.as_ref().map(|u| AvailableUpdate { version: u.version.clone(), release_notes: u.body.clone() }));
+    let fresh = state.checked_at.lock().map_err(|_| "updater.lock_poisoned")?.is_some_and(|at| at.elapsed() < Duration::from_secs(290));
+    if fresh {
+        if let Some(cached) = state.checked.lock().map_err(|_| "updater.lock_poisoned")?.as_ref() {
+            return Ok(cached.as_ref().map(|u| AvailableUpdate { version: u.version.clone(), release_notes: u.body.clone() }));
+        }
     }
+    let check_started = Instant::now();
     let exit_app = app.clone();
     let checked = app.updater_builder()
         .timeout(Duration::from_secs(15))
@@ -87,6 +92,7 @@ pub async fn check_for_update(window: tauri::WebviewWindow, app: tauri::AppHandl
         })?;
     let offer = checked.as_ref().map(|u| AvailableUpdate { version: u.version.clone(), release_notes: u.body.clone() });
     *state.checked.lock().map_err(|_| "updater.lock_poisoned")? = Some(checked);
+    *state.checked_at.lock().map_err(|_| "updater.lock_poisoned")? = Some(check_started);
     Ok(offer)
 }
 

@@ -1,4 +1,4 @@
-import { t, useTranslation } from '../i18n';
+import { t, useTranslation, type Language } from '../i18n';
 import { useRef, useState } from 'react';
 import { ArrowUpToLine } from 'lucide-react';
 import type { AvailableUpdate, UpdateProgress } from '../bridge/contracts';
@@ -16,8 +16,16 @@ export interface UpdateNoticeProps {
   disabled?: boolean;
 }
 
+export function localizedReleaseNotes(notes: string, language: Language): string {
+  const sections = [...notes.matchAll(/^## (Русский|English)[ \t]*\r?$/gm)];
+  if (!sections.length) return notes;
+  const selected = sections.find(section => section[1] === (language === 'ru' ? 'Русский' : 'English')) ?? sections[0];
+  const index = sections.indexOf(selected);
+  return notes.slice(selected.index! + selected[0].length, sections[index + 1]?.index ?? notes.length).trim();
+}
+
 export function UpdateNotice({ update, onInstall, disabled }: UpdateNoticeProps) {
-  useTranslation();
+  const { language } = useTranslation();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +63,7 @@ export function UpdateNotice({ update, onInstall, disabled }: UpdateNoticeProps)
       confirmLabel={t("Обновить и перезапустить")} cancelLabel={t("Позже")} initialFocus="cancel"
       busy={busy} busyLabel={t("Обновляем…")} onConfirm={() => void install()} onCancel={() => setOpen(false)}>
       {update.releaseNotes && <div className={updateStyles.notes}><Markdown skipHtml
-        components={{ a: ({ children }) => <span>{children}</span>, img: () => null }}>{update.releaseNotes}</Markdown></div>}
+        components={{ a: ({ children }) => <span>{children}</span>, img: () => null }}>{localizedReleaseNotes(update.releaseNotes, language)}</Markdown></div>}
       {busy && <div className="mt-3 space-y-2">
         <p role="status">{progress?.phase === 'installing' ? t('Устанавливаем обновление…') : progress?.phase === 'preparing' ? t('Завершаем запись перед обновлением…') : t('Скачиваем обновление…')}</p>
         {(!progress || progress.phase === 'downloading') && <>

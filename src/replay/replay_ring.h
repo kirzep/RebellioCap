@@ -38,6 +38,7 @@ class ReplayRing {
 
   Result<void> append(EncodedPacket packet);
   Result<ReplaySnapshot> snapshot(QpcTicks end, QpcTicks duration) const;
+  void clear_after_save(QpcTicks cutoff);
   [[nodiscard]] std::size_t bytes() const noexcept;
   [[nodiscard]] QpcTicks retained_duration() const noexcept;
   [[nodiscard]] bool memory_limited() const noexcept;

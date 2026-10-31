@@ -9,6 +9,7 @@ test('constructs, drags and remembers a recording name preset',async({page})=>{
  await page.getByRole('button',{name:'Название игры',exact:true}).dragTo(editor,{targetPosition:caret});
  await expect(page.getByLabel('Пример имени записи')).toHaveText('Мой Cyberpunk 2077 момент.mp4');
  await page.getByRole('button',{name:'Счётчик',exact:true}).click();await expect(editor.locator('[data-token=counter]')).toHaveCount(1);await editor.locator('[data-token=counter]').dragTo(editor,{targetPosition:{x:18,y:35}});await expect(editor.locator('[data-token]').first()).toHaveAttribute('data-token','counter');
+ await editor.locator('[data-token=counter]').dragTo(page.getByLabel('Готовые блоки'));await expect(editor.locator('[data-token=counter]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Счётчик',exact:true})).toBeVisible();
  await page.getByLabel('Название нового пресета').fill('Мои моменты');await page.getByRole('button',{name:'Сохранить пресет',exact:true}).click();
  await expect(page.getByRole('combobox',{name:'Пресет имени записи'})).toHaveText('Мои моменты');expect(await page.evaluate(()=>(window as any).savedNames.presets.at(-1).parts.some((p:any)=>p.kind==='token'&&p.value==='game'))).toBe(true);
  await page.reload();await expect(page.getByRole('combobox',{name:'Пресет имени записи'})).toHaveText('Мои моменты');

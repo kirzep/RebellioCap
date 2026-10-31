@@ -12,6 +12,7 @@ import { SettingsHelp, SettingsLabel } from '../components/SettingsHelp';
 
 function Builder({parts,resetKey,onChange,disabled}:{parts:Part[];resetKey:number;disabled:boolean;onChange:(parts:Part[])=>void}){
   const { language } = useTranslation();
+ const [returnTarget,setReturnTarget]=useState(false);
  const [dropPoint,setDropPoint]=useState<{left:number;top:number;height:number}>();const dropRange=useRef<Range|null>(null);
  const root=useRef<HTMLDivElement>(null),selection=useRef<Range|null>(null),dragged=useRef<HTMLElement|null>(null);
  function block(value:string){const span=document.createElement('span');span.dataset.token=value;span.contentEditable='false';span.draggable=true;span.className='name-block name-block-arrive';span.textContent=t(blocks.find(b=>b.id===value)?.label??value);span.setAttribute('aria-label',span.textContent);return span;}
@@ -20,14 +21,18 @@ function Builder({parts,resetKey,onChange,disabled}:{parts:Part[];resetKey:numbe
  function remember(){const s=window.getSelection();if(s?.rangeCount&&root.current?.contains(s.anchorNode))selection.current=s.getRangeAt(0).cloneRange();}
  function insert(node:Node,range=selection.current){const el=root.current!;if(!range||!el.contains(range.commonAncestorContainer)){range=document.createRange();range.selectNodeContents(el);range.collapse(false);}range.deleteContents();range.insertNode(node);range.setStartAfter(node);range.collapse(true);const s=window.getSelection();s?.removeAllRanges();s?.addRange(range);selection.current=range.cloneRange();el.focus();onChange(readParts(el));}
  function rangeAt(x:number,y:number){const range=(document as Document&{caretRangeFromPoint?:(x:number,y:number)=>Range|null}).caretRangeFromPoint?.(x,y)??null;if(!range||!root.current?.contains(range.commonAncestorContainer))return null;const hit=range.startContainer instanceof HTMLElement?range.startContainer:range.startContainer.parentElement;const target=hit?.closest<HTMLElement>('[data-token]');if(target){const rect=target.getBoundingClientRect();if(x<rect.x+rect.width/2)range.setStartBefore(target);else range.setStartAfter(target);range.collapse(true);}return range;}
- function finishDrag(){dragged.current?.classList.remove('name-block-dragging');dragged.current=null;dropRange.current=null;setDropPoint(undefined);}
+ function finishDrag(){setReturnTarget(false);dragged.current?.classList.remove('name-block-dragging');dragged.current=null;dropRange.current=null;setDropPoint(undefined);}
  return <><div className="name-builder-wrap"><div className="name-builder" ref={root} role="textbox" aria-label={t("Конструктор имени записи")} aria-multiline={false} contentEditable={!disabled} suppressContentEditableWarning spellCheck={false} onInput={()=>{remember();onChange(readParts(root.current!));}} onKeyUp={remember} onPointerUp={remember} onKeyDown={e=>{if(e.key==='Enter')e.preventDefault();}} onPaste={e=>{e.preventDefault();insert(document.createTextNode(e.clipboardData.getData('text/plain').replace(/[\r\n]+/g,' ')));}}
  onDragStart={e=>{const target=(e.target as HTMLElement).closest<HTMLElement>('[data-token]');if(!target)return;dragged.current=target;target.classList.add('name-block-dragging');e.dataTransfer.setData('application/x-rebcap-name-token',target.dataset.token!);e.dataTransfer.effectAllowed='move';}}
  onDragOver={e=>{if(e.dataTransfer.types.includes('application/x-rebcap-name-token')){e.preventDefault();e.dataTransfer.dropEffect=dragged.current?'move':'copy';const range=rangeAt(e.clientX,e.clientY);dropRange.current=range;setDropPoint(range?dropMarker(range,root.current!):undefined);}}}
  onDrop={e=>{e.preventDefault();const value=e.dataTransfer.getData('application/x-rebcap-name-token');if(!blocks.some(b=>b.id===value))return;const range=dropRange.current??rangeAt(e.clientX,e.clientY);if(dragged.current&&root.current?.contains(dragged.current))dragged.current.remove();finishDrag();insert(block(value),range);}}
  onDragEnd={finishDrag} onDragLeave={e=>{if(!root.current?.contains(e.relatedTarget as Node))setDropPoint(undefined);}}/>{dropPoint&&<span className="name-drop-marker" aria-hidden="true" style={{left:dropPoint.left,top:dropPoint.top,height:dropPoint.height}}/>}</div>
  <p className="name-hint">{t("Пишите свой текст между блоками. Перетаскивайте блоки в нужное место или добавляйте нажатием.")}</p>
- <div className="name-palette" aria-label={t("Готовые блоки")}>{blocks.map(b=><button type="button" key={b.id} draggable onDragStart={e=>{dragged.current=null;e.dataTransfer.setData('application/x-rebcap-name-token',b.id);e.dataTransfer.effectAllowed='copy';}} onClick={()=>insert(block(b.id))} title={b.sample}><GripVertical size={12}/>{t(b.label)}<Plus size={12}/></button>)}</div></>;
+ <div className="name-palette" data-return-target={returnTarget} aria-label={t("Готовые блоки")}
+ onDragOver={e=>{if(!disabled&&dragged.current&&root.current?.contains(dragged.current)){e.preventDefault();e.dataTransfer.dropEffect='move';setReturnTarget(true);}}}
+ onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setReturnTarget(false);}}
+ onDrop={e=>{if(disabled||!dragged.current||!root.current?.contains(dragged.current))return;e.preventDefault();dragged.current.remove();selection.current=null;finishDrag();onChange(readParts(root.current!));}}
+ >{blocks.map(b=><button type="button" key={b.id} draggable onDragStart={e=>{dragged.current=null;e.dataTransfer.setData('application/x-rebcap-name-token',b.id);e.dataTransfer.effectAllowed='copy';}} onClick={()=>insert(block(b.id))} title={b.sample}><GripVertical size={12}/>{t(b.label)}<Plus size={12}/></button>)}</div></>;
 }
 export function RecordingNameSettings(){
   useTranslation();

@@ -60,6 +60,11 @@ export function OverlayConstructor({ layout, display, onCommit, onClose, feedbac
     <p>{t('Перетащите элементы на экране. Для точной настройки используйте стрелки на клавиатуре.')}</p>
     <p><kbd>Esc</kbd> {t('— выйти без сохранения')} <span>·</span> <kbd>Ctrl + Enter</kbd> {t('— сохранить и выйти')}</p>
     <p className="overlay-constructor__secondary"><kbd>Ctrl + Backspace</kbd> {t('— сбросить расположение')} <span>·</span> <kbd>Tab</kbd> {t('— выбрать элемент')}</p>
+    <div className="overlay-shortcut-cards" aria-hidden="true">
+     {[{label:'Перемещение', keys:['←','↑','↓','→']}, {label:'Сохранить', keys:['Ctrl','Enter']}, {label:'Сбросить', keys:['Ctrl','⌫']}, {label:'Выбрать', keys:['Tab']}, {label:'Выйти', keys:['Esc']}].map(item => <div className="overlay-shortcut-card" key={item.label}>
+      <span>{t(item.label)}</span><div>{item.keys.map(key => <kbd key={key}>{key}</kbd>)}</div>
+     </div>)}
+    </div>
    </>}
   </div>
  </div>, document.body);

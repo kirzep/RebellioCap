@@ -544,7 +544,7 @@ TEST_CASE("Replay toggle retains one shared budget across sixteen queued saves",
   RecorderEngine engine({.clock = clock, .video = video,
       .hotkey = std::make_shared<FakeHotkeySource>(), .muxer = muxer});
   auto settings = config();
-  settings.maximum_buffer_bytes = 8192;
+  settings.maximum_buffer_bytes = 131072;
   REQUIRE(engine.start(settings).is_success());
   clock->advance_through(0);
   REQUIRE(video->wait_for_frames(1, 5s));
@@ -553,7 +553,11 @@ TEST_CASE("Replay toggle retains one shared budget across sixteen queued saves",
     std::this_thread::yield();
   }
   std::vector<std::future<Result<std::filesystem::path>>> saves;
-  for (int i = 0; i < 16; ++i) saves.push_back(engine.save_clip(0));
+  for (int i = 0; i < 16; ++i) {
+    clock->advance_through(i * 2000);
+    REQUIRE(video->wait_for_frames(i * 2 + 1, 5s));
+    saves.push_back(engine.save_clip(i * 2000));
+  }
   const bool entered = muxer->wait_until_entered();
   auto seventeenth = engine.save_clip(0).get();
   const auto disabled = engine.set_replay_enabled(false);
@@ -569,9 +573,9 @@ TEST_CASE("Replay toggle retains one shared budget across sixteen queued saves",
   REQUIRE(seventeenth.error().code == "engine.save_queue_full");
   REQUIRE(held.replay_bytes == 0);
   REQUIRE(held.buffered_bytes > 0);
-  REQUIRE(held.buffered_bytes <= 8192);
+  REQUIRE(held.buffered_bytes <= 131072);
   REQUIRE(resumed.buffered_bytes == held.buffered_bytes);
-  REQUIRE(resumed.budget_bytes == 8192);
+  REQUIRE(resumed.budget_bytes == 131072);
   REQUIRE(stopped.is_success());
   for (auto& save : saves) REQUIRE(save.get().is_success());
 }
@@ -1044,8 +1048,14 @@ TEST_CASE("new recording session retries occupied numbered clips without overwri
   muxer->release();
   const auto first = saved.get();
   REQUIRE(first.is_success());
-  auto second = engine.save_clip(2 * clock->frequency()).get();
+  const auto first_snapshot = muxer->snapshot();
+  clock->advance_through(3 * clock->frequency());
+  REQUIRE(video->wait_for_frames(181, 5s));
+  auto second = engine.save_clip(3 * clock->frequency()).get();
   REQUIRE(second.is_success());
+  const auto second_snapshot = muxer->snapshot();
+  REQUIRE(second_snapshot.actual_start > first_snapshot.end);
+  REQUIRE_FALSE(engine.save_clip(3 * clock->frequency()).get().is_success());
   REQUIRE(engine.stop().is_success());
   REQUIRE(first.value().filename() == "clip-000002.mp4");
   REQUIRE(second.value().filename() == "clip-000004.mp4");
@@ -1074,12 +1084,14 @@ TEST_CASE("blocked save keeps capture running and owns an immutable snapshot") {
   saves.push_back(engine.save_clip(5 * frequency));
   REQUIRE(muxer->wait_until_entered());
   for (int index = 1; index < 10; ++index) {
-    saves.push_back(engine.save_clip(5 * frequency));
+    clock->advance_through((5 + index) * frequency);
+    REQUIRE(video->wait_for_frames((5 + index) * 60 + 1, 5s));
+    saves.push_back(engine.save_clip((5 + index) * frequency));
   }
   const auto frozen_packet_count = muxer->snapshot().packets.size();
 
-  clock->advance_through(10 * frequency);
-  REQUIRE(video->wait_for_frames(601, 5s));
+  clock->advance_through(15 * frequency);
+  REQUIRE(video->wait_for_frames(901, 5s));
   const auto packet_count_while_capture_continues = muxer->snapshot().packets.size();
 
   muxer->release();
@@ -1109,7 +1121,9 @@ TEST_CASE("bounded save queue counts the active mux operation") {
   REQUIRE(video->wait_for_frames(301, 5s));
   auto active = engine.save_clip(5 * frequency);
   REQUIRE(muxer->wait_until_entered());
-  auto queued = engine.save_clip(5 * frequency);
+  clock->advance_through(6 * frequency);
+  REQUIRE(video->wait_for_frames(361, 5s));
+  auto queued = engine.save_clip(6 * frequency);
   auto overflow = engine.save_clip(5 * frequency);
   const bool overflow_was_rejected_immediately =
       overflow.wait_for(0s) == std::future_status::ready;
@@ -1228,7 +1242,9 @@ TEST_CASE("queued replay saves keep the category captured at each request") {
   auto first = engine.save_clip(5 * frequency);
   REQUIRE(muxer->wait_until_entered());
   foreground = L"Desktop";
-  auto second = engine.save_clip(5 * frequency);
+  clock->advance_through(6 * frequency);
+  REQUIRE(video->wait_for_frames(361, 5s));
+  auto second = engine.save_clip(6 * frequency);
   foreground = L"Different Game";
   muxer->release();
   const auto first_result = first.get();
@@ -1326,7 +1342,7 @@ TEST_CASE("naming preset is frozen at each save boundary and collisions keep ori
   auto settings=config();settings.output_directory=directory.path();settings.naming_settings_file=preset;
   settings.save_without_game_folders=direct_output;
   REQUIRE(engine.start(settings).is_success());clock->advance_through(5*frequency);REQUIRE(video->wait_for_frames(301,5s));
-  auto first=engine.save_clip(5*frequency);REQUIRE(muxer->wait_until_entered());write("Second");REQUIRE(engine.reload_recording_names().is_success());auto second=engine.save_clip(5*frequency);muxer->release();
+  auto first=engine.save_clip(5*frequency);REQUIRE(muxer->wait_until_entered());write("Second");REQUIRE(engine.reload_recording_names().is_success());clock->advance_through(6*frequency);REQUIRE(video->wait_for_frames(361,5s));auto second=engine.save_clip(6*frequency);muxer->release();
   const auto a=first.get(),b=second.get();REQUIRE(engine.stop().is_success());REQUIRE(a.is_success());REQUIRE(b.is_success());
   REQUIRE(a.value().filename()==L"First (2).mp4");REQUIRE(b.value().filename()==L"Second.mp4");
   REQUIRE(a.value().parent_path()==destination);REQUIRE(b.value().parent_path()==destination);
@@ -1361,8 +1377,10 @@ TEST_CASE("sixteen hotkey saves freeze cached names while the writer is blocked"
   write("Updated ");
   std::vector<double> latency_us;
   for (int index=1;index<16;++index) {
+    clock->advance_through((5+index)*frequency);
+    REQUIRE(video->wait_for_frames((5+index)*60+1,5s));
     const auto started=std::chrono::steady_clock::now();
-    hotkey->press(5*frequency);
+    hotkey->press((5+index)*frequency);
     latency_us.push_back(std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-started).count());
   }
   // Update after enqueue: already accepted names must remain frozen.

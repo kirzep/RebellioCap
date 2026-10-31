@@ -227,6 +227,7 @@ void SessionController::poll(bool publish_snapshot) {
      metrics.replay_memory_limited!=snapshot_.metrics.replay_memory_limited ||
      metrics.continuous_failures!=snapshot_.metrics.continuous_failures ||
      metrics.continuous_recovery_path!=snapshot_.metrics.continuous_recovery_path ||
+     metrics.save_requests!=snapshot_.metrics.save_requests ||
      metrics.completed_saves!=snapshot_.metrics.completed_saves ||
      metrics.failed_saves!=snapshot_.metrics.failed_saves) publish_snapshot=true;
   for(auto& completion:engine_.take_hotkey_save_completions()) {

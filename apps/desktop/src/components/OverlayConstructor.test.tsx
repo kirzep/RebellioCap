@@ -13,7 +13,7 @@ it('has only movable elements without external buttons or selectors', () => {
  expect(screen.getAllByRole('button')).toHaveLength(3);
  expect(screen.queryByRole('combobox')).toBeNull();
  expect(screen.getByText('Ctrl + Enter')).toBeVisible();
- expect(screen.getByText('Esc')).toBeVisible();
+ expect(screen.getAllByText('Esc')).toHaveLength(2);
 });
 it('saves with Ctrl+Enter and shows a green frame for 500ms before closing', async () => {
  vi.useFakeTimers();

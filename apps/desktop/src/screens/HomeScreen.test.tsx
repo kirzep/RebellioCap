@@ -345,3 +345,21 @@ it('confirms explicit Auto memory against a legacy persisted configuration witho
   fireEvent.click(screen.getByTestId('apply-settings-button'));
   expect(await screen.findByText('Настройки применены. Replay включён с новой конфигурацией.')).toBeInTheDocument();
 });
+
+it('checks updates every five minutes and stops after unmount', async () => {
+ vi.useFakeTimers();
+ try {
+  const bridge = createTestHost(createSnapshot());
+  const check = vi.fn().mockResolvedValue(null);
+  bridge.checkForUpdate = check;
+  bridge.installUpdate = vi.fn();
+  const view = render(<HomeScreen host={bridge} initialState={createStoredState()} initialSnapshot={createSnapshot()}/>);
+  await act(async()=>{});
+  expect(check).toHaveBeenCalledTimes(1);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(300000);});
+  expect(check).toHaveBeenCalledTimes(2);
+  view.unmount();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(300000);});
+  expect(check).toHaveBeenCalledTimes(2);
+ } finally { vi.useRealTimers(); }
+});

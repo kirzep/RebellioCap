@@ -7,10 +7,11 @@ import { defaultOverlayLayout, overlayPosition } from './overlayLayout';
 import { normalizeNotificationSettings, defaultNotificationSettings, playNotificationSound, type NotificationSettings } from './notificationSound';
 import './NotificationOverlay.css';
 
-interface Batch { events: string[]; settings: NotificationSettings; replayActive?: boolean; recordingActive?: boolean; editorActive?: boolean; editorFeedback?: 'saved' | 'cancelled' | null }
+interface Batch { replaySaving?: boolean; events: string[]; settings: NotificationSettings; replayActive?: boolean; recordingActive?: boolean; editorActive?: boolean; editorFeedback?: 'saved' | 'cancelled' | null }
 export function NotificationOverlay() {
   useTranslation();
   const [events, setEvents] = useState<{ kind: string; id: number }[]>([]);
+  const [replaySaving, setReplaySaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(defaultNotificationSettings.overlayEnabled);
   const [editorActive, setEditorActive] = useState(false);
@@ -45,6 +46,7 @@ export function NotificationOverlay() {
         const batch = await invoke<Batch>('poll_notifications');
         if (disposed) return;
         settings.current = batch.settings;
+        setReplaySaving(batch.replaySaving ?? false);
         setEditorActive(batch.editorActive ?? false);
         setEditorFeedback(batch.editorFeedback ?? undefined);
         setLayout(normalizeNotificationSettings(batch.settings).layout!);
@@ -52,7 +54,7 @@ export function NotificationOverlay() {
         setOverlayEnabled(batch.settings.overlayEnabled);
         if (!batch.settings.overlayEnabled && !batch.settings.soundEnabled) {
           setEvents(previous => previous.length ? [] : previous);
-        } else if (batch.events.length) setEvents(previous => [...previous, ...batch.events.filter(kind => actions[kind]).map(kind => ({ kind, id: ++counter.current }))].slice(-32));
+        } else if (batch.events.length) setEvents(previous => [...previous, ...batch.events.filter(kind => kind !== 'replay_saving' && actions[kind]).map(kind => ({ kind, id: ++counter.current }))].slice(-32));
       } catch { failed = true; }
       finally { inFlight = false; }
       if (disposed) return;
@@ -84,15 +86,15 @@ export function NotificationOverlay() {
     return () => clearTimeout(timer);
   }, [editorFeedback]);
   useEffect(() => {
-    if (!current) return;
+    if (!current || replaySaving) return;
     setClosing(false);
     if (settings.current.soundEnabled) void playNotificationSound(settings.current).catch(() => {});
     const duration = actions[current.kind].tone === 'error' ? 5000 : 3200;
     const closingTimer = setTimeout(() => setClosing(true), duration);
     const removeTimer = setTimeout(() => setEvents(previous => previous.slice(1)), duration + 350);
     return () => { clearTimeout(closingTimer); clearTimeout(removeTimer); };
-  }, [current?.id]);
-  const visible = !editorActive && (Boolean(editorFeedback) || (overlayEnabled && (capture.replay || capture.recording || !!(action && current))));
+  }, [current?.id, replaySaving]);
+  const visible = !editorActive && (Boolean(editorFeedback) || (overlayEnabled && (replaySaving || capture.replay || capture.recording || !!(action && current))));
   useEffect(() => {
     if ('__TAURI_INTERNALS__' in window) void invoke('set_overlay_visible', { visible }).catch(() => {});
   }, [visible]);
@@ -100,8 +102,8 @@ export function NotificationOverlay() {
   return <>
     {overlayEnabled && capture.recording && <div className="capture-indicator-position" style={overlayPosition(layout.recording)} aria-label={t('Идёт запись')}><OverlayIndicator recording/></div>}
     {overlayEnabled && capture.replay && <div className="capture-indicator-position" style={overlayPosition(layout.replay)} aria-label={t('Мгновенный повтор включён')}><OverlayIndicator/></div>}
-    {overlayEnabled && action && current && <div className="capture-notification-position" style={overlayPosition(layout.messages)}>
-      <OverlayNotification key={current.id} kind={current.kind} closing={closing}/>
+    {overlayEnabled && (replaySaving || (action && current)) && <div className="capture-notification-position" style={overlayPosition(layout.messages)}>
+      <OverlayNotification key={replaySaving ? "saving" : current?.id} kind={replaySaving ? "replay_saving" : current!.kind} closing={!replaySaving && closing}/>
     </div>}
     {editorFeedback && <div className="overlay-editor-feedback" data-status={editorFeedback} role="status">
       {t(editorFeedback === 'saved' ? 'Оверлей сохранён' : 'Изменения отменены')}

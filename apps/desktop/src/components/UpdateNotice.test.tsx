@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { applyLanguageSettings } from '../i18n';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WindowShell } from './WindowShell';
 import type { UpdateProgress } from '../bridge/contracts';
-import { UpdateNotice } from './UpdateNotice';
+import { UpdateNotice, localizedReleaseNotes } from './UpdateNotice';
 import { SidebarProvider } from './ui/sidebar';
 
 afterEach(cleanup);
@@ -72,4 +73,24 @@ describe('update offer', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(install).toHaveBeenCalledOnce();
   });
+});
+
+it('selects release notes by language and preserves legacy notes', () => {
+ const notes = '## Русский\n\n- Исправлен повтор.\n\n## English\n\n- Fix replay.';
+ expect(localizedReleaseNotes(notes, 'ru')).toBe('- Исправлен повтор.');
+ expect(localizedReleaseNotes(notes, 'en')).toBe('- Fix replay.');
+ expect(localizedReleaseNotes('- Legacy notes.', 'en')).toBe('- Legacy notes.');
+ expect(localizedReleaseNotes('## Русский\n- Only Russian.', 'en')).toBe('- Only Russian.');
+});
+
+it('updates the visible notes immediately when the application language changes', () => {
+ try {
+  render(<SidebarProvider><UpdateNotice update={{version:'0.1.25',releaseNotes:'## Русский\n- Исправлен повтор.\n\n## English\n- Fix replay.'}} onInstall={vi.fn()}/></SidebarProvider>);
+  fireEvent.click(screen.getByRole('button', {name:'Доступно обновление 0.1.25'}));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Исправлен повтор.');
+  expect(screen.getByRole('dialog')).not.toHaveTextContent('Fix replay.');
+  act(()=>applyLanguageSettings({preference:'en',language:'en'}));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Fix replay.');
+  expect(screen.getByRole('dialog')).not.toHaveTextContent('Исправлен повтор.');
+ } finally { act(()=>applyLanguageSettings({preference:'ru',language:'ru'})); }
 });

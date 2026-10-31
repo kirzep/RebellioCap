@@ -25,6 +25,13 @@ export function extractReleaseNotes(tag, markdown) {
   return notes;
 }
 
+// Keep a single updater payload readable by older clients that show all notes.
+export function bilingualReleaseNotes(tag, russian, english) {
+  const ru = extractReleaseNotes(tag, russian);
+  const en = extractReleaseNotes(tag, english);
+  return `## Русский\n\n${ru}\n\n## English\n\n${en}`;
+}
+
 export function createReleaseArtifacts({ directory, tag, versions, notes = '', now = new Date() }) {
   const version = validateReleaseVersion(tag, versions);
   const installers = readdirSync(directory).filter(name => name.endsWith('_x64-setup.exe'));
@@ -103,7 +110,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const versions = [tauri.version, desktop.version, cargoVersion];
   validateReleaseVersion(options.tag, versions);
   if (options['write-notes']) {
-    writeFileSync(options['write-notes'], `${extractReleaseNotes(options.tag, readFileSync(join(root, 'docs/release-notes.md'), 'utf8'))}\n`);
+    writeFileSync(options['write-notes'], `${bilingualReleaseNotes(options.tag, readFileSync(join(root, 'docs/release-notes.md'), 'utf8'), readFileSync(join(root, 'docs/release-notes.en.md'), 'utf8'))}\n`);
   } else if (options['verify-only']) {
     verifyReleaseArtifacts({ directory: options.directory ?? join(root, 'apps/desktop/src-tauri/target/release/bundle/nsis'), tag: options.tag, versions });
   } else if (!options['validate-only']) {

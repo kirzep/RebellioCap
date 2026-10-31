@@ -812,5 +812,10 @@
   "Восстановление проекта": "Project recovery",
   "Логи приложения": "Application logs",
   "Не удалось воспроизвести клип": "Could not play the clip",
-  "Имя записи": "Recording name"
+  "Имя записи": "Recording name",
+  "Сохраняем повтор": "Saving replay",
+  "Перемещение": "Move",
+  "Сбросить": "Reset",
+  "Выбрать": "Select",
+  "Выйти": "Exit"
 }

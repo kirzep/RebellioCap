@@ -13,7 +13,7 @@ export function SettingsHelp({ topic }: { topic: SettingsHelpTopic }) {
     <TooltipProvider delayDuration={300}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" className={styles.trigger} aria-label={t('Подсказка: {0}', t(help.label))}>
+          <button type="button" className={styles.trigger} data-settings-help aria-label={t('Подсказка: {0}', t(help.label))}>
             <Info size={15} aria-hidden="true" />
           </button>
         </TooltipTrigger>

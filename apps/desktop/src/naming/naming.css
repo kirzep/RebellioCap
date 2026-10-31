@@ -8,8 +8,8 @@
 .name-builder:focus { outline: 2px solid var(--brand); outline-offset: 2px; }
 .name-block { display: inline-block; vertical-align: baseline; margin: 2px 3px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--surface-raised); color: var(--text-primary); font-size: 11px; line-height: 26px; cursor: grab; user-select: none; }
 .name-palette { display: flex; flex-wrap: wrap; gap: 6px; }
-.recording-names button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 10px; border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--canvas); color: var(--text-primary); font-size: 11px; cursor: pointer; }
-.recording-names button:hover { background: var(--surface-raised); }
+.recording-names button:not([data-settings-help]) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 10px; border: 1px solid var(--control-border); border-radius: var(--radius-control); background: var(--canvas); color: var(--text-primary); font-size: 11px; cursor: pointer; }
+.recording-names button:not([data-settings-help]):hover { background: var(--surface-raised); }
 .recording-names button:disabled { opacity: .45; cursor: default; }
 .recording-names button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .name-palette button { cursor: grab; }
@@ -35,3 +35,8 @@
 .name-confirm-actions button:first-child { background: var(--brand); color: var(--on-accent); border-color: var(--brand); }
 .name-confirm-actions button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 @media(prefers-reduced-motion:reduce) { .name-block-arrive { animation: none; } .name-block,.name-drop-marker { transition: none; } }
+
+.name-palette { border-radius:8px; outline:1px solid transparent; outline-offset:6px; transition:background 160ms ease,outline-color 160ms ease; }
+.name-palette[data-return-target=true] { background:#c5ac7c0d; outline-color:var(--brand,#c5ac7c); }
+.recording-names h3 { display:flex; align-items:center; gap:2px; }
+@media(prefers-reduced-motion:reduce) { .name-palette { transition:none; } }

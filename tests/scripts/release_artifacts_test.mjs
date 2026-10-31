@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReleaseArtifacts, validateReleaseVersion, verifyReleaseArtifacts, extractReleaseNotes } from '../../scripts/release-artifacts.mjs';
+import { createReleaseArtifacts, validateReleaseVersion, verifyReleaseArtifacts, extractReleaseNotes, bilingualReleaseNotes } from '../../scripts/release-artifacts.mjs';
 
 test('release notes select only the requested version and preserve Markdown', () => {
   const markdown = '# Updates\r\n\r\n## 0.1.16\r\n\r\n- Исправлен **язык**.\r\n\r\n### Редактор\r\n- Сохранён монтаж.\r\n\r\n## 0.1.15\r\n- Старые изменения.\r\n';
@@ -31,16 +31,17 @@ test('CLI uses the default bundle directory when --directory is absent', () => {
     writeFileSync(join(root, 'apps/desktop/src-tauri/Cargo.toml'), '[package]\nversion = "0.1.8"\n');
     mkdirSync(join(root, 'docs'));
     writeFileSync(join(root, 'docs/release-notes.md'), '## 0.1.8\n- Исправлена навигация.\n\n## 0.1.7\n- Старый релиз.\n');
+    writeFileSync(join(root, 'docs/release-notes.en.md'), '## 0.1.8\n- Fix navigation.\n');
     const notesFile = join(root, 'notes.md');
     const notesResult = spawnSync(process.execPath, [script, '--tag', 'v0.1.8', '--write-notes', notesFile], { encoding: 'utf8' });
     assert.equal(notesResult.status, 0, notesResult.stderr);
-    assert.equal(readFileSync(notesFile, 'utf8'), '- Исправлена навигация.\n');
+    assert.equal(readFileSync(notesFile, 'utf8'), '## Русский\n\n- Исправлена навигация.\n\n## English\n\n- Fix navigation.\n');
     writeFileSync(join(bundles, 'RebellioCap_0.1.8_x64-setup.exe'), 'MZfixture');
     writeFileSync(join(bundles, 'RebellioCap_0.1.8_x64-setup.exe.sig'), 'signed-update');
     const result = spawnSync(process.execPath, [script, '--tag', 'v0.1.8', '--notes-file', notesFile], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(readFileSync(join(bundles, 'latest.json'))).version, '0.1.8');
-    assert.equal(JSON.parse(readFileSync(join(bundles, 'latest.json'))).notes, '- Исправлена навигация.\n');
+    assert.equal(JSON.parse(readFileSync(join(bundles, 'latest.json'))).notes, '## Русский\n\n- Исправлена навигация.\n\n## English\n\n- Fix navigation.\n');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -95,4 +96,9 @@ test('release verification rejects changed bytes, mismatched metadata and unsafe
     writeFileSync(join(root, 'SHA256SUMS'), sums.join('\n'));
     assert.throws(() => verifyReleaseArtifacts(options), /manifest/i);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('release notes include separately validated Russian and English sections', () => {
+ assert.equal(bilingualReleaseNotes('v0.1.25', '## 0.1.25\n- Исправлен повтор.', '## 0.1.25\n- Fix replay.'), '## Русский\n\n- Исправлен повтор.\n\n## English\n\n- Fix replay.');
+ assert.throws(() => bilingualReleaseNotes('v0.1.25', '## 0.1.25\n- Исправлен повтор.', '## 0.1.24\n- Old.'), /notes/i);
 });

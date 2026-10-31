@@ -10,6 +10,7 @@ import engineStoppedIcon from '../assets/notifications/engine-stopped.svg';
 import replayErrorIcon from '../assets/notifications/replay-error.svg';
 import './NotificationOverlay.css';
 export const actions: Record<string, { text: string; icon: string; tone: string }> = {
+  replay_saving: { text: 'Сохраняем повтор', icon: '', tone: 'pending' },
   replay_started: { text: 'Мгновенный повтор включён', icon: replayStartedIcon, tone: 'neutral' },
   replay_saved: { text: 'Повтор сохранён', icon: replaySavedIcon, tone: 'success' },
   recording_started: { text: 'Запись началась', icon: recordingStartedIcon, tone: 'recording' },
@@ -29,7 +30,7 @@ export function OverlayNotification({ kind, closing = false, preview = false }: 
  const action = actions[kind];
  if (!action) return null;
  return <div role={preview ? undefined : 'status'} className={`capture-notification ${closing ? 'is-closing' : ''} ${preview ? 'capture-notification--preview' : ''}`} data-tone={action.tone}>
-  <div className="capture-notification__icon"><img src={action.icon} alt="" draggable={false} width={42} height={42}/></div>
+  <div className="capture-notification__icon">{kind === 'replay_saving' ? <span className="capture-save-spinner"/> : <img src={action.icon} alt="" draggable={false} width={42} height={42}/>}</div>
   <strong className="capture-notification__text">{t(action.text)}</strong>
  </div>;
 }

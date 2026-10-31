@@ -219,12 +219,19 @@ export function HomeScreen({
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   useEffect(() => {
     let disposed = false;
-    if (bridge.checkForUpdate && bridge.installUpdate) {
-      void bridge.checkForUpdate().then(update => {
+    let inFlight = false;
+    const check = async () => {
+      if (inFlight || !bridge.checkForUpdate || !bridge.installUpdate) return;
+      inFlight = true;
+      try {
+        const update = await bridge.checkForUpdate();
         if (!disposed) setAvailableUpdate(update);
-      }).catch(() => { /* A failed update check must not interrupt recording. */ });
-    }
-    return () => { disposed = true; };
+      } catch { /* A failed update check must not interrupt recording. */ }
+      finally { inFlight = false; }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 5 * 60 * 1000);
+    return () => { disposed = true; clearInterval(timer); };
   }, [bridge]);
   const [settingsCloseRequestToken, setSettingsCloseRequestToken] = useState(0);
 

@@ -35,6 +35,24 @@ std::size_t payload_bytes(const EncodedPacket& packet) {
 ReplayRing::ReplayRing(QpcTicks capacity, std::shared_ptr<PacketMemoryBudget> budget)
     : capacity_(std::max<QpcTicks>(capacity, 0)), budget_(std::move(budget)) {}
 
+void ReplayRing::clear_after_save(QpcTicks cutoff) {
+  std::scoped_lock lock(mutex_);
+  packets_.clear();
+  keyframe_pts_.clear();
+  bytes_ = 0;
+  ring_memory_bytes_ = 0;
+  newest_pts_.reset();
+  newest_video_pts_.reset();
+  earliest_retained_pts_.reset();
+  latest_retained_pts_.reset();
+  pruned_from_.reset();
+  memory_boundary_.reset();
+  memory_limited_ = false;
+  waiting_for_keyframe_ = false;
+  time_boundary_ = cutoff;
+  waiting_for_video_ = true;
+}
+
 Result<void> ReplayRing::append(EncodedPacket packet) {
   std::scoped_lock lock(mutex_);
 

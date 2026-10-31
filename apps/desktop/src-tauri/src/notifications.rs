@@ -8,6 +8,7 @@ pub fn transitions(old: &EngineSnapshot, next: &EngineSnapshot) -> Vec<&'static 
     }
     let recording_error = next.metrics.continuous_failures > old.metrics.continuous_failures;
     let mut events = Vec::new();
+    if next.metrics.save_requests > old.metrics.save_requests { events.push("replay_saving"); }
     if recording_error {
         events.push("recording_error");
     }
@@ -200,6 +201,8 @@ pub struct NotificationBatch {
     editor_feedback: Option<String>,
     #[serde(rename = "replayActive")]
     replay_active: bool,
+    #[serde(rename = "replaySaving")]
+    replay_saving: bool,
     #[serde(rename = "recordingActive")]
     recording_active: bool,
     #[serde(rename = "editorActive")]
@@ -209,7 +212,7 @@ fn notification_batch(mut events: Vec<&'static str>, settings: NotificationSetti
     if !settings.overlay_enabled && !settings.sound_enabled {
         events.clear();
     }
-    NotificationBatch { events, settings, editor_feedback: None, replay_active: false, recording_active: false, editor_active: false }
+    NotificationBatch { events, settings, editor_feedback: None, replay_active: false, replay_saving: false, recording_active: false, editor_active: false }
 }
 #[tauri::command]
 pub async fn poll_notifications(
@@ -229,6 +232,7 @@ pub async fn poll_notifications(
     let healthy = !matches!(snapshot.lifecycle, EngineLifecycle::Failed | EngineLifecycle::Blocked | EngineLifecycle::Stopped);
     batch.editor_feedback = editor_feedback;
     batch.editor_active = editor_active;
+    batch.replay_saving = healthy && snapshot.metrics.save_requests > snapshot.metrics.completed_saves.saturating_add(snapshot.metrics.failed_saves);
     batch.replay_active = healthy && snapshot.replay_active;
     batch.recording_active = healthy && snapshot.continuous_recording_active;
     Ok(batch)

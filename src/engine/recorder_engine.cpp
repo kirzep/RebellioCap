@@ -763,6 +763,11 @@ std::future<Result<std::filesystem::path>> RecorderEngine::Impl::enqueue_save(
     request->name=capture_name(request->category,false,name_time);
     request->snapshot = std::move(snapshot).value();
     save_queue.push_back(request);
+    // The queued snapshot owns its packets; the next clip starts with a fresh IDR.
+    auto cutoff = requested_at;
+    for (const auto& packet : request->snapshot.packets) cutoff = (std::max)(cutoff, packet.pts);
+    replay->clear_after_save(cutoff == (std::numeric_limits<QpcTicks>::max)() ? cutoff : cutoff + 1);
+    replay_keyframe_requested = true;
   }
   save_condition.notify_one();
   return future;

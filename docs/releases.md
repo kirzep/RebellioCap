@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Testing](testing.md) · [Licensing](../LICENSE.md)
 
-Desktop manifests declare **0.1.21**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
+Desktop manifests declare **0.1.25**; CMake and vcpkg declare **0.1.0** for the engine/native package. Source versions do not establish a verified binary release. Check [GitHub Releases](https://github.com/kirzep/RebellioCap/releases) for explicitly published binary artifacts.
 
 ## Build a local package
 
@@ -41,7 +41,7 @@ These Secrets are read only by the release build. They are not required for ordi
 1. Set matching desktop versions in `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/src-tauri/tauri.conf.json` and refresh the lockfiles. The engine's component version is independent.
 2. Publish the reviewed source snapshot to this public repository using its normal export procedure.
 3. Create a stable tag such as `v0.1.9` on the public commit and push that exact tag. Alternatively run **Windows installer release** manually with an existing stable tag. Tags with prerelease suffixes and mismatched desktop versions are rejected.
-4. The public workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It uploads them to a draft, verifies checksums and manifest identity, then publishes the stable release automatically. Short Russian notes are maintained for each version in [release-notes.md](release-notes.md), then copied into the release description and update manifest. Missing or empty notes stop publication before the installer build. Published installers and signatures are never overwritten. Corrections to descriptions or manifest notes must preserve installer/signature bytes, refresh checksums, and be mirrored in both repositories.
+4. The public workflow runs software tests and produces the EXE installer, `.sig`, `latest.json` and `SHA256SUMS`. It uploads them to a draft, verifies checksums and manifest identity, then publishes the stable release automatically. Russian notes are maintained for each version in [release-notes.md](release-notes.md), with matching English notes in [release-notes.en.md](release-notes.en.md). The release script validates both and combines them under `## Русский` and `## English` in the release description and update manifest. The update dialog selects the section matching the application language; older clients display both. Missing or empty notes in either language stop publication before the installer build. Published installers and signatures are never overwritten. Corrections to descriptions or manifest notes must preserve installer/signature bytes, refresh checksums, and be mirrored in both repositories.
 5. Push a tag with the same version on the matching private source commit. Its workflow waits for the public release, verifies downloaded artifacts and publishes identical assets in the private repository using its own workflow token. Alternatively dispatch that workflow with the existing private tag. No cross-repository token is required.
 6. The README download button opens the latest public release. The latest published stable release becomes the application update source. Drafts and prereleases are not offered to users.
 

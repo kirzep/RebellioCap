@@ -210,3 +210,25 @@ it('renders only active indicators and removes them on the next authoritative ev
  expect(screen.queryByLabelText('Мгновенный повтор включён')).not.toBeInTheDocument();
  expect(invoke).toHaveBeenCalledTimes(3);
 });
+
+
+it('shows a silent pending save until disk completion', async () => {
+  vi.mocked(invoke).mockResolvedValue({events:[],replaySaving:true,settings:{overlayEnabled:true,soundEnabled:true,sound:'glass',volume:35}});
+  render(<NotificationOverlay/>);
+  expect(await screen.findByText('Сохраняем повтор')).toBeInTheDocument();
+});
+
+it('keeps pending visible without sound and replaces it on completion', async () => {
+ vi.useFakeTimers();
+ const settings={overlayEnabled:true,soundEnabled:true,sound:'glass',volume:35};
+ vi.mocked(invoke).mockResolvedValue({events:['replay_saving'],replaySaving:true,settings});
+ render(<NotificationOverlay/>);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(screen.getByText('Сохраняем повтор')).toBeVisible();
+ expect(playNotificationSound).not.toHaveBeenCalled();
+ vi.mocked(invoke).mockResolvedValue({events:['replay_saved'],replaySaving:false,settings});
+ await act(async()=>{nativeEvents.ready?.();await vi.advanceTimersByTimeAsync(0);});
+ expect(screen.queryByText('Сохраняем повтор')).toBeNull();
+ expect(screen.getByText('Повтор сохранён')).toBeVisible();
+ expect(playNotificationSound).toHaveBeenCalledTimes(1);
+});
