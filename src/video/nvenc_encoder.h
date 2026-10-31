@@ -8,6 +8,7 @@
 
 #include "core/qpc_clock.h"
 #include "core/result.h"
+#include "capture/gpu_recording_priority.h"
 #include "video/video_encoder.h"
 #include "media/stream_descriptor.h"
 
@@ -83,6 +84,8 @@ struct CaptureSessionDiagnostics {
 struct NvencRuntimeMetrics {
   bool recording_priority_requested{false}, recording_priority_applied{false};
   int recording_gpu_priority{0};
+  bool recording_gpu_priority_available{true};
+  GpuRecordingPriorityMode recording_priority_mode{GpuRecordingPriorityMode::Disabled};
   std::optional<long> recording_priority_hresult;
   CaptureSessionDiagnostics capture_session;
   bool capture_waiting_for_game{false};

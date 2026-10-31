@@ -26,9 +26,12 @@ int main() {
   const auto metrics=video->metrics();
   if(!metrics.accepted_config.constant_qp || metrics.accepted_config.qp_i!=23 || metrics.accepted_config.qp_p!=23 ||
       metrics.accepted_config.qp_b!=23 || metrics.accepted_config.target_bitrate!=0 || !metrics.recording_priority_requested) return 1;
-  if(metrics.recording_priority_applied && metrics.recording_gpu_priority!=7) return 1;
+  if(metrics.recording_priority_applied &&
+      (metrics.recording_priority_mode!=GpuRecordingPriorityMode::SoftRealtime || metrics.recording_gpu_priority_available)) return 1;
   std::cout<<"CQP23 accepted; GPU priority applied="<<metrics.recording_priority_applied
-           <<" level="<<metrics.recording_gpu_priority<<" HRESULT="<<metrics.recording_priority_hresult.value_or(0)<<'\n';
+           <<" mode="<<gpu_recording_priority_mode_name(metrics.recording_priority_mode)
+           <<" effective_known="<<metrics.recording_gpu_priority_available
+           <<" HRESULT="<<metrics.recording_priority_hresult.value_or(0)<<'\n';
   if(metrics.capture_session.game_window || !metrics.capture_session.available || metrics.capture_waiting_for_game) return 1;
   QpcClock clock;
   std::size_t packets=0;
@@ -41,11 +44,15 @@ int main() {
   auto tail=video->flush();
   if(!tail.is_success()) return 1;
   packets+=tail.value().size(); video->suspend();
+  if(video->metrics().recording_priority_mode!=metrics.recording_priority_mode ||
+      video->metrics().recording_gpu_priority_available!=metrics.recording_gpu_priority_available) return 1;
   if(packets==0) return 1;
   if(!video->resume().is_success()) return 1;
   const auto resumed=video->metrics();
   if(!resumed.accepted_config.constant_qp || resumed.accepted_config.qp_p!=23 || !resumed.recording_priority_requested ||
-      resumed.recording_priority_applied!=metrics.recording_priority_applied) return 1;
+      resumed.recording_priority_applied!=metrics.recording_priority_applied ||
+      resumed.recording_priority_mode!=metrics.recording_priority_mode ||
+      resumed.recording_gpu_priority_available!=metrics.recording_gpu_priority_available) return 1;
   auto resumed_tail=video->flush(); if(!resumed_tail.is_success()) return 1; video->suspend();
   std::cout<<"PASS: legacy game profile uses full-screen DXGI, packets="<<packets<<'\n';
   return 0;

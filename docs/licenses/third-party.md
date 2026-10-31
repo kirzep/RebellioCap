@@ -16,7 +16,8 @@ effects, presets, assets, or runtime behavior from other capture applications.
 | React | `19.3.0` | MIT |
 | react-markdown and Markdown parsing dependencies | Versions pinned in `package-lock.json`; bundled release notes renderer | MIT / ISC / BSD; full notices in `markdown-dependencies.txt` |
 | thinking-orbs | `0.3.2`; composing indicator during onboarding test recording | MIT; copyright 2026 Jakub Antalik |
-| Tauri | `2.11.5` | Apache-2.0 / MIT |
+| Tauri | `2.12.1` | Apache-2.0 / MIT |
+| Tauri notification plugin and its Windows notification dependencies | Versions pinned in `Cargo.lock`; plugin `2.8.0` | MIT / Apache-2.0; full shipped notices in `notification-dependencies.txt` |
 | Playwright | `1.63.0` | Apache-2.0 |
 | Manrope Variable via Fontsource | `@fontsource-variable/manrope` `5.3.0`, publish hash `5ea7462ba57d9fdb` | SIL Open Font License 1.1 |
 | Golos Text Variable via Fontsource | `@fontsource-variable/golos-text` `5.3.0`, publish hash `2982edfd482e13b0` | SIL Open Font License 1.1 |

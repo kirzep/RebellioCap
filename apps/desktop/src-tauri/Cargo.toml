@@ -1,6 +1,6 @@
 [package]
 name = "rebelliocap-desktop"
-version = "0.1.22"
+version = "0.1.23"
 edition = "2021"
 rust-version = "1.90"
 
@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

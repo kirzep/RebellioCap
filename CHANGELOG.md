@@ -2,6 +2,16 @@
 
 This file describes public source changes. Tags, dates, binary artifacts, and compatibility evidence are recorded when actually published. See [release policy](docs/releases.md).
 
+## 0.1.23
+
+- Show a Windows notification when closing the main window to explain that RebellioCap continues running in the system tray and how to open or quit it.
+- Reduce avoidable capture delays with a timer-resolution request scoped to active capture and a longer frame-acquisition budget.
+- Refresh optional GPU recording priority after graphics initialization and recovery, with explicit diagnostics when the requested policy is unavailable.
+- Preserve encoder-queue loss counters across capture suspension and expose frame-delivery diagnostics without enabling timing telemetry.
+- Expand capture cadence and GPU-priority regression coverage and remove the checked-label highlight in recording settings.
+
+GPU-saturated gameplay remains workload-dependent; these changes do not guarantee lossless capture in every game.
+
 ## 0.1.22
 
 - Add VBR/CQP recording controls and optional GPU recording priority, which can trade game FPS for smoother frame preparation under load.

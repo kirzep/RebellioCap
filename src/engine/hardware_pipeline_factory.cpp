@@ -51,6 +51,7 @@ extern "C" {
 #include "mux/ffmpeg_clip_muxer.h"
 #include "mux/ffmpeg_continuous_muxer.h"
 #include "platform/windows/com_apartment.h"
+#include "platform/windows/timer_resolution.h"
 #include "video/d3d11_nv12_converter.h"
 #include "video/nvenc_api.h"
 #include "video/nvenc_encoder.h"
@@ -121,6 +122,9 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
   static Result<std::shared_ptr<HardwareVideoSession>> create(
       const MonitorInfo& monitor, const CliArguments& arguments, QpcClock& clock,
       HardwareVideoOptions options = {}) {
+    auto timer_resolution = std::make_unique<CaptureTimerResolution>();
+    if (!timer_resolution->active()) return Result<std::shared_ptr<HardwareVideoSession>>::failure(
+        pipeline_error("capture.timer_resolution_unavailable", "The capture timer resolution could not be requested."));
     if (options.encoder.slot_count < 6 || options.encoder.slot_count > 12) return Result<std::shared_ptr<HardwareVideoSession>>::failure(
         pipeline_error("nvenc.invalid_slot_count", "NVENC slot count must be between 6 and 12."));
     auto device_result = create_d3d11_device(monitor.id.adapter_luid,options.recording_priority);
@@ -174,8 +178,11 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       return Result<std::shared_ptr<HardwareVideoSession>>::failure(
           pipeline_error("capture.cache_creation_failed", "Could not create the GPU-only latest-frame cache.", static_cast<long>(created)));
     }
+    // Apply to contexts created by VideoProcessor/NVENC initialization as well
+    // as the original immediate context. Keep the final request's diagnostics.
+    device.refresh_recording_priority();
     auto result = std::shared_ptr<HardwareVideoSession>(new HardwareVideoSession(
-        std::move(device), std::move(capture), std::move(converter_result).value(),
+        std::move(timer_resolution), std::move(device), std::move(capture), std::move(converter_result).value(),
         std::move(worker_result).value(), std::move(cache), mode.Width, mode.Height, arguments.fps, monitor, clock, options, std::move(game_capture)));
     return Result<std::shared_ptr<HardwareVideoSession>>::success(std::move(result));
   }
@@ -194,7 +201,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       // then times out on alternating ticks even while the desktop animates
       // above 60 Hz, encoding only 30 fresh images into a 60 FPS stream. Allow
       // a bounded wait for that copy, still reusing the cache on a static screen.
-      // Reserve at least half the frame interval for conversion and encoding.
+      // Encoding runs on its own worker. Keep two milliseconds for GPU command
+      // submission instead of expiring a desktop copy halfway through a slot.
       if(game_capture_) return game_capture_->next_frame(0ms);
       return capture_->next_frame(have_frame_ ? capture_wait_ : 100ms);
     }();
@@ -239,6 +247,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
           auto fallback = D3d11Nv12Converter::create(device_.device(), device_.context(), fallback_config);
           if (!fallback.is_success()) return Result<std::vector<EncodedPacket>>::failure(fallback.error());
           converter_ = std::move(fallback).value();
+          device_.refresh_recording_priority();
           options_.direct_nv12_cache = false;
         } else direct_frame.emplace(std::move(direct).value());
       }
@@ -283,6 +292,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     const auto& priority=device_.recording_priority();
     result.recording_priority_requested=priority.requested; result.recording_priority_applied=priority.applied;
     result.recording_gpu_priority=priority.effective; result.recording_priority_hresult=priority.hresult;
+    result.recording_gpu_priority_available=priority.effective_available;
+    result.recording_priority_mode=priority.mode;
     result.capture_session=capture_diagnostics_;
     result.capture_waiting_for_game=game_capture_ && game_capture_->waiting_for_game();
     result.capture_session.game_window=game_capture_!=nullptr;
@@ -311,6 +322,7 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
         "capture.cache_creation_failed", "Could not rebuild the latest-frame cache.", static_cast<long>(created)));
     auto rebuilt = converter_->reconfigure_input(width, height, rotation);
     if (!rebuilt.is_success()) return rebuilt;
+    device_.refresh_recording_priority();
     // Output resolution, NVENC, registered output surfaces and container
     // descriptors remain stable; only the capture-sized input changes.
     cache_ = std::move(replacement);
@@ -332,21 +344,22 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
     capture_diagnostics_.adapter_luid_high=static_cast<std::int32_t>(luid.HighPart);
   }
 
-  HardwareVideoSession(D3d11Device device, std::unique_ptr<DxgiCaptureSource> capture,
+  HardwareVideoSession(std::unique_ptr<CaptureTimerResolution> timer_resolution,
+                        D3d11Device device, std::unique_ptr<DxgiCaptureSource> capture,
                         std::unique_ptr<D3d11Nv12Converter> converter,
                         std::unique_ptr<AsyncVideoEncoder> encoder,
                         Microsoft::WRL::ComPtr<ID3D11Texture2D> cache,
                         std::uint32_t width, std::uint32_t height, std::uint32_t fps,
                         const MonitorInfo& monitor, QpcClock& clock, HardwareVideoOptions options,
                         std::unique_ptr<WgcCaptureSource> game_capture)
-      : device_(std::move(device)),
+      : timer_resolution_(std::move(timer_resolution)), device_(std::move(device)),
         game_capture_(std::move(game_capture)),
         converter_(std::move(converter)), encoder_(std::move(encoder)),
         cache_(std::move(cache)), input_width_(width), input_height_(height),
         cache_lifetime_(std::make_shared<int>(0)), options_(std::move(options)),
         fps_(fps), frequency_(clock.frequency()),
         capture_wait_(std::chrono::milliseconds(
-            (std::max)(1U, (std::min)(8U, 500U / fps)))) {
+            (std::max)(1U, (std::min)(14U, 1000U / fps > 2U ? 1000U / fps - 2U : 1U)))) {
     if(game_capture_) {
       capture_diagnostics_.game_window=true;
       const auto luid=device_.adapter_luid();
@@ -374,6 +387,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
             rotation != converter_->config().rotation) {
           auto rebuilt = rebuild_input(mode.Width, mode.Height, rotation);
           if (!rebuilt.is_success()) return RecoveringCaptureSource::SourceResult::failure(rebuilt.error());
+        } else {
+          device_.refresh_recording_priority();
         }
         update_capture_diagnostics(*recreated.value());
         return RecoveringCaptureSource::SourceResult::success(std::move(recreated).value());
@@ -383,6 +398,8 @@ class HardwareVideoSession final : public IEngineVideoPipeline {
       });
   }
 
+  // Destroy last, after the encoder worker and every graphics resource.
+  std::unique_ptr<CaptureTimerResolution> timer_resolution_;
   D3d11Device device_;
   std::unique_ptr<RecoveringCaptureSource> capture_;
   std::unique_ptr<WgcCaptureSource> game_capture_;
@@ -443,6 +460,8 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
       accumulated_.submitted_frames += current.submitted_frames;
       accumulated_.completed_frames += current.completed_frames;
       accumulated_.backpressure_dropped_frames += current.backpressure_dropped_frames;
+      accumulated_.encoder_queue_dropped_frames += current.encoder_queue_dropped_frames;
+      accumulated_.encoder_queue_capacity = current.encoder_queue_capacity;
       accumulated_.p_picture_frames += current.p_picture_frames;
       accumulated_.b_picture_frames += current.b_picture_frames;
       accumulated_.driver_timestamp_packets += current.driver_timestamp_packets;
@@ -452,6 +471,8 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
       accumulated_.recording_priority_requested=current.recording_priority_requested;
       accumulated_.recording_priority_applied=current.recording_priority_applied;
       accumulated_.recording_gpu_priority=current.recording_gpu_priority;
+      accumulated_.recording_gpu_priority_available=current.recording_gpu_priority_available;
+      accumulated_.recording_priority_mode=current.recording_priority_mode;
       accumulated_.recording_priority_hresult=current.recording_priority_hresult;
       accumulated_.max_in_flight_frames=(std::max)(accumulated_.max_in_flight_frames,current.max_in_flight_frames);
       accumulated_.new_image_ticks+=current.new_image_ticks; accumulated_.repeated_image_ticks+=current.repeated_image_ticks;
@@ -478,6 +499,7 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
     result.submitted_frames += accumulated_.submitted_frames;
     result.completed_frames += accumulated_.completed_frames;
     result.backpressure_dropped_frames += accumulated_.backpressure_dropped_frames;
+    result.encoder_queue_dropped_frames += accumulated_.encoder_queue_dropped_frames;
     result.max_in_flight_frames=(std::max)(result.max_in_flight_frames,accumulated_.max_in_flight_frames);
     result.new_image_ticks+=accumulated_.new_image_ticks; result.repeated_image_ticks+=accumulated_.repeated_image_ticks;
     result.no_image_ticks+=accumulated_.no_image_ticks; result.converter_cache_hits+=accumulated_.converter_cache_hits;
@@ -487,11 +509,14 @@ class HardwareVideoPipeline final : public IEngineVideoPipeline {
     result.driver_timestamp_packets += accumulated_.driver_timestamp_packets;
     result.driver_timestamp_digest ^= accumulated_.driver_timestamp_digest;
     if (!session_) {
+      result.encoder_queue_capacity = accumulated_.encoder_queue_capacity;
       result.direct_nv12_cache=accumulated_.direct_nv12_cache;
       result.accepted_config=accumulated_.accepted_config;
       result.recording_priority_requested=accumulated_.recording_priority_requested;
       result.recording_priority_applied=accumulated_.recording_priority_applied;
       result.recording_gpu_priority=accumulated_.recording_gpu_priority;
+      result.recording_gpu_priority_available=accumulated_.recording_gpu_priority_available;
+      result.recording_priority_mode=accumulated_.recording_priority_mode;
       result.recording_priority_hresult=accumulated_.recording_priority_hresult;
       result.p50_latency_us = accumulated_.p50_latency_us;
       result.p95_latency_us = accumulated_.p95_latency_us;

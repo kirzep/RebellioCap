@@ -90,6 +90,7 @@ target_link_libraries(rebelliocap_core PUBLIC
   avrt
   advapi32
   user32)
+target_link_libraries(rebelliocap_core PUBLIC winmm)
 target_link_libraries(rebelliocap_core PUBLIC windowsapp runtimeobject dwmapi)
 rebelliocap_enable_warnings(rebelliocap_core)
 

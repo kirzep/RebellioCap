@@ -19,6 +19,13 @@ Error hresult_error(std::string code, std::string message, HRESULT result) {
 
 }  // namespace
 
+void D3d11Device::refresh_recording_priority() {
+  if (!priority_.requested) return;
+  priority_ = configure_recording_priority(true,
+      [&](int priority) { return dxgi_device_->SetGPUThreadPriority(priority); },
+      [&](int* priority) { return dxgi_device_->GetGPUThreadPriority(priority); });
+}
+
 Result<D3d11Device> create_d3d11_device(LUID adapter_luid, bool recording_priority) {
   Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
   HRESULT result = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
@@ -84,14 +91,13 @@ Result<D3d11Device> create_d3d11_device(LUID adapter_luid, bool recording_priori
   if(!multithread->GetMultithreadProtected()) return Result<D3d11Device>::failure(
       hresult_error("d3d11.multithread_unavailable", "Graphics context protection was not enabled.", E_FAIL));
 
-  Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device;
-  result = created.device_.As(&dxgi_device);
+  result = created.device_.As(&created.dxgi_device_);
   if (FAILED(result)) {
     return Result<D3d11Device>::failure(hresult_error(
         "d3d11.dxgi_device_failed", "Could not query the D3D11 DXGI device.", result));
   }
   Microsoft::WRL::ComPtr<IDXGIAdapter> actual_adapter;
-  result = dxgi_device->GetAdapter(&actual_adapter);
+  result = created.dxgi_device_->GetAdapter(&actual_adapter);
   if (FAILED(result)) {
     return Result<D3d11Device>::failure(hresult_error(
         "d3d11.actual_adapter_failed", "Could not query the D3D11 device adapter.", result));
@@ -105,8 +111,8 @@ Result<D3d11Device> create_d3d11_device(LUID adapter_luid, bool recording_priori
 
   created.adapter_luid_ = actual_description.AdapterLuid;
   created.priority_=configure_recording_priority(recording_priority,
-      [&](int priority){return dxgi_device->SetGPUThreadPriority(priority);},
-      [&](int* priority){return dxgi_device->GetGPUThreadPriority(priority);});
+      [&](int priority){return created.dxgi_device_->SetGPUThreadPriority(priority);},
+      [&](int* priority){return created.dxgi_device_->GetGPUThreadPriority(priority);});
   return Result<D3d11Device>::success(std::move(created));
 }
 

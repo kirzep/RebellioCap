@@ -112,6 +112,21 @@ TEST_CASE("metrics publish actual accepted encoder configuration without assumin
   REQUIRE(fields.at("nvenc_accepted_config").at("b_frames")==1);
 }
 
+TEST_CASE("GPU priority fallback reports its relative value without claiming the desired policy") {
+  NvencRuntimeMetrics video{};
+  video.recording_priority_requested = true;
+  video.recording_priority_applied = false;
+  video.recording_priority_mode = GpuRecordingPriorityMode::RelativeFallback;
+  video.recording_gpu_priority_available = true;
+  video.recording_gpu_priority = 7;
+  video.recording_priority_hresult = static_cast<long>(E_ACCESSDENIED);
+  const auto fields = engine_metrics_json(EngineMetrics{}, 10'000'000, video);
+  CHECK(fields.at("recording_priority_applied") == false);
+  CHECK(fields.at("recording_priority_mode") == "relative_fallback");
+  CHECK(fields.at("recording_gpu_priority") == 7);
+  CHECK(fields.at("recording_priority_hresult") == static_cast<long>(E_ACCESSDENIED));
+}
+
 TEST_CASE("capture diagnostics distinguish an unavailable session from legacy BGRA capture") {
   const auto fields=engine_metrics_json(EngineMetrics{},10'000'000,NvencRuntimeMetrics{});
   REQUIRE(fields.contains("capture_session"));

@@ -26,6 +26,7 @@ pub fn run() {
         &context.config().identifier, test_root.as_deref(), cfg!(debug_assertions)
     ).expect("Invalid test instance configuration");
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| tray::show(app)))
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
@@ -79,7 +80,11 @@ pub fn run() {
                         return;
                     }
                 }
-                let _ = window.hide();
+                match window.hide() {
+                    Ok(()) if window.label() == "main" => tray::notify_hidden(window.app_handle()),
+                    Ok(()) => {}
+                    Err(error) => logging::record("error", "window", "hide_failed", serde_json::json!({"error":error.to_string()})),
+                }
             }
             tauri::WindowEvent::Destroyed if window.label() == "overlay-editor" => {
                 if let Err(error) = notifications::overlay_editor_destroyed(window.app_handle()) {

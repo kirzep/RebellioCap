@@ -196,6 +196,8 @@ if(REBELLIOCAP_ENABLE_HARDWARE_TESTS)
   set_tests_properties(capture_cadence PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
   rebelliocap_add_test(NAME capture_cadence_priority COMMAND rebelliocap_capture_cadence_test --recording-priority LABELS "hardware;performance")
   set_tests_properties(capture_cadence_priority PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+  rebelliocap_add_test(NAME capture_cadence_sparse COMMAND rebelliocap_capture_cadence_test --sparse-updates LABELS "hardware;performance")
+  set_tests_properties(capture_cadence_sparse PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
   rebelliocap_copy_ffmpeg_runtime(rebelliocap_capture_cadence_test)
 
   add_executable(rebelliocap_hotkey_passthrough_test

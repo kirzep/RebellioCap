@@ -15,12 +15,16 @@ class D3d11Device {
   [[nodiscard]] ID3D11DeviceContext* context() const noexcept { return context_.Get(); }
   [[nodiscard]] LUID adapter_luid() const noexcept { return adapter_luid_; }
   [[nodiscard]] const GpuRecordingPriority& recording_priority() const noexcept { return priority_; }
+  // Video/encoder initialization can create driver contexts after device
+  // creation. Refresh the opted-in policy after those initialization boundaries.
+  void refresh_recording_priority();
 
  private:
   friend Result<D3d11Device> create_d3d11_device(LUID adapter_luid, bool recording_priority);
 
   Microsoft::WRL::ComPtr<ID3D11Device> device_;
   Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
+  Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device_;
   LUID adapter_luid_{};
   GpuRecordingPriority priority_;
 };

@@ -193,6 +193,7 @@ TEST_CASE("recording priority and accepted CQP status are published without timi
   EngineSnapshot snapshot;
   snapshot.metrics.video_pipeline.recording_priority_requested=true;
   snapshot.metrics.video_pipeline.recording_priority_applied=false;
+  snapshot.metrics.video_pipeline.recording_gpu_priority_available=false;
   snapshot.metrics.video_pipeline.recording_priority_hresult=static_cast<long>(E_ACCESSDENIED);
   snapshot.metrics.video_pipeline.accepted_config.constant_qp=true;
   snapshot.metrics.video_pipeline.accepted_config.qp_p=23;
@@ -205,4 +206,48 @@ TEST_CASE("recording priority and accepted CQP status are published without timi
   REQUIRE(status.at("recording_gpu_priority").is_null());
   REQUIRE(status.at("nvenc_accepted_config").at("constant_qp")==true);
   REQUIRE(status.at("nvenc_accepted_config").at("qp_p")==23);
+}
+
+TEST_CASE("absolute recording priority publishes acceptance separately from an unknown effective level") {
+  EngineSnapshot snapshot{};
+  auto& video = snapshot.metrics.video_pipeline;
+  video.recording_priority_requested = true;
+  video.recording_priority_applied = true;
+  video.recording_priority_mode = GpuRecordingPriorityMode::SoftRealtime;
+  video.recording_gpu_priority_available = false;
+  for (const bool telemetry : {false, true}) {
+    snapshot.metrics.pipeline_telemetry.enabled = telemetry;
+    const auto encoded = nlohmann::json::parse(encode_session_event(
+        {.type = SessionEventType::Snapshot, .snapshot = snapshot}));
+    const auto& status = encoded.at("snapshot").at("metrics").at("diagnostics");
+    CHECK(status.at("recording_priority_applied") == true);
+    CHECK(status.at("recording_priority_mode") == "soft_realtime");
+    CHECK(status.at("recording_gpu_priority").is_null());
+    CHECK(status.at("recording_priority_hresult").is_null());
+  }
+}
+
+TEST_CASE("frame loss counters are published without timing telemetry") {
+  EngineSnapshot snapshot{};
+  auto& video = snapshot.metrics.video_pipeline;
+  video.submitted_frames = 100;
+  video.completed_frames = 97;
+  video.new_image_ticks = 80;
+  video.repeated_image_ticks = 20;
+  video.no_image_ticks = 2;
+  video.encoder_queue_depth = 1;
+  video.encoder_queue_capacity = 2;
+  video.encoder_queue_dropped_frames = 13;
+  const auto encoded = nlohmann::json::parse(encode_session_event(
+      {.type = SessionEventType::Snapshot, .snapshot = snapshot}));
+  const auto& status = encoded.at("snapshot").at("metrics").at("diagnostics");
+  REQUIRE(status.at("submitted_frames") == 100);
+  REQUIRE(status.at("completed_frames") == 97);
+  REQUIRE(status.at("new_image_ticks") == 80);
+  REQUIRE(status.at("repeated_image_ticks") == 20);
+  REQUIRE(status.at("no_image_ticks") == 2);
+  REQUIRE(status.at("encoder_queue_depth") == 1);
+  REQUIRE(status.at("encoder_queue_capacity") == 2);
+  REQUIRE(status.at("encoder_queue_dropped_frames") == 13);
+  REQUIRE_FALSE(status.contains("pipeline_telemetry"));
 }

@@ -151,10 +151,19 @@ json metrics_json(const EngineMetrics& metrics) {
     const auto& video=metrics.video_pipeline;
     const auto& accepted=video.accepted_config;
     result["diagnostics"]={
+      {"submitted_frames",video.submitted_frames},
+      {"completed_frames",video.completed_frames},
+      {"new_image_ticks",video.new_image_ticks},
+      {"repeated_image_ticks",video.repeated_image_ticks},
+      {"no_image_ticks",video.no_image_ticks},
+      {"encoder_queue_depth",video.encoder_queue_depth},
+      {"encoder_queue_capacity",video.encoder_queue_capacity},
+      {"encoder_queue_dropped_frames",video.encoder_queue_dropped_frames},
       {"capture_waiting_for_game",video.capture_waiting_for_game},
       {"recording_priority_requested",video.recording_priority_requested},
       {"recording_priority_applied",video.recording_priority_applied},
-      {"recording_gpu_priority",video.recording_priority_requested && video.recording_priority_hresult ? json(nullptr) : json(video.recording_gpu_priority)},
+      {"recording_gpu_priority",video.recording_gpu_priority_available ? json(video.recording_gpu_priority) : json(nullptr)},
+      {"recording_priority_mode",gpu_recording_priority_mode_name(video.recording_priority_mode)},
       {"recording_priority_hresult",video.recording_priority_hresult ? json(*video.recording_priority_hresult) : json(nullptr)},
       {"nvenc_accepted_config",{{"available",accepted.width!=0},{"constant_qp",accepted.constant_qp},
         {"qp_i",accepted.qp_i},{"qp_p",accepted.qp_p},{"qp_b",accepted.qp_b},

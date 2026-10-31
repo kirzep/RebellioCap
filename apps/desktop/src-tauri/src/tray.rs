@@ -71,6 +71,21 @@ pub fn show(app: &tauri::AppHandle) {
     }
 }
 
+pub fn notify_hidden(app: &tauri::AppHandle) {
+    use tauri_plugin_notification::NotificationExt;
+
+    if let Err(error) = app.notification().builder()
+        .title(crate::language::text("RebellioCap свёрнут в трей", "RebellioCap is in the system tray"))
+        .body(crate::language::text(
+            "Приложение не закрылось и продолжает работать. Открыть его или выйти можно через значок в трее рядом с часами.",
+            "The app is still running. Use its icon in the system tray next to the clock to open it or quit.",
+        ))
+        .show()
+    {
+        crate::logging::record("error", "tray", "notification_failed", serde_json::json!({"error":error.to_string()}));
+    }
+}
+
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", crate::language::text("Открыть", "Open"), true, None::<&str>)?;
     let replay = MenuItem::with_id(app, "replay", crate::language::text("Сохранить повтор", "Save replay"), false, None::<&str>)?;

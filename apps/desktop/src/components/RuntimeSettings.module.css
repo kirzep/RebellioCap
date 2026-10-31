@@ -49,7 +49,6 @@
 .editor [data-slot='input'], .editor [data-slot='native-select'] { box-shadow: none; background: #161618; }
 .editor [data-slot='native-select-wrapper'] { width: 100%; }
 .editor [data-slot='field-label'] { font-size: 13px; font-weight: 450; }
-.editor label:has([data-state='checked']) { border-color: #ffffff2b; background: #ffffff05; }
 .footer {
   display: flex;
   align-items: center;
